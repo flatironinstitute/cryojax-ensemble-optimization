@@ -1,0 +1,39 @@
+[project]
+name = "cryo_MD"
+authors = [
+    {name = "David Silva Sanchez", email = "david.silva@yale.edu"},
+    {name = "Erik Henning Thiede"},
+    {name = "Wai Shing Tang"},
+    {name = "Pilar Cossio"},
+    {name = "Roy Lederman"},
+    {name = "Aditya Rangan"}
+]
+
+description = "My package description"
+readme = "README.rst"
+requires-python = ">=3.7"
+keywords = ["CryoEM", "Molecular Dynamics", "single particle"]
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+
+dependencies = [
+    "numpy",
+    "jax[cpu]",
+    "matplotlib",
+    "scikit-learn"
+]
+
+
+dynamic = ["version"]
+
+[project.optional-dependencies]
+pdf = ["ReportLab>=1.2", "RXP"]
+rest = ["docutils>=0.3", "pack ==1.1, ==1.3"]
+
+[project.scripts]
+my-script = "my_package.module:function"
+
+# ... other project metadata fields as specified in:
+#     https://packaging.python.org/en/latest/specifications/declaring-project-metadata/
