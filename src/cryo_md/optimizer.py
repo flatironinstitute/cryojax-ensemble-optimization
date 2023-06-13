@@ -12,7 +12,11 @@ def run_optimizer(
     data: np.ndarray,
     prior_center: np.ndarray,
     config: Dict,
+    seed: int = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
+    if seed is not None:
+        np.random.seed(seed)
+
     check_config(config)
 
     trajectory = np.zeros(
@@ -43,6 +47,7 @@ def run_optimizer(
         )
         curr_models = curr_models + config["opt_step_size"] * grad_strucs
         curr_weights = curr_weights + config["opt_step_size"] * grad_weights
+
         curr_weights /= curr_weights.sum()
 
         if (i + 1) % config["stride"] == 0:

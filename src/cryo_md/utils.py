@@ -37,7 +37,7 @@ def help_config() -> None:
         + "sigma (float): TO BE CHANGED - the standard deviation involved in the likelihood p(yi | sj). \n"
         + "gamma (float): TO BE CHANGED - gamma parameter in Eq 21. \n"
         + "delta_sigma (float): TO BE CHANGED - we model some delta functions as a gaussian, this is the standard deviation of those gaussians. \n"
-        +"stride: how often you want a simulation step to be saved into the output."
+        + "stride: how often you want a simulation step to be saved into the output."
     )
 
     print(help_message)
