@@ -12,9 +12,8 @@ from cryo_md.wpa_simulator.noise import add_noise
 class Image:
     def __init__(self):
         pass
-    
-    def init_from_json(self, filename: str):
 
+    def init_from_json(self, filename: str):
         with open(filename, "r") as metadata_file:
             self.metadata = json.load(metadata_file)
 
@@ -25,7 +24,12 @@ class Image:
         return
 
     def init_from_data(
-        self, data: ArrayLike, pixel_size: float, sigma: float, orientation: Union[ArrayLike, None] = None, dtype=None
+        self,
+        data: ArrayLike,
+        pixel_size: float,
+        sigma: float,
+        orientation: Union[ArrayLike, None] = None,
+        dtype=None,
     ) -> None:
         """
         Initialize image using existing data from a projection
@@ -50,12 +54,12 @@ class Image:
             "pixel_size": pixel_size,
             "sigma": sigma,
             "ctf": False,
-            "noise": False
+            "noise": False,
         }
 
         if orientation is None:
             self.metadata["rotation"] = False
-        
+
         else:
             self.metadata["rotation"] = True
             self.metadata["orientation"] = orientation
@@ -104,12 +108,10 @@ class Image:
         return
 
     def show(self, figsize=(4, 4)):
-
         fig, ax = plt.subplots(1, 1, figsize=figsize)
         ax.imshow(self._data, cmap="gray")
 
     def save_image(self, fname_prefix: str):
-
         self.metadata["filename"] = f"{fname_prefix}.npy"
         jnp.save(f"{fname_prefix}.npy", self._data)
 
@@ -117,6 +119,3 @@ class Image:
             json.dump(self.metadata, metadata_file)
 
         return
-
-
-

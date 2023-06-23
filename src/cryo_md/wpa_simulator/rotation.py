@@ -4,7 +4,7 @@ import jax
 from scipy.spatial.transform import Rotation
 
 
-def gen_quat() -> np.ndarray:
+def gen_quat(n_quats, dtype: float) -> np.ndarray:
     """
     Generate a random quaternion.
 
@@ -12,8 +12,11 @@ def gen_quat() -> np.ndarray:
         quat (np.ndarray): Random quaternion
 
     """
+
+    quats = np.empty((n_quats, 4), dtype=dtype)
+
     count = 0
-    while count < 1:
+    while count < n_quats:
         quat = np.random.uniform(
             -1, 1, 4
         )  # note this is a half-open interval, so 1 is not included but -1 is
@@ -21,28 +24,32 @@ def gen_quat() -> np.ndarray:
 
         if 0.2 <= norm <= 1.0:
             quat /= norm
+            quats[count] = quat
             count += 1
 
-    return quat
+    return jnp.array(quats)
 
 
 @jax.jit
-def rotate_struct(coords: np.ndarray, quat: np.ndarray) -> np.ndarray:
-    """
-    Use scipy's Rotation class to generate a rotation matrix from quaternions, and rotate a structure.
+def calc_rot_matrix(quat):
+    rot_mat = jnp.array(
+        [
+            [
+                1.0 - 2.0 * (quat[1] ** 2 + quat[2] ** 2),
+                2.0 * (quat[0] * quat[1] - quat[2] * quat[3]),
+                2.0 * (quat[0] * quat[2] + quat[1] * quat[3]),
+            ],
+            [
+                2.0 * (quat[0] * quat[1] + quat[2] * quat[3]),
+                1.0 - 2.0 * (quat[0] ** 2 + quat[2] ** 2),
+                2.0 * (quat[1] * quat[2] - quat[0] * quat[3]),
+            ],
+            [
+                2.0 * (quat[0] * quat[2] - quat[1] * quat[3]),
+                2.0 * (quat[1] * quat[2] + quat[0] * quat[3]),
+                1.0 - 2.0 * (quat[0] ** 2 + quat[1] ** 2),
+            ],
+        ]
+    )
 
-    Parameters:
-    coords : np.ndarray
-        Array with atomic coordinates, shape must be (3, number_of_atoms)
-
-    quat: np.ndarray
-        Array with quaternions defining a rotation, with the convention (x, y, z, w).
-
-    Returns:
-    rot_coords: np.ndarray
-        Array with the rotated atomic coordinates
-    """
-
-    rot_coords = jnp.matmul(Rotation.from_quat(quat).as_matrix(), coords)
-
-    return rot_coords
+    return rot_mat

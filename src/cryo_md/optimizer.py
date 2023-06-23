@@ -1,58 +1,77 @@
 import numpy as np
-from typing import Dict, Tuple
+import jax.numpy as jnp
+from tqdm import tqdm
 
-from cryo_md.md_engine import run_MD_bias
-from cryo_md.lklhood_and_grads import calc_gradient
-from cryo_md.utils import check_config
+from cryo_md.md_engine import run_square_langevin
+from cryo_md.likelihood.calc_lklhood import calc_lkl_and_grad, get_neigh_list
 
 
 def run_optimizer(
-    init_models: np.ndarray,
-    init_weights: np.ndarray,
-    data: np.ndarray,
-    prior_center: np.ndarray,
-    config: Dict,
-    seed: int = None,
-) -> Tuple[np.ndarray, np.ndarray]:
-    if seed is not None:
-        np.random.seed(seed)
+    init_models, init_weights, image_stack, n_steps, step_size, gamma, batch_size=None, stride_neigh_list=1
+):
+    opt_models = init_models.copy()
+    opt_weights = init_weights.copy()
 
-    check_config(config)
+    losses = np.zeros(n_steps)
+    traj = np.zeros((n_steps + 1, *opt_models.shape))
+    traj[0] = opt_models.copy()
 
-    trajectory = np.zeros(
-        (config["opt_steps"] // config["stride"] + 1, *init_models.shape)
-    )
+    if batch_size is None:
+        batch_size = image_stack.images.shape[0]
 
-    weight_traj = np.zeros(
-        (config["opt_steps"] // config["stride"] + 1, *init_weights.shape)
-    )
+    for i in tqdm(range(n_steps)):
 
-    trajectory[0] = init_models.copy()
-    weight_traj[0] = init_weights.copy()
-
-    curr_models = init_models.copy()
-    curr_weights = init_weights.copy()
-
-    counter = 1
-
-    for i in range(config["opt_steps"]):
-        samples = run_MD_bias(curr_models, prior_center, config)
-
-        random_batch = np.arange(0, data.shape[0], 1)
-        np.random.shuffle(random_batch)
-        random_batch = random_batch[: config["batch_size"]]
-
-        grad_strucs, grad_weights = calc_gradient(
-            curr_models, samples, init_weights, data[random_batch], config
+        # Run MD
+        samples = run_square_langevin(
+            opt_models + 0.0001, opt_models, n_steps=100, step_size=0.01
         )
-        curr_models = curr_models + config["opt_step_size"] * grad_strucs
-        curr_weights = curr_weights + config["opt_step_size"] * grad_weights
 
-        curr_weights /= curr_weights.sum()
+        grad_prior = -np.mean(opt_models[None, :, :, :] - samples[1:], axis=0)
+        grad_prior /= jnp.max(jnp.abs(grad_prior), axis=(1))[:, None, :]
 
-        if (i + 1) % config["stride"] == 0:
-            trajectory[counter] = curr_models
-            weight_traj[counter] = curr_weights
-            counter += 1
+        # Set up stochastic grad descent
+        random_batch = np.arange(0, image_stack.images.shape[0], 1)
+        np.random.shuffle(random_batch)
+        random_batch = random_batch[:batch_size]
 
-    return (trajectory, weight_traj)
+        # Update Neighbor List
+        if i % stride_neigh_list == 0:
+            neigh_list = get_neigh_list(opt_models, image_stack)
+
+        # Optimize structure
+        loss, grad = calc_lkl_and_grad(
+            opt_models,
+            opt_weights,
+            image_stack.images[random_batch],
+            image_stack.constant_params[0],
+            image_stack.constant_params[1],
+            image_stack.constant_params[2],
+            image_stack.variable_params[random_batch],
+            1.0,
+            neigh_list[random_batch],
+        )
+
+        losses[i] = loss
+        grad_str = grad[0]
+        grad_wts = grad[1]
+
+        grad_str /= jnp.max(jnp.abs(grad_str), axis=(1))[:, None, :]
+
+        grad_total = gamma * grad_str + (1 - gamma) * grad_prior
+        grad_total /= jnp.max(jnp.abs(grad_total), axis=(1))[:, None, :]
+
+        opt_models = opt_models + step_size * grad_total
+
+        # Find closest structure from prior sample to the opt. structure
+        indices = np.argmin(
+            np.linalg.norm(samples - opt_models[None, :, :, :], axis=(2, 3)), axis=0
+        )
+        for j in range(opt_models.shape[0]):
+            opt_models = opt_models.at[j].set(samples[indices[j], j, :, :])
+
+        opt_weights = opt_weights + 0.01 * grad_wts
+        opt_weights /= jnp.sum(opt_weights)
+
+        traj[i + 1] = opt_models.copy()
+
+    return traj, opt_weights, losses
