@@ -10,7 +10,7 @@ from cryo_md.image.image_stack import ImageStack
 
 
 def generate_params(n_images, config, dtype=float):
-    params = np.zeros((n_images, 10), dtype=dtype)
+    params = np.zeros((n_images, 11), dtype=dtype)
 
     params[:, 0:4] = gen_quat(n_images, dtype=dtype)
     # params[:, 4:6] = shifts  # TODO
@@ -29,7 +29,7 @@ def generate_params(n_images, config, dtype=float):
                 f"{key} should be a single float value or a list of [min_{key}, max_{key}]"
             )
 
-    return jnp.array(params)
+    return params
 
 
 @partial(jax.jit, static_argnames=["pixel_size", "box_size"])
@@ -77,6 +77,7 @@ def full_simulator_(
     )
 
     image = jnp.fft.ifft2(jnp.fft.fft2(image) * ctf).real
+    image /= jnp.linalg.norm(image)
 
     # add noise
     noise_grid = jnp.linspace(-0.5 * (box_size - 1), 0.5 * (box_size - 1), box_size)
@@ -88,7 +89,7 @@ def full_simulator_(
     noise_power = signal_power / jnp.sqrt(var_imaging_args[9])
     image = image + jax.random.normal(random_key, shape=image.shape) * noise_power
 
-    return image
+    return image, noise_power
 
 
 batch_full_simulator_ = jax.vmap(
@@ -199,7 +200,7 @@ def simulate_stack_traj(
     key, *subkeys = jax.random.split(key, num=models.shape[0] + 1)
     subkeys = jnp.array(subkeys)
 
-    batch_images = batch_over_models_simulator(
+    batch_images, noise_variances = batch_over_models_simulator(
         models,
         config["box_size"],
         config["pixel_size"],
@@ -208,6 +209,9 @@ def simulate_stack_traj(
         variable_params,
         subkeys,
     )
+
+    variable_params[:, 10] = noise_variances
+    variable_params = jnp.array(variable_params)
 
     images_stack.stack_batch(batch_images, variable_params)
 

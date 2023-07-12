@@ -56,7 +56,7 @@ def run_square_langevin(init_models, ref_models, n_steps, step_size):
     traj[0] = init_models
 
     for i in range(n_steps):
-        grad = calc_energy_grad_all(traj[i], 48.0, 0.0, 100.0, ref_models, 10.0)
+        grad = calc_energy_grad_all(traj[i], 48.0, 0.0, 100.0, ref_models, 5.0)
 
         traj[i + 1] = (
             traj[i]

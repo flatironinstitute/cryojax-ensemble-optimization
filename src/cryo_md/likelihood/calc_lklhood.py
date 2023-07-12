@@ -16,66 +16,49 @@ def compare_coords_with_img_(
     sigma: float,
     var_imaging_args: ArrayLike,
 ) -> float:
+    """
+    Compare the coordinates with the image and return the log-likelihood. This function is used in the likelihood calculation.
+
+    Parameters
+    ----------
+    coords : ArrayLike
+        Coordinates of the model
+    image_ref : ArrayLike
+        Image to compare with
+    box_size : int
+        Size of the box
+    pixel_size : float
+        Pixel size
+    sigma : float
+        Standard deviation of the Gaussian
+    var_imaging_args : ArrayLike
+        Imaging parameters
+
+    Returns
+    -------
+    float
+        Log-likelihood
+    """
     image_coords = noiseless_simulator_(
         coords, box_size, pixel_size, sigma, var_imaging_args
     )
 
-    return -0.5 * jnp.linalg.norm(image_coords - image_ref)
-
-
-def compare_dummy(
-    coords: ArrayLike,
-) -> ArrayLike:
-    return jnp.array(0.0)
-
-
-@partial(jax.jit, static_argnames=["pixel_size", "box_size"])
-def calc_loglkl_model_image(
-    coords: ArrayLike,
-    image_ref: ArrayLike,
-    box_size: int,
-    pixel_size: float,
-    sigma: float,
-    var_imaging_args: ArrayLike,
-    is_neigh: Union[int, float, ArrayLike],
-) -> ArrayLike:
-    cond_comp = partial(
-        compare_coords_with_img_,
-        image_ref=image_ref,
-        box_size=box_size,
-        pixel_size=pixel_size,
-        sigma=sigma,
-        var_imaging_args=var_imaging_args,
+    return (
+        -0.5
+        * jnp.linalg.norm(image_coords - image_ref) ** 2
+        / var_imaging_args[10] ** 2
     )
-
-    log_lkl = jax.lax.cond(jnp.equal(is_neigh, 0.0), compare_dummy, cond_comp, coords)
-
-    return log_lkl
 
 
 batch_over_models = jax.jit(
-    jax.vmap(calc_loglkl_model_image, in_axes=(0, None, None, None, None, None, 0)),
+    jax.vmap(compare_coords_with_img_, in_axes=(0, None, None, None, None, None)),
     static_argnums=(2, 3),
 )
 
 batch_over_images = jax.jit(
-    jax.vmap(batch_over_models, in_axes=(None, 0, None, None, None, 0, 0)),
+    jax.vmap(batch_over_models, in_axes=(None, 0, None, None, None, 0)),
     static_argnums=(2, 3),
 )
-
-
-def get_neigh_list(models, data_stack):
-    lklhood_matrix = batch_over_images(
-        models,
-        data_stack.images,
-        data_stack.constant_params[0],
-        data_stack.constant_params[1],
-        data_stack.constant_params[2],
-        data_stack.variable_params,
-        jnp.ones((data_stack.images.shape[0], models.shape[0])),
-    )
-
-    return (lklhood_matrix == jnp.max(lklhood_matrix, axis=1)[:, None]).astype(float)
 
 
 @partial(jax.jit, static_argnames=["pixel_size", "box_size"])
@@ -87,20 +70,15 @@ def calc_lklhood_(
     pixel_size: float,
     sigma: float,
     variable_params: ArrayLike,
-    noise_var: float,
-    neigh_list: ArrayLike,
 ) -> float:
-    lklhood_matrix = (
-        batch_over_images(
-            models, images, box_size, pixel_size, sigma, variable_params, neigh_list
-        )
-        / noise_var
+    lklhood_matrix = batch_over_images(
+        models, images, box_size, pixel_size, sigma, variable_params
     )
 
-    model_weights = model_weights * (noise_var * 2 * jnp.pi) ** (0.5)
+    model_weights = model_weights
 
     log_lklhood = jax.scipy.special.logsumexp(
-        a=lklhood_matrix, b=model_weights[None, :] * neigh_list, axis=1
+        a=lklhood_matrix, b=model_weights[None, :], axis=1
     )
 
     log_lklhood = jnp.sum(log_lklhood)
@@ -108,6 +86,10 @@ def calc_lklhood_(
     return log_lklhood
 
 
-calc_lkl_and_grad = jax.jit(
-    jax.value_and_grad(calc_lklhood_, argnums=(0, 1)), static_argnums=(3, 4)
+calc_lkl_and_grad_struct = jax.jit(
+    jax.value_and_grad(calc_lklhood_, argnums=0), static_argnums=(3, 4)
+)
+
+calc_lkl_and_grad_wts = jax.jit(
+    jax.value_and_grad(calc_lklhood_, argnums=1), static_argnums=(3, 4)
 )

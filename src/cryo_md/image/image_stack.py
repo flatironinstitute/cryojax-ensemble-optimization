@@ -23,7 +23,7 @@ class ImageStack:
         """
 
         self.images = np.empty((n_images, box_size, box_size), dtype=dtype)
-        self.variable_params = np.empty((n_images, 10), dtype=dtype)
+        self.variable_params = np.empty((n_images, 11), dtype=dtype)
 
         self.stacked_images_ = 0
 

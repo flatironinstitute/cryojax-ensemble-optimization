@@ -3,43 +3,69 @@ import jax.numpy as jnp
 from tqdm import tqdm
 
 from cryo_md.md_engine import run_square_langevin
-from cryo_md.likelihood.calc_lklhood import calc_lkl_and_grad, get_neigh_list
+from cryo_md.likelihood.calc_lklhood import (
+    calc_lkl_and_grad_wts,
+    calc_lkl_and_grad_struct,
+)
+
+
+def optimize_weights(models, weights, steps, step_size, image_stack):
+    losses = np.zeros(steps)
+    for i in range(steps):
+        loss, grad_wts = calc_lkl_and_grad_wts(
+            models,
+            weights,
+            image_stack.images,
+            image_stack.constant_params[0],
+            image_stack.constant_params[1],
+            image_stack.constant_params[2],
+            image_stack.variable_params,
+        )
+
+        weights = weights + step_size * grad_wts
+        weights /= jnp.sum(weights)
+
+        losses[i] = loss
+
+    return weights, losses
 
 
 def run_optimizer(
-    init_models, init_weights, image_stack, n_steps, step_size, gamma, batch_size=None, stride_neigh_list=1
+    init_models,
+    init_weights,
+    image_stack,
+    n_steps,
+    step_size,
+    gamma,
+    batch_size=None,
 ):
     opt_models = init_models.copy()
     opt_weights = init_weights.copy()
 
     losses = np.zeros(n_steps)
-    traj = np.zeros((n_steps + 1, *opt_models.shape))
-    traj[0] = opt_models.copy()
+    traj = np.zeros((n_steps, *opt_models.shape))
+    
+    traj_wts = np.zeros((n_steps, opt_weights.shape[0]))
 
     if batch_size is None:
         batch_size = image_stack.images.shape[0]
 
     for i in tqdm(range(n_steps)):
 
-        # Run MD
+        opt_weights, _ = optimize_weights(opt_models, opt_weights, 10, 0.1, image_stack)
+
         samples = run_square_langevin(
             opt_models + 0.0001, opt_models, n_steps=100, step_size=0.01
         )
 
-        grad_prior = -np.mean(opt_models[None, :, :, :] - samples[1:], axis=0)
+        grad_prior = np.mean(samples[1:], axis=0) - opt_models
         grad_prior /= jnp.max(jnp.abs(grad_prior), axis=(1))[:, None, :]
 
-        # Set up stochastic grad descent
         random_batch = np.arange(0, image_stack.images.shape[0], 1)
         np.random.shuffle(random_batch)
         random_batch = random_batch[:batch_size]
 
-        # Update Neighbor List
-        if i % stride_neigh_list == 0:
-            neigh_list = get_neigh_list(opt_models, image_stack)
-
-        # Optimize structure
-        loss, grad = calc_lkl_and_grad(
+        loss, grad_str = calc_lkl_and_grad_struct(
             opt_models,
             opt_weights,
             image_stack.images[random_batch],
@@ -47,13 +73,13 @@ def run_optimizer(
             image_stack.constant_params[1],
             image_stack.constant_params[2],
             image_stack.variable_params[random_batch],
-            1.0,
-            neigh_list[random_batch],
         )
 
+        if loss == -np.inf:
+            print("whoops")
+            break
+
         losses[i] = loss
-        grad_str = grad[0]
-        grad_wts = grad[1]
 
         grad_str /= jnp.max(jnp.abs(grad_str), axis=(1))[:, None, :]
 
@@ -62,16 +88,13 @@ def run_optimizer(
 
         opt_models = opt_models + step_size * grad_total
 
-        # Find closest structure from prior sample to the opt. structure
         indices = np.argmin(
             np.linalg.norm(samples - opt_models[None, :, :, :], axis=(2, 3)), axis=0
         )
         for j in range(opt_models.shape[0]):
             opt_models = opt_models.at[j].set(samples[indices[j], j, :, :])
 
-        opt_weights = opt_weights + 0.01 * grad_wts
-        opt_weights /= jnp.sum(opt_weights)
+        traj[i] = opt_models.copy()
+        traj_wts[i] = opt_weights.copy()
 
-        traj[i + 1] = opt_models.copy()
-
-    return traj, opt_weights, losses
+    return traj, traj_wts, losses

@@ -14,6 +14,27 @@ def noiseless_simulator_(
     sigma: float,
     var_imaging_args: ArrayLike,
 ) -> ArrayLike:
+    """
+    Simulate a noiseless image. This function is used in the likelihood calculation.
+
+    Parameters
+    ----------
+    coords : ArrayLike
+        Coordinates of the atoms.
+    box_size : int
+        Size of the box.
+    pixel_size : float
+        Pixel size.
+    sigma : float
+        Standard deviation of the Gaussian.
+    var_imaging_args : ArrayLike
+        Imaging parameters.
+
+    Returns
+    -------
+    ArrayLike
+        Noiseless image.
+    """
     box_size = int(box_size)
 
     num_atoms = coords.shape[1]
@@ -51,5 +72,7 @@ def noiseless_simulator_(
     )
 
     image = jnp.fft.ifft2(jnp.fft.fft2(image) * ctf).real
+
+    image /= jnp.linalg.norm(image)
 
     return image
