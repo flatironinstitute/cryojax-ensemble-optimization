@@ -54,12 +54,12 @@ def run_optimizer(
 
         opt_weights, _ = optimize_weights(opt_models, opt_weights, 10, 0.1, image_stack)
 
-        samples = run_square_langevin(
-            opt_models + 0.0001, opt_models, n_steps=100, step_size=0.01
-        )
+        # samples = run_square_langevin(
+        #     opt_models + 0.0001, opt_models, n_steps=100, step_size=0.01
+        # )
 
-        grad_prior = np.mean(samples[1:], axis=0) - opt_models
-        grad_prior /= jnp.max(jnp.abs(grad_prior), axis=(1))[:, None, :]
+        # grad_prior = np.mean(samples[1:], axis=0) - opt_models
+        # grad_prior /= jnp.max(jnp.abs(grad_prior), axis=(1))[:, None, :]
 
         random_batch = np.arange(0, image_stack.images.shape[0], 1)
         np.random.shuffle(random_batch)
@@ -83,16 +83,16 @@ def run_optimizer(
 
         grad_str /= jnp.max(jnp.abs(grad_str), axis=(1))[:, None, :]
 
-        grad_total = gamma * grad_str + (1 - gamma) * grad_prior
+        grad_total = gamma * grad_str #+ (1 - gamma) * grad_prior
         grad_total /= jnp.max(jnp.abs(grad_total), axis=(1))[:, None, :]
 
         opt_models = opt_models + step_size * grad_total
 
-        indices = np.argmin(
-            np.linalg.norm(samples - opt_models[None, :, :, :], axis=(2, 3)), axis=0
-        )
-        for j in range(opt_models.shape[0]):
-            opt_models = opt_models.at[j].set(samples[indices[j], j, :, :])
+        # indices = np.argmin(
+        #     np.linalg.norm(samples - opt_models[None, :, :, :], axis=(2, 3)), axis=0
+        # )
+        # for j in range(opt_models.shape[0]):
+        #     opt_models = opt_models.at[j].set(samples[indices[j], j, :, :])
 
         traj[i] = opt_models.copy()
         traj_wts[i] = opt_weights.copy()

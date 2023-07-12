@@ -41,7 +41,7 @@ def noiseless_simulator_(
     norm = 1 / (2 * jnp.pi * sigma**2 * num_atoms)
 
     # Rotate coordinates
-    # coords = jnp.matmul(calc_rot_matrix(var_imaging_args[0:4]), coords)
+    coords = jnp.matmul(calc_rot_matrix(var_imaging_args[0:4]), coords)
 
     # Project
     grid_min = -pixel_size * (box_size - 1) * 0.5
