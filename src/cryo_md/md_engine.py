@@ -41,7 +41,7 @@ def run_md_openmm(
 
         forcefield = openmm_app.ForceField("amber14-all.xml", "amber14/tip3p.xml")
         pdb = openmm_app.PDBFile(f"{directory_path}/ala_model_{i}.pdb")
-        pdb_ref = openmm_app.PDBFile(f"{directory_path}/ala_model_{i}.pdb")
+        pdb_ref = openmm_app.PDBFile(f"{directory_path}/ala_model_{i}_ref.pdb")
 
         # Create index list for non-solvent and non-ion atoms
         indexlist_protein = []
@@ -90,8 +90,9 @@ def run_md_openmm(
         )
 
         platform = openmm.Platform.getPlatformByName(device)
+        properties = {"Threads": "16"}
         simulation = openmm_app.Simulation(
-            modeller.topology, system, integrator, platform
+            modeller.topology, system, integrator, platform, properties
         )
         simulation.context.setPositions(pdb.positions)
         simulation.minimizeEnergy()
@@ -169,40 +170,8 @@ def process_outputs(n_models: int, directory_path: str, filter: str = "not name 
 
     return samples, opt_models
 
-# def dump_new_models(directory_path, indices, unit_cell):
 
-#     ala_start = mda.Universe(f"{directory_path}/ala_start.pdb")
-
-#     for i in range(indices.shape[0]):
-
-#         traj = mda.Universe(
-#             f"{directory_path}/ala_model_{i}.pdb", f"{directory_path}/ala_traj_{i}.pdb"
-#         )
-
-#         traj.trajectory[indices[i]]
-#         traj.atoms.dimensions = unit_cell
-#         traj.atoms.write(f"{directory_path}/ala_model_{i}.pdb")
-
-#         traj_prot = mda.Universe(
-#             f"{directory_path}/ala_start.pdb",
-#             f"{directory_path}/ala_traj_prot_{i}.pdb",
-#             in_memory=True,
-#         )
-
-#         align.AlignTraj(
-#             traj_prot,  # trajectory to align,
-#             ala_start,  # reference,
-#             select="protein",  # selection of atoms to align,
-#             in_memory=True,
-#             match_atoms=True,  # whether to match atoms based on mass
-#         ).run()
-
-#         traj_prot.trajectory[indices[i]]
-#         traj_prot.atoms.write(f"{directory_path}/ala_prot_{i}.pdb")
-
-#     return
-
-def dump_new_models(directory_path: str, opt_models: np.ndarray, unit_cell: np.ndarray):
+def dump_new_models(directory_path: str, opt_models: np.ndarray, closest_indices: np.ndarray, unit_cell: np.ndarray):
     """
     Dump new models to PDB files
 
@@ -212,6 +181,8 @@ def dump_new_models(directory_path: str, opt_models: np.ndarray, unit_cell: np.n
         Path to directory containing PDB files
     opt_models : np.ndarray
         Optimized models
+    closest_indices : np.ndarray
+        Indices of the closest frames in the trajectory to the optimized models
     unit_cell : np.ndarray
         Unit cell dimensions for PDB files
 
@@ -234,6 +205,49 @@ def dump_new_models(directory_path: str, opt_models: np.ndarray, unit_cell: np.n
         ala_system_prot = ala_system.select_atoms("protein")
         ala_system_prot.positions = ala_prot.atoms.positions
         ala_system.atoms.dimensions = unit_cell
-        ala_system.atoms.write(f"{directory_path}/ala_model_{i}.pdb")
+        ala_system.atoms.write(f"{directory_path}/ala_model_{i}_ref.pdb")
+
+        traj = mda.Universe(
+            f"{directory_path}/ala_model_{i}.pdb", f"{directory_path}/ala_traj_{i}.pdb"
+        )
+
+        traj.trajectory[closest_indices[i]]
+        traj.atoms.dimensions = unit_cell
+        traj.atoms.write(f"{directory_path}/ala_model_{i}.pdb")
 
     return
+
+"""
+def dump_new_models(directory_path, indices, unit_cell):
+
+    ala_start = mda.Universe(f"{directory_path}/ala_start.pdb")
+
+    for i in range(indices.shape[0]):
+
+        traj = mda.Universe(
+            f"{directory_path}/ala_model_{i}.pdb", f"{directory_path}/ala_traj_{i}.pdb"
+        )
+
+        traj.trajectory[indices[i]]
+        traj.atoms.dimensions = unit_cell
+        traj.atoms.write(f"{directory_path}/ala_model_{i}.pdb")
+
+        traj_prot = mda.Universe(
+            f"{directory_path}/ala_start.pdb",
+            f"{directory_path}/ala_traj_prot_{i}.pdb",
+            in_memory=True,
+        )
+
+        align.AlignTraj(
+            traj_prot,  # trajectory to align,
+            ala_start,  # reference,
+            select="protein",  # selection of atoms to align,
+            in_memory=True,
+            match_atoms=True,  # whether to match atoms based on mass
+        ).run()
+
+        traj_prot.trajectory[indices[i]]
+        traj_prot.atoms.write(f"{directory_path}/ala_prot_{i}.pdb")
+
+    return
+"""
