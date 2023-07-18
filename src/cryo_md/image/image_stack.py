@@ -6,7 +6,10 @@ from typing import Union
 
 
 class ImageStack:
-    def __init__(self):
+    def __init__(self, fname=None):
+        if fname is not None:
+            self.load(fname)
+
         pass
 
     def init_for_stacking(
@@ -48,3 +51,17 @@ class ImageStack:
         ] = batch_params
 
         self.stacked_images_ += batch_images.shape[0]
+
+    def load(self, fname):
+        numpy_file = np.load(fname)
+        self.images = numpy_file["images"]
+        self.variable_params = numpy_file["variable_params"]
+        self.constant_params = numpy_file["constant_params"]
+
+    def save(self, fname):
+        np.savez(
+            fname,
+            images=self.images,
+            variable_params=self.variable_params,
+            constant_params=self.constant_params,
+        )

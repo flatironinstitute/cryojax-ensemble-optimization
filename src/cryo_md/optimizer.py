@@ -2,7 +2,6 @@ import numpy as np
 import jax.numpy as jnp
 from tqdm import tqdm
 
-from cryo_md.md_engine import run_square_langevin
 from cryo_md.likelihood.calc_lklhood import (
     calc_lkl_and_grad_wts,
     calc_lkl_and_grad_struct,
@@ -44,14 +43,13 @@ def run_optimizer(
 
     losses = np.zeros(n_steps)
     traj = np.zeros((n_steps, *opt_models.shape))
-    
+
     traj_wts = np.zeros((n_steps, opt_weights.shape[0]))
 
     if batch_size is None:
         batch_size = image_stack.images.shape[0]
 
     for i in tqdm(range(n_steps)):
-
         opt_weights, _ = optimize_weights(opt_models, opt_weights, 10, 0.1, image_stack)
 
         # samples = run_square_langevin(
@@ -83,7 +81,7 @@ def run_optimizer(
 
         grad_str /= jnp.max(jnp.abs(grad_str), axis=(1))[:, None, :]
 
-        grad_total = gamma * grad_str #+ (1 - gamma) * grad_prior
+        grad_total = gamma * grad_str  # + (1 - gamma) * grad_prior
         grad_total /= jnp.max(jnp.abs(grad_total), axis=(1))[:, None, :]
 
         opt_models = opt_models + step_size * grad_total
