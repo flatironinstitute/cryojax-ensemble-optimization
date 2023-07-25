@@ -7,6 +7,7 @@ from typing import Union, Tuple
 from cryo_md.likelihood.simulator_for_lklhood import noiseless_simulator_
 from cryo_md.image.image_stack import ImageStack
 
+
 @partial(jax.jit, static_argnames=["pixel_size", "box_size"])
 def compare_coords_with_img_(
     coords: ArrayLike,
@@ -50,13 +51,13 @@ def compare_coords_with_img_(
     )
 
 
-batch_over_models = jax.jit(
+batch_over_models_ = jax.jit(
     jax.vmap(compare_coords_with_img_, in_axes=(0, None, None, None, None, None)),
     static_argnums=(2, 3),
 )
 
-batch_over_images = jax.jit(
-    jax.vmap(batch_over_models, in_axes=(None, 0, None, None, None, 0)),
+batch_over_images_ = jax.jit(
+    jax.vmap(batch_over_models_, in_axes=(None, 0, None, None, None, 0)),
     static_argnums=(2, 3),
 )
 
@@ -71,7 +72,7 @@ def calc_lklhood_(
     sigma: float,
     variable_params: ArrayLike,
 ) -> float:
-    lklhood_matrix = batch_over_images(
+    lklhood_matrix = batch_over_images_(
         models, images, box_size, pixel_size, sigma, variable_params
     )
 
@@ -86,47 +87,82 @@ def calc_lklhood_(
     return log_lklhood
 
 
-calc_lkl_and_grad_struct = jax.jit(
+calc_lkl_and_grad_struct_ = jax.jit(
     jax.value_and_grad(calc_lklhood_, argnums=0), static_argnums=(3, 4)
 )
 
-calc_lkl_and_grad_wts = jax.jit(
+calc_lkl_and_grad_wts_ = jax.jit(
     jax.value_and_grad(calc_lklhood_, argnums=1), static_argnums=(3, 4)
 )
 
-# def calc_lkl_and_grad_struct(
-#     models: ArrayLike,
-#     model_weights: ArrayLike,
-#     image_stack: ImageStack
-# ) -> Tuple[float, ArrayLike]:
-#     """
-#     Calculate the log-likelihood and its gradient with respect to the structure.
 
-#     Parameters
-#     ----------
-#     models : ArrayLike
-#         Models to compare with
-#     model_weights : ArrayLike
-#         Weights of the models
-#     image_stack : ImageStack
-#         Image stack
+def calc_lkl_and_grad_struct(
+    models: ArrayLike, model_weights: ArrayLike, image_stack: ImageStack
+) -> Tuple[float, ArrayLike]:
+    """
+    Calculate the log-likelihood and its gradient with respect to the structure.
 
-#     Returns
-#     -------
-#     float
-#         Log-likelihood
-#     ArrayLike
-#         Gradient with respect to the structure
-#     """
+    Parameters
+    ----------
+    models : ArrayLike
+        Models to compare with
+    model_weights : ArrayLike
+        Weights of the models
+    image_stack : ImageStack
+        Image stack
 
-#     log_lklhood, grad_str = calc_lkl_and_grad_struct_(
-#         models,
-#         model_weights,
-#         image_stack.images,
-#         image_stack.constant_params[0],
-#         image_stack.constant_params[1],
-#         image_stack.constant_params[2],
-#         image_stack.variable_params,
-#     )
+    Returns
+    -------
+    float
+        Log-likelihood
+    ArrayLike
+        Gradient with respect to the structure
+    """
 
-#     return log_lklhood, grad_str
+    log_lklhood, grad_str = calc_lkl_and_grad_struct_(
+        models,
+        model_weights,
+        image_stack.images,
+        image_stack.constant_params[0],
+        image_stack.constant_params[1],
+        image_stack.constant_params[2],
+        image_stack.variable_params,
+    )
+
+    return log_lklhood, grad_str
+
+
+def calc_lkl_and_grad_wts(
+    models: ArrayLike, model_weights: ArrayLike, image_stack: ImageStack
+) -> Tuple[float, ArrayLike]:
+    """
+    Calculate the log-likelihood and its gradient with respect to the model weights.
+
+    Parameters
+    ----------
+    models : ArrayLike
+        Models to compare with
+    model_weights : ArrayLike
+        Weights of the models
+    image_stack : ImageStack
+        Image stack
+
+    Returns
+    -------
+    float
+        Log-likelihood
+    ArrayLike
+        Gradient with respect to the model weights
+    """
+
+    log_lklhood, grad_wts = calc_lkl_and_grad_wts_(
+        models,
+        model_weights,
+        image_stack.images,
+        image_stack.constant_params[0],
+        image_stack.constant_params[1],
+        image_stack.constant_params[2],
+        image_stack.variable_params,
+    )
+
+    return log_lklhood, grad_wts

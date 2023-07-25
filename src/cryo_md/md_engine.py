@@ -8,11 +8,11 @@ from tqdm import tqdm
 
 
 def run_md_openmm(
-        n_models: int,
-        directory_path: str,
-        nsteps: int = 1000,
-        stride: int = 5,
-        device: str = "CPU"
+    n_models: int,
+    directory_path: str,
+    nsteps: int = 1000,
+    stride: int = 5,
+    device: str = "CPU",
 ):
     """
     Run MD simulations using OpenMM
@@ -61,7 +61,9 @@ def run_md_openmm(
 
                 indexlist_protein.append(atom.index)
 
-        pdb_reporter = openmm_app.PDBReporter(f"{directory_path}/ala_traj_{i}.pdb", stride)
+        pdb_reporter = openmm_app.PDBReporter(
+            f"{directory_path}/ala_traj_{i}.pdb", stride
+        )
         pdb_reporter._atomSubset = indexlist_protein
 
         modeller = openmm_app.Modeller(pdb.topology, pdb.positions)
@@ -135,7 +137,7 @@ def process_outputs(n_models: int, directory_path: str, filter: str = "not name 
         (n_models, *ala_start.select_atoms(filter).atoms.positions.T.shape)
     )
 
-    #prot_trajs = []
+    # prot_trajs = []
 
     for i in range(n_models):
         traj = mda.Universe(
@@ -166,12 +168,17 @@ def process_outputs(n_models: int, directory_path: str, filter: str = "not name 
         align.alignto(opt_traj, ala_start, select="all", match_atoms=True)
         opt_models[i] = opt_traj.select_atoms(filter).atoms.positions.T
 
-        #prot_trajs.append(traj_prot)
+        # prot_trajs.append(traj_prot)
 
     return samples, opt_models
 
 
-def dump_new_models(directory_path: str, opt_models: np.ndarray, closest_indices: np.ndarray, unit_cell: np.ndarray):
+def dump_new_models(
+    directory_path: str,
+    opt_models: np.ndarray,
+    closest_indices: np.ndarray,
+    unit_cell: np.ndarray,
+):
     """
     Dump new models to PDB files
 
@@ -193,14 +200,15 @@ def dump_new_models(directory_path: str, opt_models: np.ndarray, closest_indices
     """
 
     for i in range(opt_models.shape[0]):
-
         ala_prot = mda.Universe(f"{directory_path}/ala_prot_{i}.pdb")
         ala_system = mda.Universe(f"{directory_path}/ala_model_{i}.pdb")
 
         ala_prot_noH = ala_prot.select_atoms("not name H*")
         ala_prot_noH.positions = opt_models[i].T
 
-        align.alignto(ala_prot, ala_system.select_atoms("protein"), select="all", match_atoms=True)
+        align.alignto(
+            ala_prot, ala_system.select_atoms("protein"), select="all", match_atoms=True
+        )
 
         ala_system_prot = ala_system.select_atoms("protein")
         ala_system_prot.positions = ala_prot.atoms.positions
@@ -216,6 +224,7 @@ def dump_new_models(directory_path: str, opt_models: np.ndarray, closest_indices
         traj.atoms.write(f"{directory_path}/ala_model_{i}.pdb")
 
     return
+
 
 """
 def dump_new_models(directory_path, indices, unit_cell):

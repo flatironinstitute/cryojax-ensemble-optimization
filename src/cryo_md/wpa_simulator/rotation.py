@@ -31,7 +31,20 @@ def gen_quat(n_quats, dtype: float) -> np.ndarray:
 
 
 @jax.jit
-def calc_rot_matrix(quat):
+def calc_rot_matrix(quat: jnp.array):
+    """
+    Calculate the rotation matrix from a quaternion.
+
+    Parameters
+    ----------
+    quat : jnp.array
+        Quaternion
+
+    Returns
+    -------
+    jnp.array
+        Rotation matrix
+    """
     rot_mat = jnp.array(
         [
             [
