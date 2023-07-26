@@ -88,11 +88,11 @@ def run_optimizer(
 
         opt_models = opt_models + step_size * grad_total
 
-        indices = np.argmin(
-            np.linalg.norm(samples - opt_models[None, :, :, :], axis=(2, 3)), axis=0
-        )
-        for j in range(opt_models.shape[0]):
-            opt_models = opt_models.at[j].set(samples[indices[j], j, :, :])
+        # indices = np.argmin(
+        #     np.linalg.norm(samples - opt_models[None, :, :, :], axis=(2, 3)), axis=0
+        # )
+        # for j in range(opt_models.shape[0]):
+        #     opt_models = opt_models.at[j].set(samples[indices[j], j, :, :])
 
         traj[i] = opt_models.copy()
         traj_wts[i] = opt_weights.copy()
