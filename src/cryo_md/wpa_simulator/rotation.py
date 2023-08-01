@@ -1,3 +1,14 @@
+"""
+Rotation functions.
+
+Functions
+---------
+gen_quat
+    Generate a random quaternion.
+calc_rot_matrix
+    Calculate the rotation matrix from a quaternion
+"""
+
 import numpy as np
 import jax.numpy as jnp
 import jax
@@ -12,6 +23,8 @@ def gen_quat(n_quats, dtype: float) -> np.ndarray:
         quat (np.ndarray): Random quaternion
 
     """
+
+    np.random.seed(1234)
 
     quats = np.empty((n_quats, 4), dtype=dtype)
 
@@ -42,7 +55,7 @@ def calc_rot_matrix(quat: jnp.array):
 
     Returns
     -------
-    jnp.array
+    rot_mat : jnp.array
         Rotation matrix
     """
     rot_mat = jnp.array(

@@ -68,9 +68,10 @@ def generate_params_(n_images, config, dtype=float):
 @partial(jax.jit, static_argnames=["pixel_size", "box_size"])
 def full_simulator_(
     coords: ArrayLike,
+    struct_info: ArrayLike,
     box_size: int,
     pixel_size: float,
-    sigma: float,
+    res: float,
     noise_radius_mask: int,
     var_imaging_args: ArrayLike,
     random_key: ArrayLike,
@@ -82,12 +83,14 @@ def full_simulator_(
     ----------
     coords : ArrayLike
         Array of shape (3, n_atoms) with the coordinates of the atoms.
+    struct_info : ArrayLike
+        Structural information of the models.
     box_size : int
         Size of the box in pixels.
     pixel_size : float
         Size of a pixel in Angstroms.
-    sigma : float
-        Standard deviation of the Gaussian that represents the atomic scattering.
+    res : float
+        Resolution of density map where this image comes from.
     noise_radius_mask : int
         Radius of the mask that defines the signal for the noise calculation.
     var_imaging_args : ArrayLike
@@ -108,9 +111,17 @@ def full_simulator_(
         Array of shape (box_size, box_size) with the simulated image. Images are normalized so that their noiseless version has an l2-norm of 1.
     noise_power : float
         Noise power of the image.
+
+    Notes
+    -----
+    For the structural information of the models, the first row should be related to the variance of the Gaussian, e.g., the radius of the aminoacid. The second row should be related to the amplitude of the Gaussian, e.g., the number of electrons in the atom/residue (for coarse grained models)
     """
-    num_atoms = coords.shape[1]
-    norm = 1 / (2 * jnp.pi * sigma**2 * num_atoms)
+
+    #assert pixel_size < 2.0 * res, "Pixel size should be smaller than 2.0 * res due to the Nyquist limit."
+    
+
+    gauss_var = struct_info[0, :] * res ** 2
+    gauss_amp = struct_info[1, :] / jnp.sqrt(gauss_var * 2.0 * jnp.pi)
 
     # Rotate coordinates
     coords = jnp.matmul(calc_rot_matrix(var_imaging_args[0:4]), coords)
@@ -120,9 +131,9 @@ def full_simulator_(
     grid_max = pixel_size * box_size * 0.5
     grid = jnp.arange(grid_min, grid_max, pixel_size)[0:box_size]
 
-    gauss_x = jnp.exp(-0.5 * (((grid[:, None] - coords[0, :]) / sigma) ** 2))
-    gauss_y = jnp.exp(-0.5 * (((grid[:, None] - coords[1, :]) / sigma) ** 2))
-    image = jnp.matmul(gauss_x, gauss_y.T) * norm
+    gauss_x = gauss_amp * jnp.exp(-0.5 * (((grid[:, None] - coords[0, :]) / gauss_var) ** 2))
+    gauss_y = gauss_amp * jnp.exp(-0.5 * (((grid[:, None] - coords[1, :]) / gauss_var) ** 2))
+    image = jnp.matmul(gauss_x, gauss_y.T)
 
     # # Apply CTF
     freq_pix_1d = jnp.fft.fftfreq(box_size, d=pixel_size)
@@ -134,12 +145,12 @@ def full_simulator_(
     env = jnp.exp(-var_imaging_args[8] * freq2_2d * 0.5)
     ctf = (
         (
-            var_imaging_args[8] * jnp.cos(phase * freq2_2d * 0.5)
-            - jnp.sqrt(1 - var_imaging_args[8] ** 2) * jnp.sin(phase * freq2_2d * 0.5)
+            var_imaging_args[7] * jnp.cos(phase * freq2_2d * 0.5)
+            - jnp.sqrt(1 - var_imaging_args[7] ** 2) * jnp.sin(phase * freq2_2d * 0.5)
             + 0.0j
         )
         * env
-        / var_imaging_args[8]
+        / var_imaging_args[7]
     )
 
     # Normalize image
@@ -160,12 +171,13 @@ def full_simulator_(
 
 
 batch_full_simulator_ = jax.vmap(
-    full_simulator_, in_axes=(None, None, None, None, None, 0, 0)
+    full_simulator_, in_axes=(None, None, None, None, None, None, 0, 0)
 )
 
 
 def simulate_stack(
     models: ArrayLike,
+    struct_info: ArrayLike,
     images_per_model: list,
     config: dict,
     batch_size: Union[int, None] = None,
@@ -179,6 +191,8 @@ def simulate_stack(
     ----------
     models : ArrayLike
         Array of shape (n_models, n_atoms, 3) with the coordinates of the atoms.
+    struct_info : ArrayLike
+        Structural information of the models.
     images_per_model : list
         List of length n_models with the number of images to simulate for each model.
     config : dict
@@ -187,7 +201,7 @@ def simulate_stack(
                 Size of the box in pixels.
             - pixel_size : float
                 Size of a pixel in Angstroms.
-            - sigma : float
+            - res : float
                 Standard deviation of the Gaussian that represents the atomic scattering.
             - noise_radius_mask : int
                 Radius of the mask that defines the signal for the noise calculation.
@@ -205,13 +219,13 @@ def simulate_stack(
         Data type of the parameters and the images, by default jax.numpy.float32
     seed : int, optional
         Seed for the random number generator, by default 0
-    
+
     Returns
     -------
     images_stack : ImageStack
         ImageStack object with the simulated images and their parameters.
     """
-    
+
     n_images = np.sum(images_per_model)
 
     images_stack = ImageStack()
@@ -220,7 +234,7 @@ def simulate_stack(
         n_images=n_images,
         box_size=config["box_size"],
         pixel_size=config["pixel_size"],
-        sigma=config["sigma"],
+        res=config["res"],
         noise_radius_mask=config["noise_radius_mask"],
         dtype=jnp.float32,
     )
@@ -228,17 +242,19 @@ def simulate_stack(
     key = jax.random.PRNGKey(seed)
 
     for i in range(models.shape[0]):
-
         key, *subkeys = jax.random.split(key, num=images_per_model[i] + 1)
         subkeys = jnp.array(subkeys)
 
-        variable_params = generate_params_(n_images=images_per_model[i], config=config, dtype=dtype)
+        variable_params = generate_params_(
+            n_images=images_per_model[i], config=config, dtype=dtype
+        )
 
         batch_images, noise_variances = batch_full_simulator_(
             models[i],
+            struct_info,
             config["box_size"],
             config["pixel_size"],
-            config["sigma"],
+            config["res"],
             config["noise_radius_mask"],
             variable_params,
             subkeys,
@@ -267,7 +283,7 @@ def simulate_stack_traj(
         n_images=models.shape[0],
         box_size=config["box_size"],
         pixel_size=config["pixel_size"],
-        sigma=config["sigma"],
+        res=config["res"],
         noise_radius_mask=config["noise_radius_mask"],
         dtype=jnp.float32,
     )
@@ -285,7 +301,7 @@ def simulate_stack_traj(
         models,
         config["box_size"],
         config["pixel_size"],
-        config["sigma"],
+        config["res"],
         config["noise_radius_mask"],
         variable_params,
         subkeys,

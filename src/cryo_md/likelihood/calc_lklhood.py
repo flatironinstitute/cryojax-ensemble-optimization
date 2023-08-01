@@ -87,6 +87,40 @@ def calc_lklhood_(
     return log_lklhood
 
 
+def calc_likelihood(
+    models: ArrayLike, model_weights: ArrayLike, image_stack: ImageStack
+) -> float:
+    """
+    Calculate the log-likelihood.
+
+    Parameters
+    ----------
+    models : ArrayLike
+        Models to compare with
+    model_weights : ArrayLike
+        Weights of the models
+    image_stack : ImageStack
+        Image stack
+
+    Returns
+    -------
+    float
+        Log-likelihood
+    """
+
+    likelihood = calc_lklhood_(
+        models,
+        model_weights,
+        image_stack.images,
+        image_stack.constant_params[0],
+        image_stack.constant_params[1],
+        image_stack.constant_params[2],
+        image_stack.variable_params,
+    )
+
+    return likelihood
+
+
 calc_lkl_and_grad_struct_ = jax.jit(
     jax.value_and_grad(calc_lklhood_, argnums=0), static_argnums=(3, 4)
 )
