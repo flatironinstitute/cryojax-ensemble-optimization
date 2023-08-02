@@ -86,14 +86,14 @@ def run_md_openmm(
 
         forcefield = openmm_app.ForceField("amber14-all.xml", "amber14/tip3p.xml")
         pdb = openmm_app.PDBFile(
-            f"{directory_path}/{kwargs['model_topfile_prefix']}{i}.pdb"
+            f"{directory_path}/curr_system_{i}.pdb"
         )
         pdb_ref = openmm_app.PDBFile(
-            f"{directory_path}/{kwargs['ref_topfile_prefix']}{i}.pdb"
+            f"{directory_path}/curr_system_{i}_ref.pdb"
         )
 
         pdb_reporter = openmm_app.PDBReporter(
-            f"{directory_path}/{kwargs['traj_fname_prefix']}_{i}.pdb", stride
+            f"{directory_path}/pull_traj_{i}.pdb", stride
         )
 
         modeller = openmm_app.Modeller(pdb.topology, pdb.positions)
