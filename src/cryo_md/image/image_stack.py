@@ -131,6 +131,7 @@ class ImageStack:
         self.images = numpy_file["images"]
         self.variable_params = numpy_file["variable_params"]
         self.constant_params = numpy_file["constant_params"]
+        self.n_images = self.images.shape[0]
 
     def save(self, fname: str):
         """

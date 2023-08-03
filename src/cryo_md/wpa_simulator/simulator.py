@@ -117,10 +117,9 @@ def full_simulator_(
     For the structural information of the models, the first row should be related to the variance of the Gaussian, e.g., the radius of the aminoacid. The second row should be related to the amplitude of the Gaussian, e.g., the number of electrons in the atom/residue (for coarse grained models)
     """
 
-    #assert pixel_size < 2.0 * res, "Pixel size should be smaller than 2.0 * res due to the Nyquist limit."
-    
+    # assert pixel_size < 2.0 * res, "Pixel size should be smaller than 2.0 * res due to the Nyquist limit."
 
-    gauss_var = struct_info[0, :] * res ** 2
+    gauss_var = struct_info[0, :] * res**2
     gauss_amp = struct_info[1, :] / jnp.sqrt(gauss_var * 2.0 * jnp.pi)
 
     # Rotate coordinates
@@ -131,8 +130,12 @@ def full_simulator_(
     grid_max = pixel_size * box_size * 0.5
     grid = jnp.arange(grid_min, grid_max, pixel_size)[0:box_size]
 
-    gauss_x = gauss_amp * jnp.exp(-0.5 * (((grid[:, None] - coords[0, :]) / gauss_var) ** 2))
-    gauss_y = gauss_amp * jnp.exp(-0.5 * (((grid[:, None] - coords[1, :]) / gauss_var) ** 2))
+    gauss_x = gauss_amp * jnp.exp(
+        -0.5 * (((grid[:, None] - coords[0, :]) / gauss_var) ** 2)
+    )
+    gauss_y = gauss_amp * jnp.exp(
+        -0.5 * (((grid[:, None] - coords[1, :]) / gauss_var) ** 2)
+    )
     image = jnp.matmul(gauss_x, gauss_y.T)
 
     # # Apply CTF

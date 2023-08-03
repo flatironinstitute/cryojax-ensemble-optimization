@@ -43,9 +43,9 @@ def get_MD_outputs(
         )
 
         pulling_traj.trajectory[-1]
-        pulling_traj.select_atoms("protein").atoms.write(f"{directory_path}/curr_prot_{i}.pdb")
+        pulling_traj.atoms.write(f"{directory_path}/curr_system_{i}.pdb")
 
-        opt_univ = mda.Universe(f"{directory_path}/curr_prot_{i}.pdb")
+        opt_univ = pulling_traj.select_atoms("protein")
         align.alignto(opt_univ, ref_universe, select=filter, match_atoms=True)
         opt_models[i] = opt_univ.select_atoms(filter).atoms.positions.T
 
@@ -80,26 +80,19 @@ def dump_optimized_models(
     """
 
     for i in range(opt_models.shape[0]):
-
-        # Replace optimized atoms
-        optim_univ = mda.Universe(f"{directory_path}/curr_prot_{i}.pdb")
-        align.alignto(optim_univ, ref_universe, select=filter, match_atoms=True)
-        optim_univ_subset = optim_univ.select_atoms(filter)
-        optim_univ_subset.positions = opt_models[i].T
-
-        # Align with MD model
-        curr_model = mda.Universe(f"{directory_path}/curr_prot{i}.pdb")
-        align.alignto(optim_univ, curr_model, select=filter, match_atoms=True)
+        # Solvated ref
+        solv_univ_ref = mda.Universe(f"{directory_path}/curr_system_{i}.pdb")
 
         # Replace in solvated model
-        pulling_traj = mda.Universe(
-            f"{directory_path}/curr_system_{i}.pdb",
-            f"{directory_path}/pull_traj_{i}.pdb",
-        )
+        opt_sys = mda.Universe(f"{directory_path}/curr_system_{i}.pdb")
+        opt_univ = opt_sys.select_atoms("protein")
+        align.alignto(opt_univ, ref_universe, select=filter, match_atoms=True)
+        opt_univ_subset = opt_univ.select_atoms(filter)
+        opt_univ_subset.positions = opt_models[i].T
 
-        pulling_traj.trajectory[-1]
-        pulling_traj.select_atoms("protein").positions = optim_univ.positions
-        pulling_traj.atoms.dimensions = unit_cell
-        pulling_traj.atoms.write(f"{directory_path}/curr_system_{i}_ref.pdb")
+        # de-align for MD simulation and write
+        align.alignto(opt_univ, solv_univ_ref, select="all", match_atoms=True)
+        opt_univ.atoms.dimensions = unit_cell
+        opt_univ.atoms.write(f"{directory_path}/curr_system_{i}_ref.pdb")
 
     return

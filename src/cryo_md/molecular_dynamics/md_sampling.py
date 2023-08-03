@@ -85,12 +85,8 @@ def run_md_openmm(
         # Running dynamics
 
         forcefield = openmm_app.ForceField("amber14-all.xml", "amber14/tip3p.xml")
-        pdb = openmm_app.PDBFile(
-            f"{directory_path}/curr_system_{i}.pdb"
-        )
-        pdb_ref = openmm_app.PDBFile(
-            f"{directory_path}/curr_system_{i}_ref.pdb"
-        )
+        pdb = openmm_app.PDBFile(f"{directory_path}/curr_system_{i}.pdb")
+        pdb_ref = openmm_app.PDBFile(f"{directory_path}/curr_system_{i}_ref.pdb")
 
         pdb_reporter = openmm_app.PDBReporter(
             f"{directory_path}/pull_traj_{i}.pdb", stride

@@ -12,9 +12,10 @@ from cryo_md.image.image_stack import ImageStack
 def compare_coords_with_img_(
     coords: ArrayLike,
     image_ref: ArrayLike,
+    struct_info: ArrayLike,
     box_size: int,
     pixel_size: float,
-    sigma: float,
+    res: float,
     var_imaging_args: ArrayLike,
 ) -> float:
     """
@@ -26,12 +27,14 @@ def compare_coords_with_img_(
         Coordinates of the model
     image_ref : ArrayLike
         Image to compare with
+    struct_info : ArrayLike
+        Structural information of the model.
     box_size : int
         Size of the box
     pixel_size : float
         Pixel size
-    sigma : float
-        Standard deviation of the Gaussian
+    res : float
+        Resolution of density map where this image comes from.
     var_imaging_args : ArrayLike
         Imaging parameters
 
@@ -41,7 +44,7 @@ def compare_coords_with_img_(
         Log-likelihood
     """
     image_coords = noiseless_simulator_(
-        coords, box_size, pixel_size, sigma, var_imaging_args
+        coords, struct_info, box_size, pixel_size, res, var_imaging_args
     )
 
     return (
@@ -52,12 +55,12 @@ def compare_coords_with_img_(
 
 
 batch_over_models_ = jax.jit(
-    jax.vmap(compare_coords_with_img_, in_axes=(0, None, None, None, None, None)),
+    jax.vmap(compare_coords_with_img_, in_axes=(0, None, None, None, None, None, None)),
     static_argnums=(2, 3),
 )
 
 batch_over_images_ = jax.jit(
-    jax.vmap(batch_over_models_, in_axes=(None, 0, None, None, None, 0)),
+    jax.vmap(batch_over_models_, in_axes=(None, 0, None, None, None, None, 0)),
     static_argnums=(2, 3),
 )
 
@@ -67,13 +70,14 @@ def calc_lklhood_(
     models: ArrayLike,
     model_weights: ArrayLike,
     images: ArrayLike,
+    struct_info: ArrayLike,
     box_size: int,
     pixel_size: float,
-    sigma: float,
+    res: float,
     variable_params: ArrayLike,
 ) -> float:
     lklhood_matrix = batch_over_images_(
-        models, images, box_size, pixel_size, sigma, variable_params
+        models, images, struct_info, box_size, pixel_size, res, variable_params
     )
 
     model_weights = model_weights
@@ -88,7 +92,7 @@ def calc_lklhood_(
 
 
 def calc_likelihood(
-    models: ArrayLike, model_weights: ArrayLike, image_stack: ImageStack
+    models: ArrayLike, model_weights: ArrayLike, image_stack: ImageStack, struct_info: ArrayLike
 ) -> float:
     """
     Calculate the log-likelihood.
@@ -101,6 +105,8 @@ def calc_likelihood(
         Weights of the models
     image_stack : ImageStack
         Image stack
+    struct_info : ArrayLike
+        Structural information of the models.
 
     Returns
     -------
@@ -112,6 +118,7 @@ def calc_likelihood(
         models,
         model_weights,
         image_stack.images,
+        struct_info,
         image_stack.constant_params[0],
         image_stack.constant_params[1],
         image_stack.constant_params[2],
@@ -122,16 +129,16 @@ def calc_likelihood(
 
 
 calc_lkl_and_grad_struct_ = jax.jit(
-    jax.value_and_grad(calc_lklhood_, argnums=0), static_argnums=(3, 4)
+    jax.value_and_grad(calc_lklhood_, argnums=0), static_argnums=(4, 5)
 )
 
 calc_lkl_and_grad_wts_ = jax.jit(
-    jax.value_and_grad(calc_lklhood_, argnums=1), static_argnums=(3, 4)
+    jax.value_and_grad(calc_lklhood_, argnums=1), static_argnums=(4, 5)
 )
 
 
 def calc_lkl_and_grad_struct(
-    models: ArrayLike, model_weights: ArrayLike, image_stack: ImageStack
+    models: ArrayLike, model_weights: ArrayLike, image_stack: ImageStack, struct_info: ArrayLike
 ) -> Tuple[float, ArrayLike]:
     """
     Calculate the log-likelihood and its gradient with respect to the structure.
@@ -144,6 +151,8 @@ def calc_lkl_and_grad_struct(
         Weights of the models
     image_stack : ImageStack
         Image stack
+    struct_info : ArrayLike
+        Structural information of the models.
 
     Returns
     -------
@@ -157,6 +166,7 @@ def calc_lkl_and_grad_struct(
         models,
         model_weights,
         image_stack.images,
+        struct_info,
         image_stack.constant_params[0],
         image_stack.constant_params[1],
         image_stack.constant_params[2],
@@ -167,7 +177,7 @@ def calc_lkl_and_grad_struct(
 
 
 def calc_lkl_and_grad_wts(
-    models: ArrayLike, model_weights: ArrayLike, image_stack: ImageStack
+    models: ArrayLike, model_weights: ArrayLike, image_stack: ImageStack, struct_info: ArrayLike
 ) -> Tuple[float, ArrayLike]:
     """
     Calculate the log-likelihood and its gradient with respect to the model weights.
@@ -180,6 +190,8 @@ def calc_lkl_and_grad_wts(
         Weights of the models
     image_stack : ImageStack
         Image stack
+    struct_info : ArrayLike
+        Structural information of the models.
 
     Returns
     -------
@@ -193,6 +205,7 @@ def calc_lkl_and_grad_wts(
         models,
         model_weights,
         image_stack.images,
+        struct_info,
         image_stack.constant_params[0],
         image_stack.constant_params[1],
         image_stack.constant_params[2],
