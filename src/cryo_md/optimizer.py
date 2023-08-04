@@ -79,6 +79,9 @@ def run_optimizer(
     filter: str,
     n_steps,
     step_size,
+    nsteps_md,
+    stride_md,
+    restrain_force_constant,
     directory_path: str,
     batch_size=None,
     init_weights=None,
@@ -103,6 +106,8 @@ def run_optimizer(
         assert (
             batch_size <= image_stack.n_images
         ), "Batch size must be smaller than the number of images in the stack."
+
+        assert batch_size > 0, "Batch size must be greater than 0."
 
     outputs = h5py.File(f"{directory_path}/outputs.h5", "w")
     trajs_full = outputs.create_dataset(
@@ -138,8 +143,7 @@ def run_optimizer(
             )
 
             pbar.set_postfix(loss=loss)
-            losses[counter] = loss
-            losses_np[counter] = loss
+
 
             if loss is jnp.nan:
                 print("Loss is nan. Exiting.")
@@ -174,7 +178,6 @@ def run_optimizer(
                 filter=filter,
             )
 
-        losses[i] = loss
         for i in range(n_models):
             opt_univ = mda.Universe(f"{directory_path}/curr_sytem_{i}.pdb")
             align.alignto(
@@ -182,11 +185,10 @@ def run_optimizer(
             )
             trajs_full[counter] = opt_univ.atoms.positions.T
 
+        losses[counter] = loss
+        losses_np[counter] = loss
         trajs_wts[counter] = opt_weights.copy()
 
-        grad_str /= jnp.max(jnp.abs(grad_str), axis=(1))[:, None, :]
+        np.save("losses.npy", losses_np[:counter])
 
-        traj[i] = opt_models.copy()
-        traj_wts[i] = opt_weights.copy()
-
-    return traj, traj_wts, losses
+    return
