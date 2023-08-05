@@ -56,12 +56,12 @@ def compare_coords_with_img_(
 
 batch_over_models_ = jax.jit(
     jax.vmap(compare_coords_with_img_, in_axes=(0, None, None, None, None, None, None)),
-    static_argnums=(2, 3),
+    static_argnums=(3, 4),
 )
 
 batch_over_images_ = jax.jit(
     jax.vmap(batch_over_models_, in_axes=(None, 0, None, None, None, None, 0)),
-    static_argnums=(2, 3),
+    static_argnums=(3, 4),
 )
 
 

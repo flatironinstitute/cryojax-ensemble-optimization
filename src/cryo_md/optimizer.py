@@ -15,17 +15,14 @@ from cryo_md.molecular_dynamics.md_sampling import run_md_openmm
 from cryo_md.utils.parser import pdb_parser
 
 
-def optimize_weights_(models, weights, steps, step_size, image_stack):
+def optimize_weights_(models, weights, struct_info, steps, step_size, image_stack):
     losses = np.zeros(steps)
     for i in range(steps):
         loss, grad_wts = calc_lkl_and_grad_wts(
             models,
             weights,
-            image_stack.images,
-            image_stack.constant_params[0],
-            image_stack.constant_params[1],
-            image_stack.constant_params[2],
-            image_stack.variable_params,
+            image_stack,
+            struct_info
         )
 
         weights = weights + step_size * grad_wts
@@ -39,10 +36,10 @@ def parse_initial_models_(directory_path: str, n_models: int, ref_universe: mda.
 
     
     if filter == "name CA":
-        struct_info = pdb_parser(f"{directory_path}/init_system_0.pdb", mode="resid")
+        struct_info = jnp.array(pdb_parser(f"{directory_path}/init_system_0.pdb", mode="resid"))
         
     elif filter == "not name H*":
-        struct_info = pdb_parser(f"{directory_path}/init_system_0.pdb", mode="all_atom")
+        struct_info = jnp.array(pdb_parser(f"{directory_path}/init_system_0.pdb", mode="all_atom"))
 
     else:
         raise NotImplementedError(
@@ -58,9 +55,13 @@ def parse_initial_models_(directory_path: str, n_models: int, ref_universe: mda.
             f"{directory_path}/init_system_{i}.pdb",
         )
 
+        univ_system.atoms.write(f"{directory_path}/curr_system_{i}.pdb")
+
         univ_prot = univ_system.select_atoms("protein")
         align.alignto(univ_prot, ref_universe, select=filter, match_atoms=True)
         opt_models[i] = univ_prot.select_atoms(filter).atoms.positions.T
+
+    opt_models = jnp.array(opt_models)
 
     atom_indices = (
         mda.Universe(f"{directory_path}/init_system_0.pdb")
@@ -68,7 +69,10 @@ def parse_initial_models_(directory_path: str, n_models: int, ref_universe: mda.
         .atoms.indices
     )
 
+    atom_indices = jnp.array(atom_indices)
+
     unit_cell = mda.Universe(f"{directory_path}/init_system_0.pdb").atoms.dimensions
+    unit_cell = jnp.array(unit_cell)
 
     return opt_models, struct_info, atom_indices, unit_cell
 
@@ -126,20 +130,16 @@ def run_optimizer(
         for counter in pbar:
 
             opt_weights, _ = optimize_weights_(
-                opt_models, opt_weights, 10, 0.1, image_stack
+                opt_models, opt_weights, struct_info, 10, 0.1, image_stack
             )
 
-            random_batch = np.random.choice(image_stack.n_images, batch_size, replace=False)
+            #random_batch = np.random.choice(image_stack.n_images, batch_size, replace=False)
 
             loss, grad_str = calc_lkl_and_grad_struct(
                 opt_models,
                 opt_weights,
-                image_stack.images[random_batch],
+                image_stack,
                 struct_info,
-                image_stack.constant_params[0],
-                image_stack.constant_params[1],
-                image_stack.constant_params[2],
-                image_stack.variable_params[random_batch],
             )
 
             pbar.set_postfix(loss=loss)
@@ -179,9 +179,9 @@ def run_optimizer(
             )
 
         for i in range(n_models):
-            opt_univ = mda.Universe(f"{directory_path}/curr_sytem_{i}.pdb")
+            opt_univ = mda.Universe(f"{directory_path}/curr_system_{i}.pdb")
             align.alignto(
-                opt_univ, ref_universe, select="not name H*", match_atoms=True
+                opt_univ, ref_universe, select=filter, match_atoms=True
             )
             trajs_full[counter] = opt_univ.atoms.positions.T
 

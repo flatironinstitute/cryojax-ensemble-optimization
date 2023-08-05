@@ -81,6 +81,7 @@ def dump_optimized_models(
 
     for i in range(opt_models.shape[0]):
         # Solvated ref
+        
         solv_univ_ref = mda.Universe(f"{directory_path}/curr_system_{i}.pdb")
 
         # Replace in solvated model
@@ -91,7 +92,7 @@ def dump_optimized_models(
         opt_univ_subset.positions = opt_models[i].T
 
         # de-align for MD simulation and write
-        align.alignto(opt_univ, solv_univ_ref, select="all", match_atoms=True)
+        align.alignto(opt_univ, solv_univ_ref, select=filter, match_atoms=True)
         opt_univ.atoms.dimensions = unit_cell
         opt_univ.atoms.write(f"{directory_path}/curr_system_{i}_ref.pdb")
 

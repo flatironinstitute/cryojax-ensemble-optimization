@@ -127,7 +127,7 @@ class ImageStack:
         -------
         None
         """
-        numpy_file = np.load_(fname)
+        numpy_file = np.load(fname)
         self.images = numpy_file["images"]
         self.variable_params = numpy_file["variable_params"]
         self.constant_params = numpy_file["constant_params"]
