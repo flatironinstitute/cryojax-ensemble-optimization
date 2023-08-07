@@ -124,4 +124,4 @@ class MDSampler:
         energy = simulation.context.getState(getEnergy=True).getPotentialEnergy()
         logging.info(f"Simulation complete. Final Energy: {energy}")
 
-        return np.array(positions)
+        return np.array(positions) * 10.0

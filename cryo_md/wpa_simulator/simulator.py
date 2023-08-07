@@ -159,7 +159,7 @@ def add_noise_(image, noise_grid, noise_radius_mask, noise_snr, random_key):
 
 
 batch_simulator_ = jax.vmap(
-    simulator_, in_axes=(None, None, None, None, None, None, 0, 0)
+    simulator_, in_axes=(None, None, None, None, None, 0)
 )
 
 batch_add_noise_ = jax.vmap(add_noise_, in_axes=(0, None, None, 0, 0))
@@ -245,9 +245,7 @@ def simulate_stack(
             image_stack.grid,
             image_stack.grid_f,
             config["res"],
-            config["noise_radius_mask"],
             variable_params,
-            subkeys,
         )
 
         batch_images, noise_variances = batch_add_noise_(

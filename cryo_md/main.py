@@ -3,7 +3,7 @@ import logging
 import pathlib
 from typing import Optional
 
-from cryo_md.pipeline import Pipeline
+from cryo_md.pipeline.pipeline import Pipeline
 from cryo_md.image.image_stack import ImageStack
 from cryo_md.utils.parser import pdb_parser
 
