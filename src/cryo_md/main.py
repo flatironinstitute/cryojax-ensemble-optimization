@@ -7,6 +7,7 @@ from cryo_md.pipeline import Pipeline
 from cryo_md.image.image_stack import ImageStack
 from cryo_md.utils.parser import pdb_parser
 
+
 def run_cryomd(
     pipeline: Pipeline,
     mode: str,
@@ -38,7 +39,7 @@ def run_cryomd(
         Path to directory containing PDB files, by default None
     output_file : str, optional
         Name of output file, by default "outputs.h5"
-    
+
     Raises
     ------
     ValueError
@@ -51,7 +52,7 @@ def run_cryomd(
     None
         Results will be saved to output file
     """
-    
+
     logging.basicConfig(filename="cryo_md.log", level=logging.INFO)
 
     if n_steps <= 0:
@@ -61,7 +62,7 @@ def run_cryomd(
     if mode not in ["all-atom", "resid"]:
         logging.warning("Invalid mode, must be 'all-atom' or 'resid'")
         raise ValueError("Invalid mode, must be 'all-atom' or 'resid'")
-    
+
     if path_to_models is None:
         path_to_models = str(pathlib.Path().resolve())
         logging.info(f"Path to models not specified, using {path_to_models}")

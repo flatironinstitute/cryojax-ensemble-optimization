@@ -29,8 +29,7 @@ class MDSampler:
 
         self.define_forcefield()
         self.define_platform()
-        #self.define_integrator()
-
+        # self.define_integrator()
 
     def parse_kwargs(self, **kwargs):
         default_kwargs = {
@@ -58,10 +57,10 @@ class MDSampler:
 
         return
 
-    def define_forcefield(
-        self
-    ):
-        self.forcefield = openmm_app.ForceField(self.config["forcefield"], self.config["water_model"])
+    def define_forcefield(self):
+        self.forcefield = openmm_app.ForceField(
+            self.config["forcefield"], self.config["water_model"]
+        )
         return
 
     def define_platform(self):
@@ -69,11 +68,10 @@ class MDSampler:
         return
 
     def update_system(self, positions, ref_positions, restrain_atom_list):
-
         integrator = openmm.LangevinIntegrator(
             self.config["temperature"], self.config["friction"], self.config["timestep"]
         )
-               
+
         pdb = openmm_app.PDBFile(self.topology_file)
         pdb.positions = positions * openmm_unit.angstroms
         modeller = openmm_app.Modeller(pdb.topology, pdb.positions)

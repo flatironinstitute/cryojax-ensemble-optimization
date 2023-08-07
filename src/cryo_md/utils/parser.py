@@ -36,11 +36,11 @@ def pdb_parser_all_atom_(fname: str) -> np.array:
     struct_info[0, :] = (1 / np.pi) ** 2
     struct_info[1, :] = np.array(
         [
-            atomic_numbers[x[0]] for x in univ.select_atoms("protein and not name H*").atoms.names
+            atomic_numbers[x[0]]
+            for x in univ.select_atoms("protein and not name H*").atoms.names
         ]
     )
 
-    
     return struct_info
 
 

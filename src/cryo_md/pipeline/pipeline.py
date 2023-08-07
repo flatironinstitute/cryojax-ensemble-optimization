@@ -12,7 +12,6 @@ from cryo_md.utils.output_manager import OutputManager
 
 class Pipeline:
     def __init__(self, workflow):
-
         self.check_steps(workflow)
         self.workflow = workflow
         # self.output_manager = output_manager
@@ -20,18 +19,65 @@ class Pipeline:
         return
 
     def check_steps(self, workflow):
-        logging.info("Checking pipeline workflow...")
+        logging.info("Reading pipeline workflow...")
+
+        workflow_types = []
         for i, step in enumerate(workflow):
-            if isinstance(step, (MDSampler, WeightOptimizer, PositionOptimizer)):
-                logging.info(f"Step {i}: {type(step)}")
+            if isinstance(step, MDSampler):
+                workflow_types.append("MDSampler")
+                logging.info(f"Step {i}: MDSampler")
+
+            elif isinstance(step, WeightOptimizer):
+                workflow_types.append("WeightOptimizer")
+                logging.info(f"Step {i}: WeightOptimizer")
+
+            elif isinstance(step, PositionOptimizer):
+                workflow_types.append("PositionOptimizer")
+                logging.info(f"Step {i}: PositionOptimizer")
 
             else:
-                logging.warning(
+                logging.error(
                     f"Invalid step {i}, must be MDSampler, WeightOptimizer, or PositionOptimizer"
                 )
                 raise ValueError(
                     "Invalid step, must be MDSampler, WeightOptimizer, or PositionOptimizer"
                 )
+
+        logging.info("Checking if workflow is valid")
+        self.workflow_is_valid(workflow_types)
+        logging.info("Workflow check complete.")
+
+        return
+
+    def workflow_is_valid(self, workflow_types):
+        if "MDSampler" not in workflow_types:
+            logging.error("Workflow must contain at least one MDSampler")
+            raise NotImplementedError("Workflow must contain at least one MDSampler")
+
+        if "WeightOptimizer" not in workflow_types:
+            logging.error("Workflow must contain at least one WeightOptimizer")
+            raise NotImplementedError(
+                "Workflow must contain at least one WeightOptimizer"
+            )
+
+        if "PositionOptimizer" not in workflow_types:
+            logging.error("Workflow must contain at least one PositionOptimizer")
+            raise NotImplementedError(
+                "Workflow must contain at least one PositionOptimizer"
+            )
+
+        for i in range(len(workflow_types)):
+            if i == 0 and workflow_types[i] != "WeightOptimizer":
+                logging.error("First step must be WeightOptimizer")
+                raise NotImplementedError("First step must be WeightOptimizer")
+
+            if i == 1 and workflow_types[i] != "PositionOptimizer":
+                logging.error("Second step must be PositionOptimizer")
+                raise NotImplementedError("Second step must be PositionOptimizer")
+
+            if i > 1 and workflow_types[i] != "MDSampler":
+                logging.error("All steps after second must be MDSampler")
+                raise NotImplementedError("All steps after second must be MDSampler")
 
         return
 
@@ -45,7 +91,6 @@ class Pipeline:
         ref_universe,
         init_weights=None,
     ):
-    
         self.univ_md = []
         self.univ_pull = []
         self.ref_universe = ref_universe
@@ -86,8 +131,8 @@ class Pipeline:
             positions = self.univ_md[i].atoms.positions
             ref_positions = self.univ_pull[i].atoms.positions
 
-            #self.univ_md[i].atoms.write(f"md_init_model_{i}.pdb")
-            #self.univ_pull[i].atoms.write(f"md_pull_model_{i}.pdb")
+            # self.univ_md[i].atoms.write(f"md_init_model_{i}.pdb")
+            # self.univ_pull[i].atoms.write(f"md_pull_model_{i}.pdb")
 
             positions = step.run(positions, ref_positions, self.opt_atom_list)
             self.univ_md[i].atoms.positions = positions
@@ -126,19 +171,21 @@ class Pipeline:
         for i in range(self.n_models):
             dummy_univ = self.univ_md[i].copy()
 
-            #dummy_univ.atoms.write(f"model_before_opt_{i}.pdb")
+            # dummy_univ.atoms.write(f"model_before_opt_{i}.pdb")
 
             align.alignto(
                 dummy_univ, self.ref_universe, select=self.filter, match_atoms=True
             )
             dummy_univs.append(dummy_univ)
 
-            #dummy_univ.atoms.write(f"model_before_opt_{i}_aligned.pdb")
+            # dummy_univ.atoms.write(f"model_before_opt_{i}_aligned.pdb")
 
             positions[i] = dummy_univ.select_atoms(self.filter).atoms.positions.T
 
         positions = jnp.array(positions)
-        positions, loss = step.run(positions, self.weights, image_stack, self.struct_info)
+        positions, loss = step.run(
+            positions, self.weights, image_stack, self.struct_info
+        )
 
         for i in range(self.n_models):
             dummy_univs[i].select_atoms(self.filter).atoms.positions = positions[i].T
@@ -147,7 +194,7 @@ class Pipeline:
             )
             self.univ_pull[i].atoms.positions = dummy_univs[i].atoms.positions
 
-            #self.univ_pull[i].atoms.write(f"model_after_opt_{i}.pdb")
+            # self.univ_pull[i].atoms.write(f"model_after_opt_{i}.pdb")
 
         return loss
 
