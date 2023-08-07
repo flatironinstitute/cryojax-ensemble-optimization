@@ -87,13 +87,19 @@ class ImageStack:
         self.generate_grids()
 
     def generate_grids(self):
+        box_size = int(self.constant_params[0])
+        pixel_size = self.constant_params[1]
 
-        grid_min = -self.constant_params[1] * self.constant_params[0] * 0.5
-        grid_max = self.constant_params[1] * self.constant_params[0] * 0.5
-        self.grid = jnp.arange(grid_min, grid_max, self.constant_params[1])[0:int(self.constant_params[0])]
-        
-        freq_pix_1d = jnp.fft.fftfreq(int(self.constant_params[0]), d=self.constant_params[1])
+        grid_min = -pixel_size * box_size * 0.5
+        grid_max = pixel_size * box_size * 0.5
+        self.grid = jnp.arange(grid_min, grid_max, pixel_size)[0:box_size]
+
+        freq_pix_1d = jnp.fft.fftfreq(box_size, d=pixel_size)
         self.grid_f = freq_pix_1d[:, None] ** 2 + freq_pix_1d[None, :] ** 2
+
+        self.noise_grid = jnp.linspace(
+            -0.5 * (box_size - 1), 0.5 * (box_size - 1), box_size
+        )
 
         return
 

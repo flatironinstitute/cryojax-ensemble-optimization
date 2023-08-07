@@ -4,7 +4,7 @@ from jax.typing import ArrayLike
 from functools import partial
 from typing import Union, Tuple
 
-from cryo_md.likelihood.simulator_for_lklhood import noiseless_simulator_
+from cryo_md.wpa_simulator.simulator import simulator_
 from cryo_md.image.image_stack import ImageStack
 
 
@@ -42,9 +42,7 @@ def compare_coords_with_img_(
     float
         Log-likelihood
     """
-    image_coords = noiseless_simulator_(
-        coords, struct_info, grid, grid_f, res, var_imaging_args
-    )
+    image_coords = simulator_(coords, struct_info, grid, grid_f, res, var_imaging_args)
 
     return (
         -0.5
@@ -60,6 +58,7 @@ batch_over_models_ = jax.jit(
 batch_over_images_ = jax.jit(
     jax.vmap(batch_over_models_, in_axes=(None, 0, None, None, None, None, 0))
 )
+
 
 def calc_lklhood_(
     models: ArrayLike,
@@ -126,13 +125,9 @@ def calc_likelihood(
     return likelihood
 
 
-calc_lkl_and_grad_struct_ = jax.jit(
-    jax.value_and_grad(calc_lklhood_, argnums=0)
-)
+calc_lkl_and_grad_struct_ = jax.jit(jax.value_and_grad(calc_lklhood_, argnums=0))
 
-calc_lkl_and_grad_wts_ = jax.jit(
-    jax.value_and_grad(calc_lklhood_, argnums=1)
-)
+calc_lkl_and_grad_wts_ = jax.jit(jax.value_and_grad(calc_lklhood_, argnums=1))
 
 
 def calc_lkl_and_grad_struct(
