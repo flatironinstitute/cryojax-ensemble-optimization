@@ -8,13 +8,12 @@ from cryo_md.likelihood.simulator_for_lklhood import noiseless_simulator_
 from cryo_md.image.image_stack import ImageStack
 
 
-@partial(jax.jit, static_argnames=["pixel_size", "box_size"])
 def compare_coords_with_img_(
     coords: ArrayLike,
     image_ref: ArrayLike,
     struct_info: ArrayLike,
-    box_size: int,
-    pixel_size: float,
+    grid: ArrayLike,
+    grid_f: ArrayLike,
     res: float,
     var_imaging_args: ArrayLike,
 ) -> float:
@@ -44,7 +43,7 @@ def compare_coords_with_img_(
         Log-likelihood
     """
     image_coords = noiseless_simulator_(
-        coords, struct_info, box_size, pixel_size, res, var_imaging_args
+        coords, struct_info, grid, grid_f, res, var_imaging_args
     )
 
     return (
@@ -55,29 +54,25 @@ def compare_coords_with_img_(
 
 
 batch_over_models_ = jax.jit(
-    jax.vmap(compare_coords_with_img_, in_axes=(0, None, None, None, None, None, None)),
-    static_argnums=(3, 4),
+    jax.vmap(compare_coords_with_img_, in_axes=(0, None, None, None, None, None, None))
 )
 
 batch_over_images_ = jax.jit(
-    jax.vmap(batch_over_models_, in_axes=(None, 0, None, None, None, None, 0)),
-    static_argnums=(3, 4),
+    jax.vmap(batch_over_models_, in_axes=(None, 0, None, None, None, None, 0))
 )
 
-
-@partial(jax.jit, static_argnames=["pixel_size", "box_size"])
 def calc_lklhood_(
     models: ArrayLike,
     model_weights: ArrayLike,
     images: ArrayLike,
     struct_info: ArrayLike,
-    box_size: int,
-    pixel_size: float,
+    grid: ArrayLike,
+    grid_f: ArrayLike,
     res: float,
     variable_params: ArrayLike,
 ) -> float:
     lklhood_matrix = batch_over_images_(
-        models, images, struct_info, box_size, pixel_size, res, variable_params
+        models, images, struct_info, grid, grid_f, res, variable_params
     )
 
     model_weights = model_weights
@@ -122,8 +117,8 @@ def calc_likelihood(
         model_weights,
         image_stack.images,
         struct_info,
-        image_stack.constant_params[0],
-        image_stack.constant_params[1],
+        image_stack.grid,
+        image_stack.grid_f,
         image_stack.constant_params[2],
         image_stack.variable_params,
     )
@@ -132,11 +127,11 @@ def calc_likelihood(
 
 
 calc_lkl_and_grad_struct_ = jax.jit(
-    jax.value_and_grad(calc_lklhood_, argnums=0), static_argnums=(4, 5)
+    jax.value_and_grad(calc_lklhood_, argnums=0)
 )
 
 calc_lkl_and_grad_wts_ = jax.jit(
-    jax.value_and_grad(calc_lklhood_, argnums=1), static_argnums=(4, 5)
+    jax.value_and_grad(calc_lklhood_, argnums=1)
 )
 
 
@@ -173,8 +168,8 @@ def calc_lkl_and_grad_struct(
         model_weights,
         image_stack.images,
         struct_info,
-        image_stack.constant_params[0],
-        image_stack.constant_params[1],
+        image_stack.grid,
+        image_stack.grid_f,
         image_stack.constant_params[2],
         image_stack.variable_params,
     )
@@ -215,8 +210,8 @@ def calc_lkl_and_grad_wts(
         model_weights,
         image_stack.images,
         struct_info,
-        image_stack.constant_params[0],
-        image_stack.constant_params[1],
+        image_stack.grid,
+        image_stack.grid_f,
         image_stack.constant_params[2],
         image_stack.variable_params,
     )
