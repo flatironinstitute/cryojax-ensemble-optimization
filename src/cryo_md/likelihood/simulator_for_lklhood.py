@@ -54,8 +54,6 @@ def noiseless_simulator_(
     grid_min = -pixel_size * box_size * 0.5
     grid_max = pixel_size * box_size * 0.5
 
-    print(grid_min, grid_max, pixel_size, box_size)
-    
     grid = jnp.arange(grid_min, grid_max, pixel_size)[0:box_size]
 
     gauss_x = gauss_amp * jnp.exp(

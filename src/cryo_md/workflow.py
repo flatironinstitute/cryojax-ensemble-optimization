@@ -15,68 +15,7 @@ from cryo_md.molecular_dynamics.md_sampling import run_md_openmm
 from cryo_md.utils.parser import pdb_parser
 
 
-def optimize_weights_(models, weights, struct_info, steps, step_size, image_stack):
-    losses = np.zeros(steps)
-    for i in range(steps):
-        loss, grad_wts = calc_lkl_and_grad_wts(
-            models,
-            weights,
-            image_stack,
-            struct_info
-        )
-
-        weights = weights + step_size * grad_wts
-        weights /= jnp.sum(weights)
-
-        losses[i] = loss
-
-    return weights, losses
-
-def parse_initial_models_(directory_path: str, n_models: int, ref_universe: mda.Universe, filter: str):
-
-    
-    if filter == "name CA":
-        struct_info = jnp.array(pdb_parser(f"{directory_path}/init_system_0.pdb", mode="resid"))
-        
-    elif filter == "not name H*":
-        struct_info = jnp.array(pdb_parser(f"{directory_path}/init_system_0.pdb", mode="all_atom"))
-
-    else:
-        raise NotImplementedError(
-            "Only CA and all-atom models are supported at the moment."
-        )
-
-    opt_models = np.zeros(
-        (n_models, *ref_universe.select_atoms(filter).atoms.positions.T.shape)
-    )
-        
-    for i in range(n_models):
-        univ_system = mda.Universe(
-            f"{directory_path}/init_system_{i}.pdb",
-        )
-
-        univ_system.atoms.write(f"{directory_path}/curr_system_{i}.pdb")
-
-        univ_prot = univ_system.select_atoms("protein")
-        align.alignto(univ_prot, ref_universe, select=filter, match_atoms=True)
-        opt_models[i] = univ_prot.select_atoms(filter).atoms.positions.T
-
-    opt_models = jnp.array(opt_models)
-
-    atom_indices = (
-        mda.Universe(f"{directory_path}/init_system_0.pdb")
-        .select_atoms(f"protein and {filter}")
-        .atoms.indices
-    )
-
-    atom_indices = jnp.array(atom_indices)
-
-    unit_cell = mda.Universe(f"{directory_path}/init_system_0.pdb").atoms.dimensions
-    unit_cell = jnp.array(unit_cell)
-
-    return opt_models, struct_info, atom_indices, unit_cell
-
-def run_optimizer(
+def run_cryomd(
     n_models: int,
     ref_universe: mda.Universe,
     image_stack,
@@ -90,12 +29,13 @@ def run_optimizer(
     batch_size=None,
     init_weights=None,
 ):
-    
     assert n_models > 0, "Number of models must be greater than 0."
     assert n_steps > 0, "Number of steps must be greater than 0."
     assert step_size > 0, "Step size must be greater than 0."
 
-    opt_models, struct_info, atom_indices, unit_cell = parse_initial_models_(directory_path, n_models, ref_universe, filter)
+    opt_models, struct_info, atom_indices, unit_cell = parse_initial_models_(
+        directory_path, n_models, ref_universe, filter
+    )
 
     if init_weights is None:
         opt_weights = jnp.ones(n_models) / n_models
@@ -128,12 +68,11 @@ def run_optimizer(
 
     with tqdm(range(n_steps), unit="step") as pbar:
         for counter in pbar:
-
             opt_weights, _ = optimize_weights_(
                 opt_models, opt_weights, struct_info, 10, 0.1, image_stack
             )
 
-            #random_batch = np.random.choice(image_stack.n_images, batch_size, replace=False)
+            # random_batch = np.random.choice(image_stack.n_images, batch_size, replace=False)
 
             loss, grad_str = calc_lkl_and_grad_struct(
                 opt_models,
@@ -143,7 +82,6 @@ def run_optimizer(
             )
 
             pbar.set_postfix(loss=loss)
-
 
             if loss is jnp.nan:
                 print("Loss is nan. Exiting.")
@@ -180,9 +118,7 @@ def run_optimizer(
 
         for i in range(n_models):
             opt_univ = mda.Universe(f"{directory_path}/curr_system_{i}.pdb")
-            align.alignto(
-                opt_univ, ref_universe, select=filter, match_atoms=True
-            )
+            align.alignto(opt_univ, ref_universe, select=filter, match_atoms=True)
             trajs_full[counter] = opt_univ.atoms.positions.T
 
         losses[counter] = loss

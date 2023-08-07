@@ -92,7 +92,10 @@ def calc_lklhood_(
 
 
 def calc_likelihood(
-    models: ArrayLike, model_weights: ArrayLike, image_stack: ImageStack, struct_info: ArrayLike
+    models: ArrayLike,
+    model_weights: ArrayLike,
+    image_stack: ImageStack,
+    struct_info: ArrayLike,
 ) -> float:
     """
     Calculate the log-likelihood.
@@ -138,7 +141,10 @@ calc_lkl_and_grad_wts_ = jax.jit(
 
 
 def calc_lkl_and_grad_struct(
-    models: ArrayLike, model_weights: ArrayLike, image_stack: ImageStack, struct_info: ArrayLike
+    models: ArrayLike,
+    model_weights: ArrayLike,
+    image_stack: ImageStack,
+    struct_info: ArrayLike,
 ) -> Tuple[float, ArrayLike]:
     """
     Calculate the log-likelihood and its gradient with respect to the structure.
@@ -177,7 +183,10 @@ def calc_lkl_and_grad_struct(
 
 
 def calc_lkl_and_grad_wts(
-    models: ArrayLike, model_weights: ArrayLike, image_stack: ImageStack, struct_info: ArrayLike
+    models: ArrayLike,
+    model_weights: ArrayLike,
+    image_stack: ImageStack,
+    struct_info: ArrayLike,
 ) -> Tuple[float, ArrayLike]:
     """
     Calculate the log-likelihood and its gradient with respect to the model weights.

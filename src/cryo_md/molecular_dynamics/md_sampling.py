@@ -6,123 +6,124 @@ Functions
 run_md_openmm
     Run MD simulations using OpenMM
 """
+import numpy as np
 import openmm
+import logging
 import openmm.app as openmm_app
 import openmm.unit as openmm_unit
 
 
-def run_md_openmm(
-    n_models: int,
-    atom_indices_restraint: list,
-    directory_path: str,
-    nsteps: int = 1000,
-    stride: int = 5,
-    restrain_force_constant: float = 1000.0,
-    **kwargs,
-):
-    """
-    Run MD simulations using OpenMM
+class MDSampler:
+    def __init__(
+        self,
+        topology_file,
+        restrain_force_constant,
+        n_steps,
+        **kwargs,
+    ) -> None:
+        self.topology_file = topology_file
+        self.restrain_force_constant = restrain_force_constant
+        self.n_steps = n_steps
 
-    Parameters
-    ----------
-    n_models : int
-        Number of models to run
-    atom_indices_restraint : list
-        List of atom indices for the RMSD restraint
-    directory_path : str
-        Path to directory containing PDB files
-    nsteps : int, optional
-        Number of MD steps, by default 1000
-    stride : int, optional
-        Stride for saving trajectory frames, by default 5
-    restrain_force_constant : float, optional
-        Force constant for the RMSD restraint, by default 1000.0
-    **kwargs
-        Additional arguments. Includes
-        - model_topfile_prefix: str
-            Prefix for the PDB file name, by defaul "curr_system_"
-        - ref_topfile_prefix: str
-            Prefix for the reference PDB file name, by default "ref_system_"
-        - traj_fname_prefix: str
-            Prefix for the trajectory file name, by default "system_traj_"
-        - platform: str
-            Platform to run MD on, by default "CPU". Other options include "CUDA" and "OpenCL".
-        - properties: dict
-            Properties for the platform, by default {"Threads": "1"}. Check other properties in the OpenMM documentation.
-        - Temperature: float
-            Temperature for the Langevin integrator, by default 300.0 * openmm.unit.kelvin
-        - friction: float
-            Friction coefficient for the Langevin integrator, by default 1.0 / openmm.unit.picosecond
-        - timestep: float
-            Timestep for the Langevin integrator, by default 0.002 * openmm.unit.picoseconds
+        self.parse_kwargs(**kwargs)
 
-    Returns
-    -------
-    None
-        Trajectory files are saved in the directory specified by directory_path with name {traj_fname_prefix}_{i}.pdb
-    """
+        self.define_forcefield()
+        self.define_platform()
+        #self.define_integrator()
 
-    default_kwargs = {
-        "model_topfile_prefix": "curr_system_",
-        "ref_topfile_prefix": "ref_system_",
-        "traj_fname_prefix": "system_traj_",
-        "platform": "CPU",
-        "properties": {"Threads": "1"},
-        "Temperature": 300.0 * openmm_unit.kelvin,
-        "friction": 1.0 / openmm_unit.picosecond,
-        "timestep": 0.002 * openmm_unit.picoseconds,
-    }
 
-    for key in kwargs:
-        if key not in default_kwargs:
-            raise ValueError(f"Invalid argument {key}")
+    def parse_kwargs(self, **kwargs):
+        default_kwargs = {
+            "forcefield": "amber14-all.xml",
+            "water_model": "amber14/tip3p.xml",
+            "nonbondedMethod": openmm_app.PME,
+            "nonbondedCutoff": 1.0 * openmm_unit.nanometers,
+            "constraints": openmm_app.HBonds,
+            "temperature": 300.0 * openmm_unit.kelvin,
+            "friction": 1.0 / openmm_unit.picosecond,
+            "timestep": 0.002 * openmm_unit.picoseconds,
+            "platform": "CPU",
+            "properties": {"Threads": "1"},
+        }
 
-    for key, value in default_kwargs.items():
-        if key not in kwargs:
-            kwargs[key] = value
+        for key in kwargs:
+            if key not in default_kwargs:
+                raise ValueError(f"Invalid argument {key}")
 
-    for i in range(n_models):
-        # Running dynamics
+        for key, value in default_kwargs.items():
+            if key not in kwargs:
+                kwargs[key] = value
 
-        forcefield = openmm_app.ForceField("amber14-all.xml", "amber14/tip3p.xml")
-        pdb = openmm_app.PDBFile(f"{directory_path}/curr_system_{i}.pdb")
-        pdb_ref = openmm_app.PDBFile(f"{directory_path}/curr_system_{i}_ref.pdb")
+        self.config = kwargs
 
-        pdb_reporter = openmm_app.PDBReporter(
-            f"{directory_path}/pull_traj_{i}.pdb", stride
+        return
+
+    def define_forcefield(
+        self
+    ):
+        self.forcefield = openmm_app.ForceField(self.config["forcefield"], self.config["water_model"])
+        return
+
+    def define_platform(self):
+        self.platform = openmm.Platform.getPlatformByName(self.config["platform"])
+        return
+
+    def update_system(self, positions, ref_positions, restrain_atom_list):
+
+        integrator = openmm.LangevinIntegrator(
+            self.config["temperature"], self.config["friction"], self.config["timestep"]
         )
-
+               
+        pdb = openmm_app.PDBFile(self.topology_file)
+        pdb.positions = positions * openmm_unit.angstroms
         modeller = openmm_app.Modeller(pdb.topology, pdb.positions)
-        system = forcefield.createSystem(
+
+        system = self.forcefield.createSystem(
             modeller.topology,
-            nonbondedMethod=openmm_app.PME,
-            nonbondedCutoff=1.0 * openmm_unit.nanometers,
-            constraints=openmm_app.HBonds,
+            nonbondedMethod=self.config["nonbondedMethod"],
+            nonbondedCutoff=self.config["nonbondedCutoff"],
+            constraints=self.config["constraints"],
         )
 
-        # Add RMSD restraint
+        RMSD_value = openmm.RMSDForce(
+            ref_positions * openmm_unit.angstroms, restrain_atom_list
+        )
 
-        RMSD_value = openmm.RMSDForce(pdb_ref.positions, atom_indices_restraint)
-
-        force_RMSD = openmm.CustomCVForce("0.5 * k * (RMSD - r0)^2")
-        force_RMSD.addGlobalParameter("k", restrain_force_constant)
-        force_RMSD.addGlobalParameter("r0", 0.0)
+        force_RMSD = openmm.CustomCVForce("0.5 * k * RMSD^2")
+        force_RMSD.addGlobalParameter("k", self.restrain_force_constant)
         force_RMSD.addCollectiveVariable("RMSD", RMSD_value)
 
         system.addForce(force_RMSD)
 
-        integrator = openmm.LangevinIntegrator(
-            kwargs["Temperature"], kwargs["friction"], kwargs["timestep"]
-        )
-
-        platform = openmm.Platform.getPlatformByName(kwargs["platform"])
         simulation = openmm_app.Simulation(
-            modeller.topology, system, integrator, platform, kwargs["properties"]
+            modeller.topology,
+            system,
+            integrator,
+            self.platform,
+            self.config["properties"],
         )
-        simulation.context.setPositions(pdb.positions)
-        simulation.minimizeEnergy()
-        simulation.reporters.append(pdb_reporter)
-        # simulation.reporters.append(openmm_app.StateDataReporter(f"ala_dynamics_{i}.csv", 5, step=True, potentialEnergy=True, temperature=True))
-        simulation.step(nsteps)
 
-    return
+        simulation.context.setPositions(positions * openmm_unit.angstroms)
+
+        return simulation
+
+    def run(self, positions, ref_positions, restrain_atom_list):
+        logging.info("Running MD simulation...")
+
+        simulation = self.update_system(positions, ref_positions, restrain_atom_list)
+        logging.info("  Positions updated.")
+
+        simulation.minimizeEnergy()
+        logging.info("  Energy minimized.")
+
+        logging.info(f"  Running simulation for {self.n_steps} steps...")
+        simulation.step(self.n_steps)
+
+        positions = simulation.context.getState(getPositions=True).getPositions(
+            asNumpy=True
+        )
+
+        energy = simulation.context.getState(getEnergy=True).getPotentialEnergy()
+        logging.info(f"Simulation complete. Final Energy: {energy}")
+
+        return np.array(positions)

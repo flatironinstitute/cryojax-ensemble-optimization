@@ -81,7 +81,7 @@ def dump_optimized_models(
 
     for i in range(opt_models.shape[0]):
         # Solvated ref
-        
+
         solv_univ_ref = mda.Universe(f"{directory_path}/curr_system_{i}.pdb")
 
         # Replace in solvated model
