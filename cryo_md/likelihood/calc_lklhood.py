@@ -129,6 +129,7 @@ calc_lkl_and_grad_struct_ = jax.jit(jax.value_and_grad(calc_lklhood_, argnums=0)
 
 calc_lkl_and_grad_wts_ = jax.jit(jax.value_and_grad(calc_lklhood_, argnums=1))
 
+import numpy as np
 
 def calc_lkl_and_grad_struct(
     models: ArrayLike,
@@ -158,6 +159,7 @@ def calc_lkl_and_grad_struct(
         Gradient with respect to the structure
     """
 
+    
     log_lklhood, grad_str = calc_lkl_and_grad_struct_(
         models,
         model_weights,

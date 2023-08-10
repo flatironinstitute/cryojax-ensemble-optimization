@@ -67,13 +67,13 @@ class MDSampler:
         self.platform = openmm.Platform.getPlatformByName(self.config["platform"])
         return
 
-    def update_system(self, positions, ref_positions, restrain_atom_list):
+    def update_system(self, position_file, ref_position_file, restrain_atom_list):
         integrator = openmm.LangevinIntegrator(
             self.config["temperature"], self.config["friction"], self.config["timestep"]
         )
 
-        pdb = openmm_app.PDBFile(self.topology_file)
-        pdb.positions = positions * openmm_unit.angstroms
+        pdb = openmm_app.PDBFile(position_file)
+        pdb_ref = openmm_app.PDBFile(ref_position_file)
         modeller = openmm_app.Modeller(pdb.topology, pdb.positions)
 
         system = self.forcefield.createSystem(
@@ -84,7 +84,7 @@ class MDSampler:
         )
 
         RMSD_value = openmm.RMSDForce(
-            ref_positions * openmm_unit.angstroms, restrain_atom_list
+            pdb_ref.positions, restrain_atom_list
         )
 
         force_RMSD = openmm.CustomCVForce("0.5 * k * RMSD^2")
@@ -101,14 +101,12 @@ class MDSampler:
             self.config["properties"],
         )
 
-        simulation.context.setPositions(positions * openmm_unit.angstroms)
-
         return simulation
 
-    def run(self, positions, ref_positions, restrain_atom_list):
+    def run(self, positions_file, ref_positions_file, restrain_atom_list):
         logging.info("Running MD simulation...")
 
-        simulation = self.update_system(positions, ref_positions, restrain_atom_list)
+        simulation = self.update_system(positions_file, ref_positions_file, restrain_atom_list)
         logging.info("  Positions updated.")
 
         simulation.minimizeEnergy()

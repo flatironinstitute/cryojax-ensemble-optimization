@@ -117,10 +117,10 @@ def simulator_(
     coords = jnp.matmul(calc_rot_matrix(var_imaging_args[0:4]), coords)
 
     gauss_x = gauss_amp * jnp.exp(
-        -0.5 * (((grid[:, None] - coords[0, :]) / gauss_var) ** 2)
+        -0.5 * ((grid[:, None] - coords[0, :]) ** 2 / gauss_var)
     )
     gauss_y = gauss_amp * jnp.exp(
-        -0.5 * (((grid[:, None] - coords[1, :]) / gauss_var) ** 2)
+        -0.5 * ((grid[:, None] - coords[1, :]) ** 2 / gauss_var)
     )
     image = jnp.matmul(gauss_x, gauss_y.T)
 
