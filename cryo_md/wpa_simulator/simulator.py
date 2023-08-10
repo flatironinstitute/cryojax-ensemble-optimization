@@ -126,9 +126,11 @@ def simulator_(
 
     # # Apply CTF
     elecwavel = 0.019866
+
     phase = var_imaging_args[6] * jnp.pi * 2.0 * 10000 * elecwavel
 
     env = jnp.exp(-var_imaging_args[8] * grid_f * 0.5)
+
     ctf = (
         (
             var_imaging_args[7] * jnp.cos(phase * grid_f * 0.5)
@@ -137,7 +139,7 @@ def simulator_(
         )
         * env
         / var_imaging_args[7]
-    )
+    )    
 
     # Normalize image
     image = jnp.fft.ifft2(jnp.fft.fft2(image) * ctf).real
