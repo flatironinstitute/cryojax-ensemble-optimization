@@ -101,6 +101,8 @@ class MDSampler:
             self.config["properties"],
         )
 
+        simulation.context.setPositions(pdb.positions)
+        
         return simulation
 
     def run(self, positions_file, ref_positions_file, restrain_atom_list):

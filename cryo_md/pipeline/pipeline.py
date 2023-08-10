@@ -40,7 +40,7 @@ class Pipeline:
                     f"Invalid step {i}, must be MDSampler, WeightOptimizer, or PositionOptimizer"
                 )
                 raise ValueError(
-                    "Invalid step, must be MDSampler, WeightOptimizer, or PositionOptimizer"
+                    f"Invalid step type: {type(step)}, must be MDSampler, WeightOptimizer, or PositionOptimizer"
                 )
 
         logging.info("Checking if workflow is valid")
@@ -136,7 +136,7 @@ class Pipeline:
             # self.univ_pull[i].atoms.write(f"md_pull_model_{i}.pdb")
 
             positions = step.run("positions.pdb", "ref_positions.pdb", self.opt_atom_list)
-            self.univ_md[i].atoms.positions = positions
+            self.univ_md[i].atoms.positions = positions.copy()
 
         return
 

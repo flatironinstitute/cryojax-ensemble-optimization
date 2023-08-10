@@ -250,15 +250,15 @@ def simulate_stack(
             variable_params,
         )
 
-        # batch_images, noise_variances = batch_add_noise_(
-        #     batch_images,
-        #     image_stack.noise_grid,
-        #     config["noise_radius_mask"],
-        #     variable_params[:, 9],
-        #     subkeys,
-        # )
+        batch_images, noise_variances = batch_add_noise_(
+            batch_images,
+            image_stack.noise_grid,
+            config["noise_radius_mask"],
+            variable_params[:, 9],
+            subkeys,
+        )
 
-        #variable_params[:, 10] = noise_variances
+        variable_params[:, 10] = noise_variances
         image_stack.stack_batch(batch_images, variable_params)
 
     return image_stack

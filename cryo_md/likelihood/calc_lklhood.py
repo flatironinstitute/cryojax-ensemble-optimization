@@ -136,6 +136,7 @@ def calc_lkl_and_grad_struct(
     model_weights: ArrayLike,
     image_stack: ImageStack,
     struct_info: ArrayLike,
+    batch_size
 ) -> Tuple[float, ArrayLike]:
     """
     Calculate the log-likelihood and its gradient with respect to the structure.
@@ -159,16 +160,17 @@ def calc_lkl_and_grad_struct(
         Gradient with respect to the structure
     """
 
+    random_batch = np.random.choice(image_stack.n_images, batch_size, replace=False)
     
     log_lklhood, grad_str = calc_lkl_and_grad_struct_(
         models,
         model_weights,
-        image_stack.images,
+        image_stack.images[random_batch],
         struct_info,
         image_stack.grid,
         image_stack.grid_f,
         image_stack.constant_params[2],
-        image_stack.variable_params,
+        image_stack.variable_params[random_batch],
     )
 
     return log_lklhood, grad_str

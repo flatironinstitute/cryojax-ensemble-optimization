@@ -33,17 +33,19 @@ class WeightOptimizer:
 
 
 class PositionOptimizer:
-    def __init__(self, step_size):
+    def __init__(self, step_size, batch_size):
         assert step_size > 0, "Step size must be greater than 0"
+        assert batch_size > 0, "Batch size must be greater than 0"
 
         self.step_size = step_size
+        self.batch_size = batch_size
 
         return
 
     def run(self, positions, weights, image_stack, struct_info):
         logging.info("Running position optimization...")
         loss, grad_str = calc_lkl_and_grad_struct(
-            positions, weights, image_stack, struct_info
+            positions, weights, image_stack, struct_info, self.batch_size
         )
 
         norms = jnp.max(jnp.abs(grad_str), axis=(1))[:, None, :]
