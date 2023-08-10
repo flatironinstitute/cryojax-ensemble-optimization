@@ -110,8 +110,8 @@ def simulator_(
 
     # assert pixel_size < 2.0 * res, "Pixel size should be smaller than 2.0 * res due to the Nyquist limit."
 
-    gauss_var = struct_info[0, :] * res**2
-    gauss_amp = struct_info[1, :] / jnp.sqrt(gauss_var * 2.0 * jnp.pi)
+    gauss_var = res ** 2#struct_info[0, :] * res**2
+    gauss_amp = 1.0 #struct_info[1, :] / jnp.sqrt(gauss_var * 2.0 * jnp.pi)
 
     # Rotate coordinates
     coords = jnp.matmul(calc_rot_matrix(var_imaging_args[0:4]), coords)
@@ -248,15 +248,15 @@ def simulate_stack(
             variable_params,
         )
 
-        batch_images, noise_variances = batch_add_noise_(
-            batch_images,
-            image_stack.noise_grid,
-            config["noise_radius_mask"],
-            variable_params[:, 9],
-            subkeys,
-        )
+        # batch_images, noise_variances = batch_add_noise_(
+        #     batch_images,
+        #     image_stack.noise_grid,
+        #     config["noise_radius_mask"],
+        #     variable_params[:, 9],
+        #     subkeys,
+        # )
 
-        variable_params[:, 10] = noise_variances
+        #variable_params[:, 10] = noise_variances
         image_stack.stack_batch(batch_images, variable_params)
 
     return image_stack
