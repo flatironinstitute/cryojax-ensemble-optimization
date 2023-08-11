@@ -22,11 +22,14 @@ dependencies = [
     "numpy",
     "jax[cpu]",
     "matplotlib",
-    "scikit-learn"
 ]
 
 
 dynamic = ["version"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cryo_md*"]
 
 [project.optional-dependencies]
 pdf = ["ReportLab>=1.2", "RXP"]
