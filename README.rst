@@ -51,12 +51,11 @@ Note: you must do this AFTER loading modules and activating the environment, oth
 
 Installation
 ============
-To install, first clone this repository and switch to the branch develop
+To install, first clone this repository
 ::
 
     git clone git@github.com:DSilva27/cryo_MD.git
     cd cryo_MD
-    git checkout develop
 
 Then install using pip (use -e for editable mode)
 ::
