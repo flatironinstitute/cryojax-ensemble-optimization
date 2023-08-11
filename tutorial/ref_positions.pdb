@@ -1,0 +1,46 @@
+HEADER    
+TITLE     MDANALYSIS FRAME 0: Created by PDBWriter
+CRYST1   34.000   34.000   34.000  90.00  90.00  90.00 P 1           1
+ATOM      1 HH31 ACE X   1       2.583   3.346  -4.441  1.00  0.00      SYST    
+ATOM      2  CH3 ACE X   1       3.051   2.356  -4.045  1.00  0.00      SYST    
+ATOM      3 HH32 ACE X   1       3.614   1.906  -4.370  1.00  0.00      SYST    
+ATOM      4 HH33 ACE X   1       1.948   1.776  -4.983  1.00  0.00      SYST    
+ATOM      5  C   ACE X   1       2.372   2.568  -2.587  1.00  0.00      SYST    
+ATOM      6  O   ACE X   1       3.093   2.149  -1.772  1.00  0.00      SYST    
+ATOM      7  N   ALA X   2       1.207   2.801  -2.454  1.00  0.00      SYST    
+ATOM      8  H   ALA X   2       0.288   2.714  -3.205  1.00  0.00      SYST    
+ATOM      9  CA  ALA X   2       0.516   2.671  -1.459  1.00  0.00      SYST    
+ATOM     10  HA  ALA X   2       1.028   2.535  -0.498  1.00  0.00      SYST    
+ATOM     11  CB  ALA X   2      -1.158   2.728  -1.824  1.00  0.00      SYST    
+ATOM     12  HB1 ALA X   2      -1.758   2.465  -1.841  1.00  0.00      SYST    
+ATOM     13  HB2 ALA X   2      -1.518   2.863  -0.157  1.00  0.00      SYST    
+ATOM     14  HB3 ALA X   2      -0.819   3.940  -1.337  1.00  0.00      SYST    
+ATOM     15  C   ALA X   2       0.249   0.546  -1.373  1.00  0.00      SYST    
+ATOM     16  O   ALA X   2      -0.837  -0.148  -1.322  1.00  0.00      SYST    
+ATOM     17  N   ALA X   3       1.237  -0.506  -1.160  1.00  0.00      SYST    
+ATOM     18  H   ALA X   3       2.195   0.426  -0.686  1.00  0.00      SYST    
+ATOM     19  CA  ALA X   3       0.987  -1.635  -0.177  1.00  0.00      SYST    
+ATOM     20  HA  ALA X   3       0.775  -1.956  -0.680  1.00  0.00      SYST    
+ATOM     21  CB  ALA X   3       2.611  -2.244  -0.495  1.00  0.00      SYST    
+ATOM     22  HB1 ALA X   3       3.198  -1.811  -1.109  1.00  0.00      SYST    
+ATOM     23  HB2 ALA X   3       3.451  -1.228   0.541  1.00  0.00      SYST    
+ATOM     24  HB3 ALA X   3       2.865  -2.877   0.287  1.00  0.00      SYST    
+ATOM     25  C   ALA X   3       0.465  -1.928   1.252  1.00  0.00      SYST    
+ATOM     26  O   ALA X   3       0.238  -2.656   1.788  1.00  0.00      SYST    
+ATOM     27  N   ALA X   4       0.154   0.055   1.387  1.00  0.00      SYST    
+ATOM     28  H   ALA X   4       0.579   0.513   1.545  1.00  0.00      SYST    
+ATOM     29  CA  ALA X   4      -0.513   0.092   3.199  1.00  0.00      SYST    
+ATOM     30  HA  ALA X   4       0.132  -1.081   4.003  1.00  0.00      SYST    
+ATOM     31  CB  ALA X   4      -0.372   1.466   3.428  1.00  0.00      SYST    
+ATOM     32  HB1 ALA X   4       1.046   1.269   3.917  1.00  0.00      SYST    
+ATOM     33  HB2 ALA X   4      -0.547   1.787   3.287  1.00  0.00      SYST    
+ATOM     34  HB3 ALA X   4      -0.449   1.124   4.887  1.00  0.00      SYST    
+ATOM     35  C   ALA X   4      -1.851  -0.934   3.651  1.00  0.00      SYST    
+ATOM     36  O   ALA X   4      -2.597  -0.316   4.085  1.00  0.00      SYST    
+ATOM     37  N   NME X   5      -2.044  -2.197   3.220  1.00  0.00      SYST    
+ATOM     38  H   NME X   5      -1.291  -2.586   2.399  1.00  0.00      SYST    
+ATOM     39  CH3 NME X   5      -3.296  -2.847   3.227  1.00  0.00      SYST    
+ATOM     40 HH31 NME X   5      -3.668  -2.855   3.692  1.00  0.00      SYST    
+ATOM     41 HH32 NME X   5      -4.058  -1.891   2.225  1.00  0.00      SYST    
+ATOM     42 HH33 NME X   5      -3.238  -3.491   2.076  1.00  0.00      SYST    
+END

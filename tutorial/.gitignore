@@ -1,0 +1,7 @@
+*.npz
+positions.pdb
+positions_ref.pdb
+*.h5
+*.bak
+*.log
+traj_*

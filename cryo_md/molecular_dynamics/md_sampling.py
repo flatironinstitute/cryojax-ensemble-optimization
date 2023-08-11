@@ -16,12 +16,10 @@ import openmm.unit as openmm_unit
 class MDSampler:
     def __init__(
         self,
-        topology_file,
         restrain_force_constant,
         n_steps,
         **kwargs,
     ) -> None:
-        self.topology_file = topology_file
         self.restrain_force_constant = restrain_force_constant
         self.n_steps = n_steps
 
