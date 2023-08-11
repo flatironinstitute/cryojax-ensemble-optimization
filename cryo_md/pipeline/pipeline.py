@@ -167,7 +167,6 @@ class Pipeline:
                 *self.ref_universe.select_atoms(self.filter).atoms.positions.T.shape,
             )
         )
-        dummy_univs = []
 
         for i in range(self.n_models):
             dummy_univ = self.univ_md[i].copy()
@@ -177,9 +176,6 @@ class Pipeline:
             align.alignto(
                 dummy_univ, self.ref_universe, select=self.filter, match_atoms=True
             )
-            dummy_univs.append(dummy_univ)
-
-            # dummy_univ.atoms.write(f"model_before_opt_{i}_aligned.pdb")
 
             positions[i] = dummy_univ.select_atoms(self.filter).atoms.positions.T
 
@@ -189,11 +185,15 @@ class Pipeline:
         )
 
         for i in range(self.n_models):
-            dummy_univs[i].select_atoms(self.filter).atoms.positions = positions[i].T
+
+            dummy_univ = self.univ_md[i].copy()
+            align.alignto(dummy_univ, self.ref_universe, select=self.filter, match_atoms=True)
+            dummy_univ.select_atoms(self.filter).atoms.positions = positions[i].T
+
             align.alignto(
-                dummy_univs[i], self.univ_md[i], select=self.filter, match_atoms=True
+                dummy_univ, self.univ_md[i], select=self.filter, match_atoms=True
             )
-            self.univ_pull[i].atoms.positions = dummy_univs[i].atoms.positions
+            self.univ_pull[i].atoms.positions = dummy_univ.atoms.positions.copy()
 
             # self.univ_pull[i].atoms.write(f"model_after_opt_{i}.pdb")
 

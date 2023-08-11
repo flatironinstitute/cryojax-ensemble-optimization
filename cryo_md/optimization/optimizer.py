@@ -49,7 +49,7 @@ class PositionOptimizer:
         )
 
         norms = jnp.max(jnp.abs(grad_str), axis=(1))[:, None, :]
-        grad_str /= jnp.maximum(norms, jnp.ones_like(norms))
+        grad_str /= norms #jnp.maximum(norms, jnp.ones_like(norms))
 
         positions = positions + self.step_size * grad_str
         logging.info(f"Optimization done. Final loss: {loss}.")
