@@ -84,6 +84,25 @@ class ImageStack:
         self.constant_params[2] = res
         self.constant_params[3] = noise_radius_mask
 
+        self.generate_grids()
+
+    def generate_grids(self):
+        box_size = int(self.constant_params[0])
+        pixel_size = self.constant_params[1]
+
+        grid_min = -pixel_size * box_size * 0.5
+        grid_max = pixel_size * box_size * 0.5
+        self.grid = jnp.arange(grid_min, grid_max, pixel_size)[0:box_size]
+
+        freq_pix_1d = jnp.fft.fftfreq(box_size, d=pixel_size)
+        self.grid_f = freq_pix_1d[:, None] ** 2 + freq_pix_1d[None, :] ** 2
+
+        self.noise_grid = jnp.linspace(
+            -0.5 * (box_size - 1), 0.5 * (box_size - 1), box_size
+        )
+
+        return
+
     def stack_batch(self, batch_images: ArrayLike, batch_params: ArrayLike):
         """
         Stack a batch of images and their parameters.
@@ -127,10 +146,15 @@ class ImageStack:
         -------
         None
         """
-        numpy_file = np.load_(fname)
+        numpy_file = np.load(fname)
         self.images = numpy_file["images"]
         self.variable_params = numpy_file["variable_params"]
         self.constant_params = numpy_file["constant_params"]
+        self.n_images = self.images.shape[0]
+
+        self.generate_grids()
+
+        return
 
     def save(self, fname: str):
         """
@@ -151,3 +175,5 @@ class ImageStack:
             variable_params=self.variable_params,
             constant_params=self.constant_params,
         )
+
+        return

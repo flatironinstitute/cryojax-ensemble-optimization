@@ -3,6 +3,7 @@ import numpy as np
 import jax.numpy as jnp
 from jax.typing import ArrayLike
 
+
 def pdb_parser_all_atom_(fname: str) -> np.array:
     """
     Parses a pdb file and returns an atomic model of the protein. The atomic model is a 5xN array, where N is the number of atoms in the protein. The first three rows are the x, y, z coordinates of the atoms. The fourth row is the atomic number of the atoms. The fifth row is the variance of the atoms before the resolution is applied.
@@ -13,7 +14,7 @@ def pdb_parser_all_atom_(fname: str) -> np.array:
 
     Returns
     -------
-    atomic_model : np.array
+    struct_info : np.array
         The atomic model of the protein.
 
     """
@@ -30,19 +31,19 @@ def pdb_parser_all_atom_(fname: str) -> np.array:
     }
 
     univ = mda.Universe(fname)
-    univ.atoms.translate(-univ.atoms.center_of_mass())
+    struct_info = np.zeros((2, univ.select_atoms("protein and not name H*").n_atoms))
 
-    atomic_model = np.zeros((5, univ.select_atoms("not name H*").n_atoms))
-
-    atomic_model[0:3, :] = univ.select_atoms("not name H*").positions.T
-
-    atomic_model[3, :] = (1 / np.pi) ** 2
-    atomic_model[4, :] = np.array(
-        [atomic_numbers[x] for x in univ.select_atoms("not name H*").elements]
+    struct_info[0, :] = 1.0#(1 / np.pi) ** 2
+    struct_info[1, :] = np.array(
+        [
+            atomic_numbers[x[0]]
+            for x in univ.select_atoms("protein and not name H*").atoms.names
+        ]
     )
 
+    struct_info[1, :] = struct_info[1, :] / np.sum(struct_info[1, :])
 
-    return atomic_model
+    return struct_info
 
 
 def pdb_parser_resid_(fname: str) -> np.array:
@@ -56,7 +57,7 @@ def pdb_parser_resid_(fname: str) -> np.array:
 
     Returns
     -------
-    atomic_model : np.array
+    struct_info : np.array
         The coarse grained atomic model of the protein.
     """
 
@@ -108,20 +109,18 @@ def pdb_parser_resid_(fname: str) -> np.array:
 
     univ = mda.Universe(fname)
     residues = univ.residues
-    univ.atoms.translate(-univ.atoms.center_of_mass())
 
-    atomic_model = np.zeros((5, residues.n_residues))
-    atomic_model[0:3, :] = univ.select_atoms("name CA").positions.T
-    atomic_model[3, :] = (
+    struct_info = np.zeros((2, residues.n_residues))
+    struct_info[0, :] = (
         np.array([resid_radius[x] for x in residues.resnames]) / np.pi
     ) ** 2
-    
-    atomic_model[4, :] = np.array([resid_density[x] for x in residues.resnames])
 
-    return atomic_model
+    struct_info[1, :] = np.array([resid_density[x] for x in residues.resnames])
+
+    return struct_info
 
 
-def pdb_parser_(input_file: str, mode: str) -> ArrayLike:
+def pdb_parser(input_file: str, mode: str) -> ArrayLike:
     """
     Parses a pdb file and returns an atomic model of the protein. The atomic model is a 5xN array, where N is the number of atoms or residues in the protein. The first three rows are the x, y, z coordinates of the atoms or residues. The fourth row is the atomic number of the atoms or the density of the residues. The fifth row is the variance of the atoms or residues, which is the resolution of the cryo-EM map divided by pi squared.
 
@@ -134,17 +133,17 @@ def pdb_parser_(input_file: str, mode: str) -> ArrayLike:
 
     Returns
     -------
-    atomic_model : ArrayLike
+    struct_info : ArrayLike
         The atomic model of the protein.
     """
 
     if mode == "resid":
-        atomic_model = pdb_parser_resid_(input_file)
+        struct_info = pdb_parser_resid_(input_file)
 
     elif mode == "all-atom":
-        atomic_model = pdb_parser_all_atom_(input_file)
+        struct_info = pdb_parser_all_atom_(input_file)
 
     else:
         raise ValueError("Mode must be either 'resid' or 'all-atom'.")
 
-    return jnp.array(atomic_model)
+    return jnp.array(struct_info)
