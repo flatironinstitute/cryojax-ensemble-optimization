@@ -1,6 +1,6 @@
 *.npz
 positions.pdb
-positions_ref.pdb
+ref_positions.pdb
 *.h5
 *.bak
 *.log
