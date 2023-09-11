@@ -135,7 +135,7 @@ class Pipeline:
             # self.univ_md[i].atoms.write(f"md_init_model_{i}.pdb")
             # self.univ_pull[i].atoms.write(f"md_pull_model_{i}.pdb")
 
-            positions = step.run("positions.pdb", "ref_positions.pdb", self.opt_atom_list)
+            positions = step.run(i, "ref_positions.pdb", self.opt_atom_list)
             self.univ_md[i].atoms.positions = positions.copy()
 
         return
