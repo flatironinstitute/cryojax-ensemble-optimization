@@ -16,10 +16,12 @@ import openmm.unit as openmm_unit
 class MDSampler:
     def __init__(
         self,
-        restrain_force_constant,
-        n_steps,
+        pdb_file: str,
+        restrain_force_constant: float,
+        n_steps: int,
         **kwargs,
     ) -> None:
+        self.pdb_file = pdb_file
         self.restrain_force_constant = restrain_force_constant
         self.n_steps = n_steps
 
@@ -65,12 +67,12 @@ class MDSampler:
         self.platform = openmm.Platform.getPlatformByName(self.config["platform"])
         return
 
-    def update_system(self, position_file, ref_position_file, restrain_atom_list):
+    def update_system(self, process_id, ref_position_file, restrain_atom_list):
         integrator = openmm.LangevinIntegrator(
             self.config["temperature"], self.config["friction"], self.config["timestep"]
         )
 
-        pdb = openmm_app.PDBFile(position_file)
+        pdb = openmm_app.PDBFile(self.pdb_file)
         pdb_ref = openmm_app.PDBFile(ref_position_file)
         modeller = openmm_app.Modeller(pdb.topology, pdb.positions)
 
@@ -99,14 +101,14 @@ class MDSampler:
             self.config["properties"],
         )
 
-        simulation.context.setPositions(pdb.positions)
+        simulation.loadCheckpoint(f"sim_model_{process_id}.chk")
         
         return simulation
 
-    def run(self, positions_file, ref_positions_file, restrain_atom_list):
+    def run(self, process_id, ref_positions_file, restrain_atom_list):
         logging.info("Running MD simulation...")
 
-        simulation = self.update_system(positions_file, ref_positions_file, restrain_atom_list)
+        simulation = self.update_system(process_id, ref_positions_file, restrain_atom_list)
         logging.info("  Positions updated.")
 
         simulation.minimizeEnergy()
@@ -114,6 +116,9 @@ class MDSampler:
 
         logging.info(f"  Running simulation for {self.n_steps} steps...")
         simulation.step(self.n_steps)
+
+        simulation.saveState(f"sim_model_{process_id}.state")
+        simulation.saveCheckpoint(f"sim_model_{process_id}.chk")
 
         positions = simulation.context.getState(getPositions=True).getPositions(
             asNumpy=True
