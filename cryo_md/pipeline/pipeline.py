@@ -6,6 +6,7 @@ import numpy as np
 import jax.numpy as jnp
 
 from cryo_md.molecular_dynamics.md_sampling import MDSampler
+from cryo_md.molecular_dynamics.mdcg_sampling import MDCGSampler
 from cryo_md.optimization.optimizer import WeightOptimizer, PositionOptimizer
 from cryo_md.utils.output_manager import OutputManager
 
@@ -21,18 +22,22 @@ class Pipeline:
     def check_steps(self, workflow):
         logging.info("Reading pipeline workflow...")
 
-        workflow_types = []
+        self.workflow_types = []
         for i, step in enumerate(workflow):
             if isinstance(step, MDSampler):
-                workflow_types.append("MDSampler")
+                self.workflow_types.append("MDSampler")
                 logging.info(f"Step {i}: MDSampler")
 
+            elif isinstance(step, MDCGSampler):
+                self.workflow_types.append("MDCGSampler")
+                logging.info(f"Step {i}: MDCGSampler")
+
             elif isinstance(step, WeightOptimizer):
-                workflow_types.append("WeightOptimizer")
+                self.workflow_types.append("WeightOptimizer")
                 logging.info(f"Step {i}: WeightOptimizer")
 
             elif isinstance(step, PositionOptimizer):
-                workflow_types.append("PositionOptimizer")
+                self.workflow_types.append("PositionOptimizer")
                 logging.info(f"Step {i}: PositionOptimizer")
 
             else:
@@ -42,42 +47,53 @@ class Pipeline:
                 raise ValueError(
                     f"Invalid step type: {type(step)}, must be MDSampler, WeightOptimizer, or PositionOptimizer"
                 )
-
+        logging.info(f"Loaded workflow with steps: {self.workflow_types}")
         logging.info("Checking if workflow is valid")
-        self.workflow_is_valid(workflow_types)
+        self.workflow_is_valid()
         logging.info("Workflow check complete.")
 
         return
 
-    def workflow_is_valid(self, workflow_types):
-        if "MDSampler" not in workflow_types:
-            logging.error("Workflow must contain at least one MDSampler")
-            raise NotImplementedError("Workflow must contain at least one MDSampler")
+    def workflow_is_valid(self):
 
-        if "WeightOptimizer" not in workflow_types:
+        if all(x in ["MDCGSampler", "MDSampler"] for x in self.workflow_types):
+            logging.error("Workflow cannot contain MDCGSampler and MDSampler")
+            raise ValueError(
+                "Workflow cannot contain MDCGSampler and MDSampler"
+            )
+
+        if not any(x in ["MDCGSampler", "MDSampler"] for x in self.workflow_types):
+            logging.error("Workflow must contain at least one of MDCGSampler or MDSampler")
+            raise ValueError(
+                "Workflow must contain at least one of MDCGSampler or MDSampler"
+            )
+
+        if "WeightOptimizer" not in self.workflow_types:
             logging.error("Workflow must contain at least one WeightOptimizer")
             raise NotImplementedError(
                 "Workflow must contain at least one WeightOptimizer"
             )
 
-        if "PositionOptimizer" not in workflow_types:
+        if "PositionOptimizer" not in self.workflow_types:
             logging.error("Workflow must contain at least one PositionOptimizer")
             raise NotImplementedError(
                 "Workflow must contain at least one PositionOptimizer"
             )
 
-        for i in range(len(workflow_types)):
-            if i == 0 and workflow_types[i] != "WeightOptimizer":
+        for i in range(len(self.workflow_types)):
+            logging.info(f"Checking step {i} with type: {self.workflow_types[i]}")
+            if i == 0 and self.workflow_types[i] != "WeightOptimizer":
                 logging.error("First step must be WeightOptimizer")
                 raise NotImplementedError("First step must be WeightOptimizer")
 
-            if i == 1 and workflow_types[i] != "PositionOptimizer":
+            if i == 1 and self.workflow_types[i] != "PositionOptimizer":
                 logging.error("Second step must be PositionOptimizer")
                 raise NotImplementedError("Second step must be PositionOptimizer")
 
-            if i > 1 and workflow_types[i] != "MDSampler":
-                logging.error("All steps after second must be MDSampler")
-                raise NotImplementedError("All steps after second must be MDSampler")
+            if i > 1 and self.workflow_types[i] not in ["MDSampler", "MDCGSampler"]:
+                logging.error(f"Step {i} is {self.workflow_types[i]}")
+                logging.error("All steps after second must be MDSampler or MDCGSampler")
+                raise NotImplementedError("All steps after second must be MDSampler or MDCGSampler")
 
         return
 
@@ -91,6 +107,31 @@ class Pipeline:
         ref_universe,
         init_weights=None,
     ):
+
+        if "MDSampler" in self.workflow_types:
+
+            if mode not in ["all-atom", "resid"]:
+                logging.error("Invalid mode, must be 'all-atom' or 'resid' when using MDSampler")
+                raise ValueError("Invalid mode, must be 'all-atom' or 'resid' when using MDSampler")
+            
+            if mode == "all-atom":
+                self.filter = "protein and not name H*"
+
+            elif mode == "resid":
+                self.filter = "protein and name CA"
+
+            self.filetype = "pdb"
+
+        if "MDCGSampler" in self.workflow_types:
+            if mode in ["all-atom", "resid"]:
+                logging.error("Cannot run all-atom optimization with CG MD")
+                raise ValueError("Cannot run all-atom optimization with CG MD")
+
+            elif mode == "cg":
+                self.filter = "protein"
+
+            self.filetype = "gro"
+
         self.univ_md = []
         self.univ_pull = []
         self.ref_universe = ref_universe
@@ -103,11 +144,6 @@ class Pipeline:
 
         self.n_steps = n_steps
 
-        if mode == "all-atom":
-            self.filter = "protein and not name H*"
-
-        elif mode == "resid":
-            self.filter = "protein and name CA"
 
         models_shape = (
             len(init_universes),
@@ -129,14 +165,15 @@ class Pipeline:
 
     def run_md_(self, step):
         for i in range(self.n_models):
-            self.univ_md[i].atoms.write("positions.pdb")
-            self.univ_pull[i].atoms.write("ref_positions.pdb")
+            self.univ_md[i].atoms.write(f"positions.{self.filetype}")
+            self.univ_pull[i].atoms.write(f"ref_positions.{self.filetype}")
 
             # self.univ_md[i].atoms.write(f"md_init_model_{i}.pdb")
             # self.univ_pull[i].atoms.write(f"md_pull_model_{i}.pdb")
-
-            positions = step.run(i, "ref_positions.pdb", self.opt_atom_list)
+            positions = step.run(i, f"ref_positions.{self.filetype}", self.opt_atom_list)
             self.univ_md[i].atoms.positions = positions.copy()
+            self.univ_md[i].atoms.write(f"positions_after_md.{self.filetype}")
+        
 
         return
 
@@ -179,10 +216,14 @@ class Pipeline:
 
             positions[i] = dummy_univ.select_atoms(self.filter).atoms.positions.T
 
+        logging.debug(f"Optimized_positions: {positions}")
+
         positions = jnp.array(positions)
         positions, loss = step.run(
             positions, self.weights, image_stack, self.struct_info
         )
+
+        logging.debug(f"Optimized_positions: {positions}")
 
         for i in range(self.n_models):
 
@@ -194,8 +235,7 @@ class Pipeline:
                 dummy_univ, self.univ_md[i], select=self.filter, match_atoms=True
             )
             self.univ_pull[i].atoms.positions = dummy_univ.atoms.positions.copy()
-
-            # self.univ_pull[i].atoms.write(f"model_after_opt_{i}.pdb")
+            self.univ_pull[i].atoms.write(f"model_after_opt_{i}.pdb")
 
         return loss
 
@@ -205,7 +245,7 @@ class Pipeline:
         with tqdm(range(self.n_steps), unit="step") as pbar:
             for counter in pbar:
                 for step in self.workflow:
-                    if isinstance(step, MDSampler):
+                    if isinstance(step, MDSampler) or isinstance(step, MDCGSampler):
                         self.run_md_(step)
 
                     elif isinstance(step, WeightOptimizer):

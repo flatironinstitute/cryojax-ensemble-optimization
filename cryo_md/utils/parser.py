@@ -108,7 +108,7 @@ def pdb_parser_resid_(fname: str) -> np.array:
     }
 
     univ = mda.Universe(fname)
-    residues = univ.residues
+    residues = univ.select_atoms("protein").residues
 
     struct_info = np.zeros((2, residues.n_residues))
     struct_info[0, :] = (
@@ -119,6 +119,80 @@ def pdb_parser_resid_(fname: str) -> np.array:
 
     return struct_info
 
+def pdb_parser_cg_(fname: str) -> np.array:
+    """
+    Parses a pdb file and returns a coarsed grained atomic model of the protein. The atomic model is a 5xN array, where N is the number of residues in the protein. The first three rows are the x, y, z coordinates of the alpha carbons. The fourth row is the density of the residues, i.e., the total number of electrons. The fifth row is the radius of the residues squared, which we use as the variance of the residues for the forward model.
+
+    Parameters
+    ----------
+    fname : str
+        The path to the pdb file.
+
+    Returns
+    -------
+    struct_info : np.array
+        The coarse grained atomic model of the protein.
+    """
+
+    resid_radius = {
+        "CYS": 2.75,
+        "PHE": 3.2,
+        "LEU": 3.1,
+        "TRP": 3.4,
+        "VAL": 2.95,
+        "ILE": 3.1,
+        "MET": 3.1,
+        "HIS": 3.05,
+        "TYR": 3.25,
+        "ALA": 2.5,
+        "GLY": 2.25,
+        "PRO": 2.8,
+        "ASN": 2.85,
+        "THR": 2.8,
+        "SER": 2.6,
+        "ARG": 3.3,
+        "GLN": 3.0,
+        "ASP": 2.8,
+        "LYS": 3.2,
+        "GLU": 2.95,
+    }
+
+    resid_density = {
+        "CYS": 64.0,
+        "PHE": 88.0,
+        "LEU": 72.0,
+        "TRP": 108.0,
+        "VAL": 64.0,
+        "ILE": 72.0,
+        "MET": 80.0,
+        "HIS": 82.0,
+        "TYR": 96.0,
+        "ALA": 48.0,
+        "GLY": 40.0,
+        "PRO": 62.0,
+        "ASN": 66.0,
+        "THR": 64.0,
+        "SER": 56.0,
+        "ARG": 93.0,
+        "GLN": 78.0,
+        "ASP": 59.0,
+        "LYS": 79.0,
+        "GLU": 53.0,
+    }
+
+    univ = mda.Universe(fname)
+    protein = univ.select_atoms("protein")
+
+    struct_info = np.zeros((2, protein.n_atoms))
+    struct_info[0, :] = (1 / np.pi) ** 2
+    counter = 0
+    for i in range(protein.n_residues):
+        for _ in range(protein.residues[i].atoms.n_atoms):
+            struct_info[1, counter] = resid_density[protein.residues.resnames[i]]
+            counter += 1
+            
+
+    return struct_info
 
 def pdb_parser(input_file: str, mode: str) -> ArrayLike:
     """
@@ -143,7 +217,10 @@ def pdb_parser(input_file: str, mode: str) -> ArrayLike:
     elif mode == "all-atom":
         struct_info = pdb_parser_all_atom_(input_file)
 
+    elif mode == "cg":
+        struct_info = pdb_parser_cg_(input_file)
+
     else:
-        raise ValueError("Mode must be either 'resid' or 'all-atom'.")
+        raise ValueError("Mode must be either 'cg', 'resid' or 'all-atom'.")
 
     return jnp.array(struct_info)

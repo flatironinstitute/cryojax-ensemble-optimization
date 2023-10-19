@@ -59,7 +59,7 @@ def run_cryomd(
         logging.warning("Number of steps must be greater than 0")
         raise ValueError("Number of steps must be greater than 0")
 
-    if mode not in ["all-atom", "resid"]:
+    if mode not in ["all-atom", "resid", "cg"]:
         logging.warning("Invalid mode, must be 'all-atom' or 'resid'")
         raise ValueError("Invalid mode, must be 'all-atom' or 'resid'")
 
@@ -67,11 +67,16 @@ def run_cryomd(
         path_to_models = str(pathlib.Path().resolve())
         logging.info(f"Path to models not specified, using {path_to_models}")
 
+    if mode in ["all-atom", "resid"]:
+        filetype = "pdb"
+    else:
+        filetype = "gro"
+
     init_universes = []
     for i in range(n_models):
-        init_universes.append(mda.Universe(f"{path_to_models}/init_system_{i}.pdb"))
+        init_universes.append(mda.Universe(f"{path_to_models}/init_system_{i}.{filetype}"))
 
-    struct_info = pdb_parser(f"{path_to_models}/init_system_0.pdb", mode=mode)
+    struct_info = pdb_parser(f"{path_to_models}/init_system_0.{filetype}", mode=mode)
 
     logging.info("Preparing pipeline for run...")
     pipeline.prepare_for_run_(
