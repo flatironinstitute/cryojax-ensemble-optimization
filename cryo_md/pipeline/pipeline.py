@@ -55,15 +55,14 @@ class Pipeline:
         return
 
     def workflow_is_valid(self):
-
         if all(x in ["MDCGSampler", "MDSampler"] for x in self.workflow_types):
             logging.error("Workflow cannot contain MDCGSampler and MDSampler")
-            raise ValueError(
-                "Workflow cannot contain MDCGSampler and MDSampler"
-            )
+            raise ValueError("Workflow cannot contain MDCGSampler and MDSampler")
 
         if not any(x in ["MDCGSampler", "MDSampler"] for x in self.workflow_types):
-            logging.error("Workflow must contain at least one of MDCGSampler or MDSampler")
+            logging.error(
+                "Workflow must contain at least one of MDCGSampler or MDSampler"
+            )
             raise ValueError(
                 "Workflow must contain at least one of MDCGSampler or MDSampler"
             )
@@ -93,7 +92,9 @@ class Pipeline:
             if i > 1 and self.workflow_types[i] not in ["MDSampler", "MDCGSampler"]:
                 logging.error(f"Step {i} is {self.workflow_types[i]}")
                 logging.error("All steps after second must be MDSampler or MDCGSampler")
-                raise NotImplementedError("All steps after second must be MDSampler or MDCGSampler")
+                raise NotImplementedError(
+                    "All steps after second must be MDSampler or MDCGSampler"
+                )
 
         return
 
@@ -107,13 +108,15 @@ class Pipeline:
         ref_universe,
         init_weights=None,
     ):
-
         if "MDSampler" in self.workflow_types:
-
             if mode not in ["all-atom", "resid"]:
-                logging.error("Invalid mode, must be 'all-atom' or 'resid' when using MDSampler")
-                raise ValueError("Invalid mode, must be 'all-atom' or 'resid' when using MDSampler")
-            
+                logging.error(
+                    "Invalid mode, must be 'all-atom' or 'resid' when using MDSampler"
+                )
+                raise ValueError(
+                    "Invalid mode, must be 'all-atom' or 'resid' when using MDSampler"
+                )
+
             if mode == "all-atom":
                 self.filter = "protein and not name H*"
 
@@ -144,7 +147,6 @@ class Pipeline:
 
         self.n_steps = n_steps
 
-
         models_shape = (
             len(init_universes),
             *init_universes[0].select_atoms("protein").atoms.positions.T.shape,
@@ -170,10 +172,13 @@ class Pipeline:
 
             # self.univ_md[i].atoms.write(f"md_init_model_{i}.pdb")
             # self.univ_pull[i].atoms.write(f"md_pull_model_{i}.pdb")
-            positions = step.run(i, f"ref_positions.{self.filetype}", self.opt_atom_list)
+            positions = step.run(
+                i, f"ref_positions.{self.filetype}", self.opt_atom_list
+            )
             self.univ_md[i].atoms.positions = positions.copy()
-            self.univ_md[i].atoms.write(f"positions_after_md.{self.filetype}")
-        
+            self.univ_md[i].select_atoms(self.filter).atoms.write(
+                f"positions_after_md.{self.filetype}"
+            )
 
         return
 
@@ -226,16 +231,19 @@ class Pipeline:
         logging.debug(f"Optimized_positions: {positions}")
 
         for i in range(self.n_models):
-
             dummy_univ = self.univ_md[i].copy()
-            align.alignto(dummy_univ, self.ref_universe, select=self.filter, match_atoms=True)
+            align.alignto(
+                dummy_univ, self.ref_universe, select=self.filter, match_atoms=True
+            )
             dummy_univ.select_atoms(self.filter).atoms.positions = positions[i].T
 
             align.alignto(
                 dummy_univ, self.univ_md[i], select=self.filter, match_atoms=True
             )
             self.univ_pull[i].atoms.positions = dummy_univ.atoms.positions.copy()
-            self.univ_pull[i].atoms.write(f"model_after_opt_{i}.pdb")
+            self.univ_pull[i].select_atoms(self.filter).atoms.write(
+                f"model_after_opt_{i}.pdb"
+            )
 
         return loss
 

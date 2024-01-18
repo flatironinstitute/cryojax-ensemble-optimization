@@ -33,7 +33,7 @@ def pdb_parser_all_atom_(fname: str) -> np.array:
     univ = mda.Universe(fname)
     struct_info = np.zeros((2, univ.select_atoms("protein and not name H*").n_atoms))
 
-    struct_info[0, :] = 1.0#(1 / np.pi) ** 2
+    struct_info[0, :] = (1 / np.pi) ** 2
     struct_info[1, :] = np.array(
         [
             atomic_numbers[x[0]]
@@ -119,6 +119,7 @@ def pdb_parser_resid_(fname: str) -> np.array:
 
     return struct_info
 
+
 def pdb_parser_cg_(fname: str) -> np.array:
     """
     Parses a pdb file and returns a coarsed grained atomic model of the protein. The atomic model is a 5xN array, where N is the number of residues in the protein. The first three rows are the x, y, z coordinates of the alpha carbons. The fourth row is the density of the residues, i.e., the total number of electrons. The fifth row is the radius of the residues squared, which we use as the variance of the residues for the forward model.
@@ -166,6 +167,7 @@ def pdb_parser_cg_(fname: str) -> np.array:
         "ILE": 72.0,
         "MET": 80.0,
         "HIS": 82.0,
+        "HSD": 82.0,
         "TYR": 96.0,
         "ALA": 48.0,
         "GLY": 40.0,
@@ -190,9 +192,9 @@ def pdb_parser_cg_(fname: str) -> np.array:
         for _ in range(protein.residues[i].atoms.n_atoms):
             struct_info[1, counter] = resid_density[protein.residues.resnames[i]]
             counter += 1
-            
 
     return struct_info
+
 
 def pdb_parser(input_file: str, mode: str) -> ArrayLike:
     """

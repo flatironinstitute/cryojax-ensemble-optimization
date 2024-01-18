@@ -5,7 +5,7 @@ from functools import partial
 from typing import Union, Tuple
 
 from cryo_md.wpa_simulator.simulator import simulator_
-from cryo_md.image.image_stack import ImageStack
+from cryo_md.image.image_stack import NumpyLoader
 
 
 def compare_coords_with_img_(
@@ -15,7 +15,9 @@ def compare_coords_with_img_(
     grid: ArrayLike,
     grid_f: ArrayLike,
     res: float,
-    var_imaging_args: ArrayLike,
+    pose_params: ArrayLike,
+    ctf_params: ArrayLike,
+    noise_var: ArrayLike,
 ) -> float:
     """
     Compare the coordinates with the image and return the log-likelihood. This function is used in the likelihood calculation.
@@ -42,21 +44,17 @@ def compare_coords_with_img_(
     float
         Log-likelihood
     """
-    image_coords = simulator_(coords, struct_info, grid, grid_f, res, var_imaging_args)
+    image_coords = simulator_(coords, struct_info, grid, grid_f, res, pose_params, ctf_params)
 
-    return (
-        -0.5
-        * jnp.linalg.norm(image_coords - image_ref) ** 2
-        / var_imaging_args[10] ** 2
-    )
+    return -0.5 * jnp.linalg.norm(image_coords - image_ref) ** 2 / noise_var
 
 
 batch_over_models_ = jax.jit(
-    jax.vmap(compare_coords_with_img_, in_axes=(0, None, None, None, None, None, None))
+    jax.vmap(compare_coords_with_img_, in_axes=(0, None, None, None, None, None, None, None, None))
 )
 
 batch_over_images_ = jax.jit(
-    jax.vmap(batch_over_models_, in_axes=(None, 0, None, None, None, None, 0))
+    jax.vmap(batch_over_models_, in_axes=(None, 0, None, None, None, None, 0, 0, 0))
 )
 
 
@@ -68,10 +66,12 @@ def calc_lklhood_(
     grid: ArrayLike,
     grid_f: ArrayLike,
     res: float,
-    variable_params: ArrayLike,
+    pose_params: ArrayLike,
+    ctf_params: ArrayLike,
+    noise_var: ArrayLike,
 ) -> float:
     lklhood_matrix = batch_over_images_(
-        models, images, struct_info, grid, grid_f, res, variable_params
+        models, images, struct_info, grid, grid_f, res, pose_params, ctf_params, noise_var
     )
 
     model_weights = model_weights
@@ -88,7 +88,7 @@ def calc_lklhood_(
 def calc_likelihood(
     models: ArrayLike,
     model_weights: ArrayLike,
-    image_stack: ImageStack,
+    image_stack: NumpyLoader,
     struct_info: ArrayLike,
 ) -> float:
     """
@@ -100,7 +100,7 @@ def calc_likelihood(
         Models to compare with
     model_weights : ArrayLike
         Weights of the models
-    image_stack : ImageStack
+    image_stack : NumpyLoader
         Image stack
     struct_info : ArrayLike
         Structural information of the models.
@@ -131,12 +131,12 @@ calc_lkl_and_grad_wts_ = jax.jit(jax.value_and_grad(calc_lklhood_, argnums=1))
 
 import numpy as np
 
+
 def calc_lkl_and_grad_struct(
     models: ArrayLike,
     model_weights: ArrayLike,
-    image_stack: ImageStack,
+    image_stack: NumpyLoader,
     struct_info: ArrayLike,
-    batch_size
 ) -> Tuple[float, ArrayLike]:
     """
     Calculate the log-likelihood and its gradient with respect to the structure.
@@ -147,7 +147,7 @@ def calc_lkl_and_grad_struct(
         Models to compare with
     model_weights : ArrayLike
         Weights of the models
-    image_stack : ImageStack
+    image_stack : NumpyLoader
         Image stack
     struct_info : ArrayLike
         Structural information of the models.
@@ -160,18 +160,20 @@ def calc_lkl_and_grad_struct(
         Gradient with respect to the structure
     """
 
-    random_batch = np.random.choice(image_stack.n_images, batch_size, replace=False)
-    
-    log_lklhood, grad_str = calc_lkl_and_grad_struct_(
-        models,
-        model_weights,
-        image_stack.images[random_batch],
-        struct_info,
-        image_stack.grid,
-        image_stack.grid_f,
-        image_stack.constant_params[2],
-        image_stack.variable_params[random_batch],
-    )
+    for image_batch in image_stack:
+
+        log_lklhood, grad_str = calc_lkl_and_grad_struct_(
+            models,
+            model_weights,
+            image_batch["proj"],
+            struct_info,
+            image_stack.dataset.proj_grid,
+            image_stack.dataset.ctf_grid,
+            image_stack.dataset.res,
+            image_batch["pose_params"],
+            image_batch["ctf_params"],
+            image_batch["noise_var"]
+        )
 
     return log_lklhood, grad_str
 
@@ -179,7 +181,7 @@ def calc_lkl_and_grad_struct(
 def calc_lkl_and_grad_wts(
     models: ArrayLike,
     model_weights: ArrayLike,
-    image_stack: ImageStack,
+    image_stack: NumpyLoader,
     struct_info: ArrayLike,
 ) -> Tuple[float, ArrayLike]:
     """
@@ -191,7 +193,7 @@ def calc_lkl_and_grad_wts(
         Models to compare with
     model_weights : ArrayLike
         Weights of the models
-    image_stack : ImageStack
+    image_stack : NumpyLoader
         Image stack
     struct_info : ArrayLike
         Structural information of the models.
@@ -204,15 +206,25 @@ def calc_lkl_and_grad_wts(
         Gradient with respect to the model weights
     """
 
-    log_lklhood, grad_wts = calc_lkl_and_grad_wts_(
-        models,
-        model_weights,
-        image_stack.images,
-        struct_info,
-        image_stack.grid,
-        image_stack.grid_f,
-        image_stack.constant_params[2],
-        image_stack.variable_params,
-    )
+    log_lklhood = 0.0
+    grad_wts = jnp.zeros_like(model_weights)
+
+    for image_batch in image_stack:
+            
+        log_lklhood_, grad_wts_ = calc_lkl_and_grad_wts_(
+            models,
+            model_weights,
+            image_batch["proj"],
+            struct_info,
+            image_stack.dataset.proj_grid,
+            image_stack.dataset.ctf_grid,
+            image_stack.dataset.res,
+            image_batch["pose_params"],
+            image_batch["ctf_params"],
+            image_batch["noise_var"]
+        )
+
+        log_lklhood += log_lklhood_
+        grad_wts += grad_wts_
 
     return log_lklhood, grad_wts

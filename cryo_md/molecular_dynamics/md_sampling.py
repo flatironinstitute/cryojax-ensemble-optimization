@@ -45,9 +45,18 @@ class MDSampler:
             "properties": {"Threads": "1"},
         }
 
+        units = {
+            "nonbondedCutoff": 1.0 * openmm_unit.nanometers,
+            "temperature": 1.0 * openmm_unit.kelvin,
+            "friction": 1.0 / openmm_unit.picosecond,
+            "timestep": 1.0 * openmm_unit.picoseconds,
+        }
+
         for key in kwargs:
             if key not in default_kwargs:
                 raise ValueError(f"Invalid argument {key}")
+            if key in units:
+                kwargs[key] = kwargs[key] * units[key]
 
         for key, value in default_kwargs.items():
             if key not in kwargs:
@@ -83,9 +92,7 @@ class MDSampler:
             constraints=self.config["constraints"],
         )
 
-        RMSD_value = openmm.RMSDForce(
-            pdb_ref.positions, restrain_atom_list
-        )
+        RMSD_value = openmm.RMSDForce(pdb_ref.positions, restrain_atom_list)
 
         force_RMSD = openmm.CustomCVForce("0.5 * k * RMSD^2")
         force_RMSD.addGlobalParameter("k", self.restrain_force_constant)
@@ -102,13 +109,15 @@ class MDSampler:
         )
 
         simulation.loadCheckpoint(f"sim_model_{process_id}.chk")
-        
+
         return simulation
 
     def run(self, process_id, ref_positions_file, restrain_atom_list):
         logging.info("Running MD simulation...")
 
-        simulation = self.update_system(process_id, ref_positions_file, restrain_atom_list)
+        simulation = self.update_system(
+            process_id, ref_positions_file, restrain_atom_list
+        )
         logging.info("  Positions updated.")
 
         simulation.minimizeEnergy()

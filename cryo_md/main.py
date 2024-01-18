@@ -4,14 +4,14 @@ import pathlib
 from typing import Optional
 
 from cryo_md.pipeline.pipeline import Pipeline
-from cryo_md.image.image_stack import ImageStack
+from cryo_md.image.image_stack import NumpyLoader
 from cryo_md.utils.parser import pdb_parser
 
 
 def run_cryomd(
     pipeline: Pipeline,
     mode: str,
-    image_stack: ImageStack,
+    image_stack: NumpyLoader,
     n_models: int,
     n_steps: int,
     ref_universe: mda.Universe,
@@ -27,7 +27,7 @@ def run_cryomd(
         Pipeline object containing workflow steps for the cryoMD method.
     mode : str
         Mode for parsing PDB files, either "all-atom" or "resid"
-    image_stack : ImageStack
+    image_stack : NumpyLoader
         Image stack object containing cryo-EM images
     n_models : int
         Number of models to optimize
@@ -74,7 +74,9 @@ def run_cryomd(
 
     init_universes = []
     for i in range(n_models):
-        init_universes.append(mda.Universe(f"{path_to_models}/init_system_{i}.{filetype}"))
+        init_universes.append(
+            mda.Universe(f"{path_to_models}/init_system_{i}.{filetype}")
+        )
 
     struct_info = pdb_parser(f"{path_to_models}/init_system_0.{filetype}", mode=mode)
 

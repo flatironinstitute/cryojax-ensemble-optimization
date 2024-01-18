@@ -45,9 +45,19 @@ class MDCGSampler:
             "properties": {"Threads": "1"},
         }
 
+        units = {
+            "nonbondedCutoff": 1.0 * openmm_unit.nanometers,
+            "temperature": 1.0 * openmm_unit.kelvin,
+            "friction": 1.0 / openmm_unit.picosecond,
+            "timestep": 1.0 * openmm_unit.femtosecond,
+        }
+
         for key in kwargs:
             if key not in default_kwargs:
                 raise ValueError(f"Invalid argument {key}")
+
+            if key in units:
+                kwargs[key] = kwargs[key] * units[key]
 
         for key, value in default_kwargs.items():
             if key not in kwargs:
@@ -57,13 +67,11 @@ class MDCGSampler:
 
         return
 
-
     def define_platform(self):
         self.platform = openmm.Platform.getPlatformByName(self.config["platform"])
         return
 
     def update_system(self, process_id, ref_position_file, restrain_atom_list):
-        
         conf = openmm_app.GromacsGroFile(self.gro_file)
         conf_ref = openmm_app.GromacsGroFile(ref_position_file)
 
@@ -72,7 +80,7 @@ class MDCGSampler:
             self.top_file,
             periodicBoxVectors=box_vectors,
             defines={},
-            epsilon_r=self.epsilon_r
+            epsilon_r=self.epsilon_r,
         )
 
         system = top.create_system(nonbonded_cutoff=self.config["nonbondedCutoff"])
@@ -81,9 +89,7 @@ class MDCGSampler:
             self.config["temperature"], self.config["friction"], self.config["timestep"]
         )
 
-        RMSD_value = openmm.RMSDForce(
-            conf_ref.positions, restrain_atom_list
-        )
+        RMSD_value = openmm.RMSDForce(conf_ref.positions, restrain_atom_list)
 
         force_RMSD = openmm.CustomCVForce("0.5 * k * RMSD^2")
         force_RMSD.addGlobalParameter("k", self.restrain_force_constant)
@@ -92,21 +98,19 @@ class MDCGSampler:
         system.addForce(force_RMSD)
 
         simulation = openmm_app.Simulation(
-            top.topology,
-            system,
-            integrator,
-            self.platform,
-            self.config["properties"]
+            top.topology, system, integrator, self.platform, self.config["properties"]
         )
 
         simulation.loadCheckpoint(f"sim_model_{process_id}.chk")
-        
+
         return simulation
 
     def run(self, process_id, ref_positions_file, restrain_atom_list):
         logging.info("Running MD simulation...")
 
-        simulation = self.update_system(process_id, ref_positions_file, restrain_atom_list)
+        simulation = self.update_system(
+            process_id, ref_positions_file, restrain_atom_list
+        )
         logging.info("  Positions updated.")
 
         simulation.minimizeEnergy()

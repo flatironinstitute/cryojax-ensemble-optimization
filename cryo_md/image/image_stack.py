@@ -1,179 +1,227 @@
 """
 Class for storing images and their parameters.
 """
+import os
+import starfile
+import mrcfile
 import numpy as np
+import torch
+from torch.utils.data import Dataset
+from torch.utils import data
 import jax.numpy as jnp
-from jax.typing import ArrayLike
-from typing import Optional
+from jax.tree_util import tree_map
 
 
-class ImageStack:
-    def __init__(self, fname: Optional[str] = None):
-        """
-        Class for storing images and their parameters.
-
-        Parameters
-        ----------
-        fname : str, optional
-            Path to file containing images and parameters, by default None. If None, then you can use init_for_stacking() to initialize the class for stacking images. If str, then the class will be initialized from the file.
-
-        Attributes
-        ----------
-        images : ArrayLike
-            Array of images
-        variable_params : ArrayLike
-            Array of variable parameters, contrains 11 parameters:
-                0:4 - quaternions that define the rotation matrix
-                4:6 - in-plane translation
-                6 - CTF defocus
-                7 - CTF amplitude
-                8 - CTF bfactor
-                9 - noise SNR
-                10 - noise variance
-        constant_params : ArrayLike
-            Array of constant parameters
+def numpy_collate(batch):
+    return tree_map(np.asarray, data.default_collate(batch))
 
 
-        """
-        if fname is not None:
-            self.load_(fname)
-
-        pass
-
-    def init_for_stacking(
+class NumpyLoader(data.DataLoader):
+    def __init__(
         self,
-        n_images: int,
-        box_size: int,
-        pixel_size: float,
-        res: float,
-        noise_radius_mask: int,
-        dtype: type = np.float32,
+        dataset,
+        batch_size=1,
+        shuffle=False,
+        sampler=None,
+        batch_sampler=None,
+        num_workers=0,
+        pin_memory=False,
+        drop_last=False,
+        timeout=0,
+        worker_init_fn=None,
     ):
-        """
-        Use this function when you are going to generate images and stack them sequentally, i.e. you know the number of images beforehand.
-
-        Parameters
-        ----------
-        n_images : int
-            Number of images to stack
-        box_size : int
-            Size of the box
-        pixel_size : float
-            Pixel size
-        res : float
-            Standard deviation of the Gaussian that is used to project the atoms onto the image
-        noise_radius_mask : int
-            Radius of the mask that defines the signal for the noise calculation
-        dtype : type, optional
-            Data type of the images and parameters, by default np.float32
-
-        Returns
-        -------
-        None
-        """
-
-        self.n_images = n_images
-        self.images = np.empty((n_images, box_size, box_size), dtype=dtype)
-        self.variable_params = np.empty((n_images, 11), dtype=dtype)
-
-        self.stacked_images_ = 0
-
-        self.constant_params = np.empty((4,), dtype=dtype)
-        self.constant_params[0] = box_size
-        self.constant_params[1] = pixel_size
-        self.constant_params[2] = res
-        self.constant_params[3] = noise_radius_mask
-
-        self.generate_grids()
-
-    def generate_grids(self):
-        box_size = int(self.constant_params[0])
-        pixel_size = self.constant_params[1]
-
-        grid_min = -pixel_size * box_size * 0.5
-        grid_max = pixel_size * box_size * 0.5
-        self.grid = jnp.arange(grid_min, grid_max, pixel_size)[0:box_size]
-
-        freq_pix_1d = jnp.fft.fftfreq(box_size, d=pixel_size)
-        self.grid_f = freq_pix_1d[:, None] ** 2 + freq_pix_1d[None, :] ** 2
-
-        self.noise_grid = jnp.linspace(
-            -0.5 * (box_size - 1), 0.5 * (box_size - 1), box_size
+        super().__init__(
+            dataset,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            sampler=sampler,
+            batch_sampler=batch_sampler,
+            num_workers=num_workers,
+            collate_fn=numpy_collate,
+            pin_memory=pin_memory,
+            drop_last=drop_last,
+            timeout=timeout,
+            worker_init_fn=worker_init_fn,
         )
 
-        return
 
-    def stack_batch(self, batch_images: ArrayLike, batch_params: ArrayLike):
-        """
-        Stack a batch of images and their parameters.
+class FlattenAndCast(object):
+    def __call__(self, pic):
+        return np.ravel(np.array(pic, dtype=jnp.float32))
 
-        Parameters
-        ----------
-        batch_images : ArrayLike
-            Array of images
-        batch_params : ArrayLike
-            Array of parameters
 
-        Returns
-        -------
-        None
-        """
-        if batch_images.ndim == 2:
-            batch_images = batch_images[None, :, :]
+class RelionDataLoader(Dataset):
+    def __init__(self, data_path: str, name_star_file: str, res: float):
+        self.data_path = data_path
+        self.name_star_file = name_star_file
+        self.res = res
 
-        if batch_params.ndim == 1:
-            batch_params = batch_params[None, :]
+        self.df = starfile.read(os.path.join(self.data_path, self.name_star_file))
+        self.validate_starfile()
+        self.num_projs = len(self.df["particles"])
+        self.compute_grids()
 
-        self.images[
-            self.stacked_images_ : self.stacked_images_ + batch_images.shape[0]
-        ] = batch_images
-        self.variable_params[
-            self.stacked_images_ : self.stacked_images_ + batch_images.shape[0]
-        ] = batch_params
+    def validate_starfile(self):
+        if "particles" not in self.df.keys():
+            raise Exception("Missing particles in starfile")
 
-        self.stacked_images_ += batch_images.shape[0]
+        if "optics" not in self.df.keys():
+            raise Exception("Missing optics in starfile")
 
-    def load_(self, fname: str):
-        """
-        Load images and parameters from a file.
-
-        Parameters
-        ----------
-        fname : str
-            Path to file containing images and parameters
-
-        Returns
-        -------
-        None
-        """
-        numpy_file = np.load(fname)
-        self.images = numpy_file["images"]
-        self.variable_params = numpy_file["variable_params"]
-        self.constant_params = numpy_file["constant_params"]
-        self.n_images = self.images.shape[0]
-
-        self.generate_grids()
+        self.validate_params()
 
         return
 
-    def save(self, fname: str):
-        """
-        Save images and parameters to a file.
+    def validate_params(self):
+        req_keys = [
+            "rlnDefocusU",
+            "rlnDefocusV",
+            "rlnDefocusAngle",
+            "rlnPhaseShift",
+            "rlnOriginXAngst",
+            "rlnOriginYAngst",
+            "rlnAngleRot",
+            "rlnAngleTilt",
+            "rlnAnglePsi",
+            "rlnNoiseVariance",
+            "rlnImageName",
+        ]
 
-        Parameters
-        ----------
-        fname : str
-            Path to file to save images and parameters
+        missing_keys = []
 
-        Returns
-        -------
-        None
-        """
-        np.savez(
-            fname,
-            images=self.images,
-            variable_params=self.variable_params,
-            constant_params=self.constant_params,
+        for key in req_keys:
+            if key not in self.df["particles"].keys():
+                missing_keys.append(key)
+
+        if len(missing_keys) > 0:
+            raise Exception(
+                "Missing required keys in starfile: {}".format(missing_keys)
+            )
+
+        return
+
+    def get_df_optics_params(self):
+        return (
+            self.df["optics"]["rlnImageSize"][0],
+            self.df["optics"]["rlnVoltage"][0],
+            self.df["optics"]["rlnImagePixelSize"][0],
+            self.df["optics"]["rlnSphericalAberration"][0],
+            self.df["optics"]["rlnAmplitudeContrast"][0],
         )
 
-        return
+    def __len__(self):
+        return self.num_projs
+
+    def compute_grids(self):
+        box_size = self.df["optics"]["rlnImageSize"][0]
+        pixel_size = self.df["optics"]["rlnImagePixelSize"][0]
+
+        values = np.linspace(-0.5, 0.5, box_size + 1)[:-1]
+        self.proj_grid = values * pixel_size * box_size
+
+        fx2, fy2 = np.meshgrid(-values, values, indexing="xy")
+        self.ctf_grid = np.stack((fx2.ravel(), fy2.ravel()), axis=1) / pixel_size
+
+    def get_ctf_params(self, particle):
+        box_size, volt, pixel_size, cs, amp_contrast = self.get_df_optics_params()
+        volt = volt * 1000.0
+        cs = cs * 1e7
+        lam = 12.2639 / np.sqrt(volt + 0.97845e-6 * volt**2)
+
+        ctf_params = np.zeros(9)
+        ctf_params[0] = np.array(particle["rlnDefocusU"])
+        ctf_params[1] = np.array(particle["rlnDefocusV"])
+        ctf_params[2] = np.array(np.radians(particle["rlnDefocusAngle"]))
+        ctf_params[3] = np.array(np.radians(particle["rlnPhaseShift"]))
+        ctf_params[4] = amp_contrast
+        ctf_params[5] = cs
+
+        if "rlnCtfBfactor" in particle.keys():
+            ctf_params[6] = np.array(particle["rlnCtfBfactor"])
+        else:
+            ctf_params[6] = 0.0
+
+        if "rlnCtfScalefactor" in particle.keys():
+            ctf_params[7] = np.array(particle["rlnCtfScalefactor"])
+        else:
+            ctf_params[7] = 1.0
+
+        ctf_params[8] = lam
+
+        return ctf_params
+
+    def __getitem__(self, idx):
+        particle = self.df["particles"].iloc[idx]
+        try:
+            # Load particle image from mrcs file
+            imgnamedf = particle["rlnImageName"].split("@")
+            mrc_path = os.path.join(self.data_path, imgnamedf[1])
+            pidx = int(imgnamedf[0]) - 1
+            with mrcfile.mmap(mrc_path, mode="r", permissive=True) as mrc:
+                proj = mrc.data[pidx]
+        except:
+            raise Exception("Error loading image from mrcs file")
+
+        # Read relion orientations and shifts
+        pose_params = np.zeros(5)
+        pose_params[0] = np.array(particle["rlnOriginXAngst"])
+        pose_params[1] = np.array(particle["rlnOriginYAngst"])
+        
+        pose_params[2:] = np.radians(
+            np.stack(
+                [
+                    particle["rlnAngleRot"],
+                    particle["rlnAngleTilt"],
+                    particle["rlnAnglePsi"],
+                ]
+            )
+        )
+
+        noise_var = particle["rlnNoiseVariance"]
+
+        # Generate CTF from relion paramaters
+        ctf_params = self.get_ctf_params(particle)
+        img_params = {
+            "proj": proj,
+            "pose_params": pose_params,
+            "ctf_params": ctf_params,
+            "noise_var": noise_var,
+            "idx": idx,
+        }
+
+        return img_params
+
+
+def load_starfile(data_path: str, name_star_file: str, res: float, batch_size: int, shuffle: bool = True):
+    """
+    Load relion starfile into np dataloader adapted to numpy arrays
+
+    Parameters
+    ----------
+    data_path : str
+        Path to starfile and mrcs files
+    name_star_file : str
+        Name of starfile
+    batch_size : int
+        Batch size for dataloader
+
+    Returns
+    -------
+    dataloader : np dataloader
+        Dataloader with numpy arrays
+    """
+    image_stack = RelionDataLoader(
+        data_path=data_path,
+        name_star_file=name_star_file,
+        res=res,
+    )
+
+    dataloader = NumpyLoader(
+        image_stack,
+        shuffle=shuffle,
+        batch_size=batch_size,
+        pin_memory=False,
+        num_workers=0,
+    )
+
+    return dataloader

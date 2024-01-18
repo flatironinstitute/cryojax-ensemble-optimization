@@ -12,10 +12,10 @@ calc_rot_matrix
 import numpy as np
 import jax.numpy as jnp
 import jax
-from scipy.spatial.transform import Rotation
+from jax.scipy.spatial.transform import Rotation
 
 
-def gen_quat(n_quats, dtype: float) -> np.ndarray:
+def gen_euler(n_quats, dtype: float) -> np.ndarray:
     """
     Generate a random quaternion.
 
@@ -40,42 +40,27 @@ def gen_quat(n_quats, dtype: float) -> np.ndarray:
             quats[count] = quat
             count += 1
 
-    return jnp.array(quats)
+    quats = jnp.array(quats)
+    euler_angs = Rotation.from_quat(quats).as_euler("ZYZ", degrees=False)
+
+    return euler_angs
 
 
-@jax.jit
-def calc_rot_matrix(quat: jnp.array):
+def calc_rot_matrix(angles):
     """
-    Calculate the rotation matrix from a quaternion.
+    Generates a rotation matrix from the Euler angles in the xyx convention.
 
     Parameters
     ----------
-    quat : jnp.array
-        Quaternion
+    angles : jnp.Tensor
+        A tensor of shape (3,) containing the Euler angles in radians.
 
     Returns
     -------
-    rot_mat : jnp.array
-        Rotation matrix
+    rot_matrix : jnp.Tensor
+        A tensor of shape (3, 3) containing the rotation matrix.
     """
-    rot_mat = jnp.array(
-        [
-            [
-                1.0 - 2.0 * (quat[1] ** 2 + quat[2] ** 2),
-                2.0 * (quat[0] * quat[1] - quat[2] * quat[3]),
-                2.0 * (quat[0] * quat[2] + quat[1] * quat[3]),
-            ],
-            [
-                2.0 * (quat[0] * quat[1] + quat[2] * quat[3]),
-                1.0 - 2.0 * (quat[0] ** 2 + quat[2] ** 2),
-                2.0 * (quat[1] * quat[2] - quat[0] * quat[3]),
-            ],
-            [
-                2.0 * (quat[0] * quat[2] - quat[1] * quat[3]),
-                2.0 * (quat[1] * quat[2] + quat[0] * quat[3]),
-                1.0 - 2.0 * (quat[0] ** 2 + quat[1] ** 2),
-            ],
-        ]
-    )
 
-    return rot_mat
+    rot_matrix = Rotation.from_euler("ZYZ", angles, degrees=False).as_matrix()
+
+    return rot_matrix.T
