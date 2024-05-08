@@ -12,9 +12,10 @@ from cryo_md.utils.output_manager import OutputManager
 
 
 class Pipeline:
-    def __init__(self, workflow):
+    def __init__(self, workflow, config):
         self.check_steps(workflow)
         self.workflow = workflow
+        self.config = config
         # self.output_manager = output_manager
 
         return
@@ -198,7 +199,7 @@ class Pipeline:
             positions[i] = dummy_univ.select_atoms(self.filter).atoms.positions.T
 
         positions = jnp.array(positions)
-        self.weights = step.run(positions, self.weights, image_stack, self.struct_info)
+        self.weights = step.run(positions, self.weights, image_stack, self.struct_info, self.config)
 
         return
 
@@ -225,7 +226,7 @@ class Pipeline:
 
         positions = jnp.array(positions)
         positions, loss = step.run(
-            positions, self.weights, image_stack, self.struct_info
+            positions, self.weights, image_stack, self.struct_info, self.config
         )
 
         logging.debug(f"Optimized_positions: {positions}")

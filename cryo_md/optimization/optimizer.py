@@ -17,7 +17,7 @@ class WeightOptimizer:
 
         return
 
-    def run(self, positions, weights, image_stack, struct_info):
+    def run(self, positions, weights, image_stack, struct_info, config):
         logging.info(f"Running weight optimization for {self.n_steps} steps...")
 
         if self.n_steps == 0:
@@ -26,7 +26,7 @@ class WeightOptimizer:
 
         for _ in range(self.n_steps):
             loss, grad_wts = calc_lkl_and_grad_wts(
-                positions, weights, image_stack, struct_info
+                positions, weights, image_stack, struct_info, config
             )
 
             weights = weights + self.step_size * grad_wts
@@ -47,12 +47,12 @@ class PositionOptimizer:
 
         return
 
-    def run(self, positions, weights, image_stack, struct_info):
+    def run(self, positions, weights, image_stack, struct_info, config):
         logging.info("Running position optimization...")
 
         for _ in range(self.n_steps):
             loss, grad_str = calc_lkl_and_grad_struct(
-                positions, weights, image_stack, struct_info,
+                positions, weights, image_stack, struct_info, config
             )
 
             norms = jnp.max(jnp.abs(grad_str), axis=(1))[:, None, :]

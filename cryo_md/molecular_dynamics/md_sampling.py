@@ -11,25 +11,46 @@ import openmm
 import logging
 import openmm.app as openmm_app
 import openmm.unit as openmm_unit
+import os
+import sys
 
 
 class MDSampler:
     def __init__(
         self,
         pdb_file: str,
-        restrain_force_constant: float,
-        n_steps: int,
+        config: dict,
         **kwargs,
     ) -> None:
         self.pdb_file = pdb_file
-        self.restrain_force_constant = restrain_force_constant
-        self.n_steps = n_steps
+        self.restrain_force_constant = config["mdsampler_force_constant"]
+        self.n_steps = config["mdsampler_steps"]
+        self.n_models = config["n_models"]
+        self.checkpoint_fnames = config["checkpoint_fname"]
 
         self.parse_kwargs(**kwargs)
-
         self.define_forcefield()
         self.define_platform()
-        # self.define_integrator()
+
+        for i in range(self.n_models):
+            if self.checkpoint_fnames[i] is None:
+                logging.info(f"Generating checkpoint for model {i}")
+
+                self.generate_checkpoint(
+                    config["init_models_fname"][i],
+                    f"checkpoint_model_{i}_tmp.chk"
+                )
+                self.checkpoint_fnames[i] = f"checkpoint_model_{i}_tmp.chk"
+                logging.info(f"Checkpoint for model {i} generated and saved as {self.checkpoint_fnames[i]}.")
+
+            else:
+                logging.info(f"Checkpoint for model {i} found at {self.checkpoint_fnames[i]}.")
+                logging.info(f"Creating copy...")
+                os.system(f"cp {self.checkpoint_fnames[i]} checkpoint_model_{i}_tmp.chk")
+                self.checkpoint_fnames[i] = f"checkpoint_model_{i}_tmp.chk"
+
+        
+        
 
     def parse_kwargs(self, **kwargs):
         default_kwargs = {
@@ -62,23 +83,55 @@ class MDSampler:
             if key not in kwargs:
                 kwargs[key] = value
 
-        self.config = kwargs
+        self.md_params = kwargs
 
         return
 
+    def generate_checkpoint(self, pdb_fname, fname):
+
+        integrator = openmm.LangevinIntegrator(
+            self.md_params["temperature"], self.md_params["friction"], self.md_params["timestep"]
+        )
+
+        pdb = openmm_app.PDBFile(pdb_fname)
+        modeller = openmm_app.Modeller(pdb.topology, pdb.positions)
+
+        system = self.forcefield.createSystem(
+            modeller.topology,
+            nonbondedMethod=self.md_params["nonbondedMethod"],
+            nonbondedCutoff=self.md_params["nonbondedCutoff"],
+            constraints=self.md_params["constraints"],
+        )
+
+        simulation = openmm_app.Simulation(
+            modeller.topology,
+            system,
+            integrator,
+            self.platform,
+            self.md_params["properties"],
+        )
+
+        simulation.context.setPositions(modeller.positions)
+        simulation.minimizeEnergy()
+        simulation.step(1)
+        simulation.saveCheckpoint(fname)
+
+        return
+
+
     def define_forcefield(self):
         self.forcefield = openmm_app.ForceField(
-            self.config["forcefield"], self.config["water_model"]
+            self.md_params["forcefield"], self.md_params["water_model"]
         )
         return
 
     def define_platform(self):
-        self.platform = openmm.Platform.getPlatformByName(self.config["platform"])
+        self.platform = openmm.Platform.getPlatformByName(self.md_params["platform"])
         return
 
     def update_system(self, process_id, ref_position_file, restrain_atom_list):
         integrator = openmm.LangevinIntegrator(
-            self.config["temperature"], self.config["friction"], self.config["timestep"]
+            self.md_params["temperature"], self.md_params["friction"], self.md_params["timestep"]
         )
 
         pdb = openmm_app.PDBFile(self.pdb_file)
@@ -87,9 +140,9 @@ class MDSampler:
 
         system = self.forcefield.createSystem(
             modeller.topology,
-            nonbondedMethod=self.config["nonbondedMethod"],
-            nonbondedCutoff=self.config["nonbondedCutoff"],
-            constraints=self.config["constraints"],
+            nonbondedMethod=self.md_params["nonbondedMethod"],
+            nonbondedCutoff=self.md_params["nonbondedCutoff"],
+            constraints=self.md_params["constraints"],
         )
 
         RMSD_value = openmm.RMSDForce(pdb_ref.positions, restrain_atom_list)
@@ -105,10 +158,10 @@ class MDSampler:
             system,
             integrator,
             self.platform,
-            self.config["properties"],
+            self.md_params["properties"],
         )
 
-        simulation.loadCheckpoint(f"sim_model_{process_id}.chk")
+        simulation.loadCheckpoint(self.checkpoint_fnames[process_id])
 
         return simulation
 
@@ -126,8 +179,7 @@ class MDSampler:
         logging.info(f"  Running simulation for {self.n_steps} steps...")
         simulation.step(self.n_steps)
 
-        simulation.saveState(f"sim_model_{process_id}.state")
-        simulation.saveCheckpoint(f"sim_model_{process_id}.chk")
+        simulation.saveCheckpoint(self.checkpoint_fnames[process_id])
 
         positions = simulation.context.getState(getPositions=True).getPositions(
             asNumpy=True

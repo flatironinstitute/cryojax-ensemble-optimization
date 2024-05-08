@@ -3,6 +3,7 @@ import jax.numpy as jnp
 from jax.typing import ArrayLike
 from functools import partial
 from typing import Union, Tuple
+import logging
 
 from cryo_md.wpa_simulator.simulator import simulator_
 from cryo_md.image.image_stack import NumpyLoader
@@ -80,7 +81,7 @@ def calc_lklhood_(
         a=lklhood_matrix, b=model_weights[None, :], axis=1
     )
 
-    log_lklhood = jnp.sum(log_lklhood)
+    log_lklhood = jnp.sum(log_lklhood) #/ log_lklhood.shape[0]
 
     return log_lklhood
 
@@ -137,6 +138,7 @@ def calc_lkl_and_grad_struct(
     model_weights: ArrayLike,
     image_stack: NumpyLoader,
     struct_info: ArrayLike,
+    config: dict
 ) -> Tuple[float, ArrayLike]:
     """
     Calculate the log-likelihood and its gradient with respect to the structure.
@@ -162,6 +164,7 @@ def calc_lkl_and_grad_struct(
 
     for image_batch in image_stack:
 
+        logging.info(f"Calculating likelihood and gradient for batch {image_batch['idx']}")
         log_lklhood, grad_str = calc_lkl_and_grad_struct_(
             models,
             model_weights,
@@ -169,11 +172,13 @@ def calc_lkl_and_grad_struct(
             struct_info,
             image_stack.dataset.proj_grid,
             image_stack.dataset.ctf_grid,
-            image_stack.dataset.res,
+            config["resolution"],
             image_batch["pose_params"],
             image_batch["ctf_params"],
             image_batch["noise_var"]
         )
+
+        break
 
     return log_lklhood, grad_str
 
@@ -183,6 +188,7 @@ def calc_lkl_and_grad_wts(
     model_weights: ArrayLike,
     image_stack: NumpyLoader,
     struct_info: ArrayLike,
+    config: dict
 ) -> Tuple[float, ArrayLike]:
     """
     Calculate the log-likelihood and its gradient with respect to the model weights.
@@ -210,21 +216,20 @@ def calc_lkl_and_grad_wts(
     grad_wts = jnp.zeros_like(model_weights)
 
     for image_batch in image_stack:
-            
-        log_lklhood_, grad_wts_ = calc_lkl_and_grad_wts_(
+
+        log_lklhood, grad_wts = calc_lkl_and_grad_wts_(
             models,
             model_weights,
             image_batch["proj"],
             struct_info,
             image_stack.dataset.proj_grid,
             image_stack.dataset.ctf_grid,
-            image_stack.dataset.res,
+            config["resolution"],
             image_batch["pose_params"],
             image_batch["ctf_params"],
             image_batch["noise_var"]
         )
 
-        log_lklhood += log_lklhood_
-        grad_wts += grad_wts_
+        break
 
     return log_lklhood, grad_wts
