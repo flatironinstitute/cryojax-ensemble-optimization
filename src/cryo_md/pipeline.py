@@ -1,14 +1,13 @@
 import logging
 from tqdm import tqdm
-import MDAnalysis as mda
 from MDAnalysis.analysis import align
 import numpy as np
 import jax.numpy as jnp
 
-from cryo_md.molecular_dynamics.md_sampling import MDSampler
-from cryo_md.molecular_dynamics.mdcg_sampling import MDCGSampler
-from cryo_md.optimization.optimizer import WeightOptimizer, PositionOptimizer
-from cryo_md.utils.output_manager import OutputManager
+from ._molecular_dynamics.md_sampling import MDSampler
+from ._molecular_dynamics.mdcg_sampling import MDCGSampler
+from ._optimization.optimizer import WeightOptimizer, PositionOptimizer
+from ._data.output_manager import OutputManager
 
 
 class Pipeline:
@@ -199,7 +198,9 @@ class Pipeline:
             positions[i] = dummy_univ.select_atoms(self.filter).atoms.positions.T
 
         positions = jnp.array(positions)
-        self.weights = step.run(positions, self.weights, image_stack, self.struct_info, self.config)
+        self.weights = step.run(
+            positions, self.weights, image_stack, self.struct_info, self.config
+        )
 
         return
 

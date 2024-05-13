@@ -6,13 +6,13 @@ Functions
 run_md_openmm
     Run MD simulations using OpenMM
 """
+
 import numpy as np
 import openmm
 import logging
 import openmm.app as openmm_app
 import openmm.unit as openmm_unit
 import os
-import sys
 
 
 class MDSampler:
@@ -37,20 +37,22 @@ class MDSampler:
                 logging.info(f"Generating checkpoint for model {i}")
 
                 self.generate_checkpoint(
-                    config["init_models_fname"][i],
-                    f"checkpoint_model_{i}_tmp.chk"
+                    config["init_models_fname"][i], f"checkpoint_model_{i}_tmp.chk"
                 )
                 self.checkpoint_fnames[i] = f"checkpoint_model_{i}_tmp.chk"
-                logging.info(f"Checkpoint for model {i} generated and saved as {self.checkpoint_fnames[i]}.")
+                logging.info(
+                    f"Checkpoint for model {i} generated and saved as {self.checkpoint_fnames[i]}."
+                )
 
             else:
-                logging.info(f"Checkpoint for model {i} found at {self.checkpoint_fnames[i]}.")
-                logging.info(f"Creating copy...")
-                os.system(f"cp {self.checkpoint_fnames[i]} checkpoint_model_{i}_tmp.chk")
+                logging.info(
+                    f"Checkpoint for model {i} found at {self.checkpoint_fnames[i]}."
+                )
+                logging.info("Creating copy...")
+                os.system(
+                    f"cp {self.checkpoint_fnames[i]} checkpoint_model_{i}_tmp.chk"
+                )
                 self.checkpoint_fnames[i] = f"checkpoint_model_{i}_tmp.chk"
-
-        
-        
 
     def parse_kwargs(self, **kwargs):
         default_kwargs = {
@@ -88,9 +90,10 @@ class MDSampler:
         return
 
     def generate_checkpoint(self, pdb_fname, fname):
-
         integrator = openmm.LangevinIntegrator(
-            self.md_params["temperature"], self.md_params["friction"], self.md_params["timestep"]
+            self.md_params["temperature"],
+            self.md_params["friction"],
+            self.md_params["timestep"],
         )
 
         pdb = openmm_app.PDBFile(pdb_fname)
@@ -118,7 +121,6 @@ class MDSampler:
 
         return
 
-
     def define_forcefield(self):
         self.forcefield = openmm_app.ForceField(
             self.md_params["forcefield"], self.md_params["water_model"]
@@ -131,7 +133,9 @@ class MDSampler:
 
     def update_system(self, process_id, ref_position_file, restrain_atom_list):
         integrator = openmm.LangevinIntegrator(
-            self.md_params["temperature"], self.md_params["friction"], self.md_params["timestep"]
+            self.md_params["temperature"],
+            self.md_params["friction"],
+            self.md_params["timestep"],
         )
 
         pdb = openmm_app.PDBFile(self.pdb_file)
