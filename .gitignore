@@ -1,6 +1,3 @@
-# Project specific
-non_tracked/
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

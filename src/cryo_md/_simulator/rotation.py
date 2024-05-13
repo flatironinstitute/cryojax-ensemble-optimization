@@ -11,8 +11,7 @@ calc_rot_matrix
 
 import numpy as np
 import jax.numpy as jnp
-import jax
-from jax.scipy.spatial.transform import Rotation
+from scipy.spatial.transform import Rotation
 
 
 def gen_euler(n_quats, dtype: float) -> np.ndarray:
@@ -48,7 +47,8 @@ def gen_euler(n_quats, dtype: float) -> np.ndarray:
 
 def calc_rot_matrix(angles):
     """
-    Generates a rotation matrix from the Euler angles in the xyx convention.
+    Generates a rotation matrix from the Euler angles in the ZYZ convention.
+    Equivalent to scipy.spatial.transform.Rotation.from_euler('ZYZ', angles).as_matrix()
 
     Parameters
     ----------
@@ -60,7 +60,16 @@ def calc_rot_matrix(angles):
     rot_matrix : jnp.Tensor
         A tensor of shape (3, 3) containing the rotation matrix.
     """
+    alpha, beta, gamma = angles
+    ca, cb, cg = jnp.cos(alpha), jnp.cos(beta), jnp.cos(gamma)
+    sa, sb, sg = jnp.sin(alpha), jnp.sin(beta), jnp.sin(gamma)
 
-    rot_matrix = Rotation.from_euler("ZYZ", angles, degrees=False).as_matrix()
+    rot_matrix = jnp.array(
+        [
+            [ca * cb * cg - sa * sg, -ca * cb * sg - sa * cg, ca * sb],
+            [sa * cb * cg + ca * sg, -sa * cb * sg + ca * cg, sa * sb],
+            [-sb * cg, sb * sg, cb],
+        ]
+    )
 
     return rot_matrix.T

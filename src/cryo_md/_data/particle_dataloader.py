@@ -1,11 +1,11 @@
 """
 Class for storing images and their parameters.
 """
+
 import os
 import starfile
 import mrcfile
 import numpy as np
-import torch
 from torch.utils.data import Dataset
 from torch.utils import data
 import jax.numpy as jnp
@@ -51,10 +51,9 @@ class FlattenAndCast(object):
 
 
 class RelionDataLoader(Dataset):
-    def __init__(self, data_path: str, name_star_file: str, res: float):
+    def __init__(self, data_path: str, name_star_file: str):
         self.data_path = data_path
         self.name_star_file = name_star_file
-        self.res = res
 
         self.df = starfile.read(os.path.join(self.data_path, self.name_star_file))
         self.validate_starfile()
@@ -159,14 +158,14 @@ class RelionDataLoader(Dataset):
             pidx = int(imgnamedf[0]) - 1
             with mrcfile.mmap(mrc_path, mode="r", permissive=True) as mrc:
                 proj = mrc.data[pidx]
-        except:
+        finally:
             raise Exception("Error loading image from mrcs file")
 
         # Read relion orientations and shifts
         pose_params = np.zeros(5)
         pose_params[0] = np.array(particle["rlnOriginXAngst"])
         pose_params[1] = np.array(particle["rlnOriginYAngst"])
-        
+
         pose_params[2:] = np.radians(
             np.stack(
                 [
@@ -192,7 +191,9 @@ class RelionDataLoader(Dataset):
         return img_params
 
 
-def load_starfile(data_path: str, name_star_file: str, res: float, batch_size: int, shuffle: bool = True):
+def load_starfile(
+    data_path: str, name_star_file: str, batch_size: int, shuffle: bool = True
+):
     """
     Load relion starfile into np dataloader adapted to numpy arrays
 
@@ -213,7 +214,6 @@ def load_starfile(data_path: str, name_star_file: str, res: float, batch_size: i
     image_stack = RelionDataLoader(
         data_path=data_path,
         name_star_file=name_star_file,
-        res=res,
     )
 
     dataloader = NumpyLoader(
