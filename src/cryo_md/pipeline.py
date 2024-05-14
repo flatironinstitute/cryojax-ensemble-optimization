@@ -3,6 +3,7 @@ from tqdm import tqdm
 from MDAnalysis.analysis import align
 import numpy as np
 import jax.numpy as jnp
+import os
 
 from ._molecular_dynamics.mdaa_simulator import MDSampler
 from ._molecular_dynamics.mdcg_simulator import MDCGSampler
@@ -100,16 +101,14 @@ class Pipeline:
 
     def prepare_for_run_(
         self,
-        n_steps,
+        config,
         init_universes,
         struct_info,
-        mode,
-        output_file,
         ref_universe,
         init_weights=None,
     ):
         if "MDSampler" in self.workflow_types:
-            if mode not in ["all-atom", "resid"]:
+            if config["mode"] not in ["all-atom", "resid"]:
                 logging.error(
                     "Invalid mode, must be 'all-atom' or 'resid' when using MDSampler"
                 )
@@ -117,20 +116,20 @@ class Pipeline:
                     "Invalid mode, must be 'all-atom' or 'resid' when using MDSampler"
                 )
 
-            if mode == "all-atom":
+            if config["mode"] == "all-atom":
                 self.filter = "protein and not name H*"
 
-            elif mode == "resid":
+            elif config["mode"] == "resid":
                 self.filter = "protein and name CA"
 
             self.filetype = "pdb"
 
         if "MDCGSampler" in self.workflow_types:
-            if mode in ["all-atom", "resid"]:
+            if config["mode"] in ["all-atom", "resid"]:
                 logging.error("Cannot run all-atom optimization with CG MD")
                 raise ValueError("Cannot run all-atom optimization with CG MD")
 
-            elif mode == "cg":
+            elif config["mode"] == "coarse-grained":
                 self.filter = "protein"
 
             self.filetype = "gro"
@@ -145,14 +144,17 @@ class Pipeline:
             self.univ_md.append(init_universes[i].copy())
             self.univ_pull.append(init_universes[i].copy())
 
-        self.n_steps = n_steps
+        self.n_steps = config["n_steps"]
 
         models_shape = (
             len(init_universes),
             *init_universes[0].select_atoms("protein").atoms.positions.T.shape,
         )
 
-        self.output_manager = OutputManager(output_file, n_steps, models_shape)
+        output_fname = os.path.join(
+            config["output_path"], config["experiment_name"] + ".h5"
+        )
+        self.output_manager = OutputManager(output_fname, self.n_steps, models_shape)
 
         if init_weights is None:
             self.weights = jnp.ones(self.n_models) / self.n_models
@@ -281,6 +283,13 @@ class Pipeline:
                 )
 
         logging.info("Pipeline finished.")
-        logging.info("Output saved to file.")
+        logging.info("Saving last checkpoints to output path...")
+        for i in range(self.n_models):
+            os.system(
+                f"cp checkpoint_model_{i}_tmp.chk {self.config['output_path']}/checkpoint_model_{i}.chk"
+            )
+
+            os.system(f"rm checkpoint_model_{i}_tmp.chk")
+        logging.info(f"Output saved to {self.output_manager.file_name}.")
 
         return

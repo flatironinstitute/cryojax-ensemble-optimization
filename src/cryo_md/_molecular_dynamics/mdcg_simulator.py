@@ -13,28 +13,60 @@ import openmm
 import openmm.unit as openmm_unit
 import openmm.app as openmm_app
 import martini_openmm as martini
+from typing import Any
+import os
 
 
 class MDCGSampler:
     def __init__(
         self,
-        gro_file: str,
+        models_fname: str,
         top_file: str,
         restrain_force_constant: float,
         n_steps: int,
-        epsilon_r: float = 15.0,
+        n_models: int,
+        checkpoint_fnames: Any,
+        epsilon_r: float,
         **kwargs,
     ) -> None:
-        self.gro_file = gro_file
+        if checkpoint_fnames is None:
+            checkpoint_fnames = [None] * n_models
+
+        else:
+            self.checkpoint_fnames = checkpoint_fnames
+
+        self.models_fname = models_fname
         self.top_file = top_file
         self.restrain_force_constant = restrain_force_constant
         self.n_steps = n_steps
         self.epsilon_r = epsilon_r
+        self.n_models = n_models
 
         self.parse_kwargs(**kwargs)
 
         self.define_platform()
-        # self.define_integrator()
+
+        for i in range(self.n_models):
+            if self.checkpoint_fnames[i] is None:
+                logging.info(f"Generating checkpoint for model {i}")
+
+                self.generate_checkpoint(
+                    models_fname[i], f"checkpoint_model_{i}_tmp.chk"
+                )
+                self.checkpoint_fnames[i] = f"checkpoint_model_{i}_tmp.chk"
+                logging.info(
+                    f"Checkpoint for model {i} generated and saved as {self.checkpoint_fnames[i]}."
+                )
+
+            else:
+                logging.info(
+                    f"Checkpoint for model {i} found at {self.checkpoint_fnames[i]}."
+                )
+                logging.info("Creating copy...")
+                os.system(
+                    f"cp {self.checkpoint_fnames[i]} checkpoint_model_{i}_tmp.chk"
+                )
+                self.checkpoint_fnames[i] = f"checkpoint_model_{i}_tmp.chk"
 
     def parse_kwargs(self, **kwargs):
         default_kwargs = {
@@ -68,12 +100,44 @@ class MDCGSampler:
 
         return
 
+    def generate_checkpoint(self, pdb_fname, fname):
+        integrator = openmm.LangevinIntegrator(
+            self.md_params["temperature"],
+            self.md_params["friction"],
+            self.md_params["timestep"],
+        )
+
+        pdb = openmm_app.PDBFile(pdb_fname)
+        modeller = openmm_app.Modeller(pdb.topology, pdb.positions)
+
+        system = self.forcefield.createSystem(
+            modeller.topology,
+            nonbondedMethod=self.md_params["nonbondedMethod"],
+            nonbondedCutoff=self.md_params["nonbondedCutoff"],
+            constraints=self.md_params["constraints"],
+        )
+
+        simulation = openmm_app.Simulation(
+            modeller.topology,
+            system,
+            integrator,
+            self.platform,
+            self.md_params["properties"],
+        )
+
+        simulation.context.setPositions(modeller.positions)
+        simulation.minimizeEnergy()
+        simulation.step(1)
+        simulation.saveCheckpoint(fname)
+
+        return
+
     def define_platform(self):
         self.platform = openmm.Platform.getPlatformByName(self.config["platform"])
         return
 
     def update_system(self, process_id, ref_position_file, restrain_atom_list):
-        conf = openmm_app.GromacsGroFile(self.gro_file)
+        conf = openmm_app.GromacsGroFile(self.models_fname[process_id])
         conf_ref = openmm_app.GromacsGroFile(ref_position_file)
 
         box_vectors = conf.getPeriodicBoxVectors()

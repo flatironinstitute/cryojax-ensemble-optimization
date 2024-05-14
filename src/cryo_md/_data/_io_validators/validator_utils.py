@@ -1,4 +1,3 @@
-
 def validate_generic_config_req(config: dict, reference: dict) -> None:
     """
     Validate a config dictionary against a reference dictionary.
@@ -30,6 +29,7 @@ def validate_generic_config_req(config: dict, reference: dict) -> None:
             )
     return
 
+
 def validate_generic_config_opt(config: dict, reference: dict) -> dict:
     """
     Validate a config dictionary with optional parameters against a reference dictionary.
@@ -55,5 +55,5 @@ def validate_generic_config_opt(config: dict, reference: dict) -> dict:
             config[key] = reference[key][1]
         elif not isinstance(config[key], reference[key][0]):
             raise ValueError("{} must be of type {}".format(key, reference[key][0]))
-        
+
     return config

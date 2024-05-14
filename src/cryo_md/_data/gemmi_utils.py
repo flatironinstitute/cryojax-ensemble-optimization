@@ -3,7 +3,9 @@ import os
 import gemmi
 
 
-def read_gemmi_atoms(path, i_model=0, chains=None, clean=False, center=True, pdb_out=""):
+def read_gemmi_atoms(
+    path, i_model=0, chains=None, clean=False, center=True, pdb_out=""
+):
     """
     Read atoms, separated by chain, from PDB or CIF file using Gemmi.
 

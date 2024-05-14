@@ -8,8 +8,10 @@ from .validator_utils import validate_generic_config_req, validate_generic_confi
 
 
 def validate_config_generator_req_values(config):
-    if config["mode"] not in ["all-atom", "resid", "cg"]:
-        raise ValueError("Invalid mode, must be 'all-atom', 'resid' or 'cg'")
+    if config["mode"] not in ["all-atom", "resid", "coarse-grained"]:
+        raise ValueError(
+            "Invalid mode, must be 'all-atom', 'resid' or 'coarse-grained'"
+        )
 
     if config["box_size"] <= 0:
         raise ValueError("Box size must be greater than 0")
@@ -49,20 +51,25 @@ def validate_config_generator_req_values(config):
 
     if config["noise_radius_mask"] > config["box_size"]:
         raise ValueError("Noise raidus mask must be less than half of the box size")
-    
+
     if not os.path.exists(config["working_dir"]):
-        raise FileNotFoundError(f"Working directory {config['working_dir']} does not exist.")
-    
+        raise FileNotFoundError(
+            f"Working directory {config['working_dir']} does not exist."
+        )
+
     if "*" in config["models_fname"]:
         models_fname = natsorted(glob.glob(config["models_fname"]))
         if len(models_fname) == 0:
-            raise FileNotFoundError(f"No files found with pattern {config['models_fname']}")
+            raise FileNotFoundError(
+                f"No files found with pattern {config['models_fname']}"
+            )
     else:
         models_fname = config["models_fname"]
         if not os.path.exists(models_fname):
             raise FileNotFoundError(f"Model {models_fname} does not exist.")
 
     return
+
 
 def read_generator_config(config: dict) -> dict:
     """
@@ -104,4 +111,3 @@ def read_generator_config(config: dict) -> dict:
 
     validate_config_generator_req_values(config)
     return config
-

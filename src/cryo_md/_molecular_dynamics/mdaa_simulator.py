@@ -13,20 +13,29 @@ import logging
 import openmm.app as openmm_app
 import openmm.unit as openmm_unit
 import os
+from typing import Any
 
 
 class MDSampler:
     def __init__(
         self,
-        pdb_file: str,
-        config: dict,
+        models_fname: str,
+        restrain_force_constant: float,
+        n_steps: int,
+        n_models: int,
+        checkpoint_fnames: Any,
         **kwargs,
     ) -> None:
-        self.pdb_file = pdb_file
-        self.restrain_force_constant = config["mdsampler_force_constant"]
-        self.n_steps = config["mdsampler_steps"]
-        self.n_models = config["n_models"]
-        self.checkpoint_fnames = config["checkpoint_fname"]
+        if checkpoint_fnames is None:
+            checkpoint_fnames = [None] * n_models
+
+        else:
+            self.checkpoint_fnames = checkpoint_fnames
+
+        self.models_fname = models_fname
+        self.restrain_force_constant = restrain_force_constant
+        self.n_steps = n_steps
+        self.n_models = n_models
 
         self.parse_kwargs(**kwargs)
         self.define_forcefield()
@@ -37,7 +46,7 @@ class MDSampler:
                 logging.info(f"Generating checkpoint for model {i}")
 
                 self.generate_checkpoint(
-                    config["init_models_fname"][i], f"checkpoint_model_{i}_tmp.chk"
+                    models_fname[i], f"checkpoint_model_{i}_tmp.chk"
                 )
                 self.checkpoint_fnames[i] = f"checkpoint_model_{i}_tmp.chk"
                 logging.info(
@@ -138,7 +147,7 @@ class MDSampler:
             self.md_params["timestep"],
         )
 
-        pdb = openmm_app.PDBFile(self.pdb_file)
+        pdb = openmm_app.PDBFile(self.models_fname[process_id])
         pdb_ref = openmm_app.PDBFile(ref_position_file)
         modeller = openmm_app.Modeller(pdb.topology, pdb.positions)
 

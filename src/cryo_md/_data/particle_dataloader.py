@@ -122,7 +122,7 @@ class RelionDataLoader(Dataset):
         self.ctf_grid = np.stack((fx2.ravel(), fy2.ravel()), axis=1) / pixel_size
 
     def get_ctf_params(self, particle):
-        box_size, volt, pixel_size, cs, amp_contrast = self.get_df_optics_params()
+        _, volt, _, cs, amp_contrast = self.get_df_optics_params()
         volt = volt * 1000.0
         cs = cs * 1e7
         lam = 12.2639 / np.sqrt(volt + 0.97845e-6 * volt**2)

@@ -10,6 +10,7 @@ from .._simulator.starfile_generator import simulate_stack
 
 warnings.filterwarnings("ignore", module="MDAnalysis")
 
+
 def add_args(parser):
     parser.add_argument(
         "--config", type=str, default=None, help="Path to the config (yaml) file"
@@ -30,19 +31,22 @@ def warnexists(out):
     if os.path.exists(out):
         Warning("Warning: {} already exists. Overwriting.".format(out))
 
+
 def main(args):
-    
     config = load_config(args.config)
     warnexists(config["output_path"])
     mkbasedir(config["output_path"])
 
     # make copy of config to output_path
 
-
     logger = logging.getLogger()
-    logger_fname = os.path.join(config["output_path"], config["experiment_name"] + ".log")
-    fhandler = logging.FileHandler(filename=logger_fname, mode='a')
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logger_fname = os.path.join(
+        config["output_path"], config["experiment_name"] + ".log"
+    )
+    fhandler = logging.FileHandler(filename=logger_fname, mode="a")
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
     fhandler.setFormatter(formatter)
     logger.addHandler(fhandler)
     logger.setLevel(logging.INFO)
@@ -51,7 +55,11 @@ def main(args):
     with open(os.path.join(config["output_path"], config_fname), "w") as f:
         json.dump(config, f)
 
-    logging.info("A copy of the used config file has been written to {}".format(os.path.join(config["output_path"], config_fname)))
+    logging.info(
+        "A copy of the used config file has been written to {}".format(
+            os.path.join(config["output_path"], config_fname)
+        )
+    )
 
     models, struct_info = load_models(config)
 
@@ -69,13 +77,14 @@ def main(args):
     )
     logging.info("Simulation complete.")
     logging.info("Output written to {}".format(config["output_path"]))
-    
+
     return
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=help_config_generator(),
-)
+    )
     main(add_args(parser).parse_args())

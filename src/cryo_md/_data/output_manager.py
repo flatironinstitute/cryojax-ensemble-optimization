@@ -6,8 +6,8 @@ import numpy as np
 
 class OutputManager:
     def __init__(self, file_name: str, steps, models_shape, dtype=np.float64):
-        file_name = self.check_file(file_name)
-        self.file = h5py.File(file_name, "w")
+        self.file_name = self.check_file(file_name)
+        self.file = h5py.File(self.file_name, "w")
         self.dtype = dtype
         self.create_datasets(steps, models_shape)
 

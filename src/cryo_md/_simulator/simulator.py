@@ -70,12 +70,10 @@ def simulator_(
         )
         * gauss_amp[None, :, :]
     )
-    gauss_y = (
-        jnp.exp(
-            -0.5
-            * gauss_var_inv[None, :, :]
-            * ((grid[:, None] - transf_coords[1, :]) ** 2)[:, :, None]
-        )
+    gauss_y = jnp.exp(
+        -0.5
+        * gauss_var_inv[None, :, :]
+        * ((grid[:, None] - transf_coords[1, :]) ** 2)[:, :, None]
     )
     gauss_x = jnp.transpose(gauss_x, (2, 1, 0))
     gauss_y = jnp.transpose(gauss_y, (2, 0, 1))

@@ -10,6 +10,7 @@ import jax.numpy as jnp
 
 from .gemmi_utils import read_gemmi_atoms, extract_atomic_parameter
 
+
 def pdb_parser_all_atom_(fname: str, config: dict) -> np.array:
     """
     Parses a pdb file and returns an atomic model of the protein. The atomic model is a 5xN array, where N is the number of atoms in the protein. The first three rows are the x, y, z coordinates of the atoms. The fourth row is the atomic number of the atoms. The fifth row is the variance of the atoms before the resolution is applied.
@@ -31,11 +32,13 @@ def pdb_parser_all_atom_(fname: str, config: dict) -> np.array:
     atoms = read_gemmi_atoms(fname)
     ff_a = jnp.array(extract_atomic_parameter(atoms, "form_factor_a"))
     ff_b = jnp.array(extract_atomic_parameter(atoms, "form_factor_b"))
-    b_factor = (jnp.array(extract_atomic_parameter(atoms, "B_factor")) * 0.5 + 0.0) * 0.25
+    b_factor = (
+        jnp.array(extract_atomic_parameter(atoms, "B_factor")) * 0.5 + 0.0
+    ) * 0.25
     invb = (4.0 * np.pi) / (ff_b + b_factor[:, None])
 
     gauss_var = (ff_b + b_factor[:, None]) / (2.0 * np.pi)
-    gauss_amp = ff_a ** 2 * invb
+    gauss_amp = ff_a**2 * invb
     gauss_var = gauss_var[atom_list]
     gauss_amp = gauss_amp[atom_list]
 
@@ -188,7 +191,7 @@ def pdb_parser_cg_(fname: str, config: dict) -> np.array:
     univ = mda.Universe(fname)
     protein = univ.select_atoms("protein")
 
-    gauss_var = np.ones(protein.n_atoms) * config["resolution"] ** 2 / (2.0 * np.pi ** 2)
+    gauss_var = np.ones(protein.n_atoms) * config["resolution"] ** 2 / (2.0 * np.pi**2)
     gauss_amp = np.zeros(protein.n_atoms)
 
     counter = 0
@@ -241,8 +244,8 @@ def pdb_parser(input_file: str, config: dict) -> dict:
 
     return struct_info
 
+
 def load_models(config):
-    
     logging.info(f"Loading models {config['models_fname']}")
 
     if "*" in config["models_fname"]:
@@ -254,7 +257,6 @@ def load_models(config):
 
     logging.debug("Using models: {}".format(models_fname))
 
-    
     n_models = len(models_fname)
 
     models = []

@@ -7,6 +7,7 @@ import textwrap
 from ._io_validators.validate_generation_config import read_generator_config
 from ._io_validators.validate_optimization_config import read_optimization_config
 
+
 def load_config(config_file):
     """
     Load a json config file
@@ -39,9 +40,9 @@ def load_config(config_file):
 
     else:
         raise ValueError("experiment_type must be either generator or optimizer")
-    
 
     return config
+
 
 def help_config_generator():
     string = textwrap.dedent(
@@ -68,7 +69,7 @@ def help_config_generator():
             volt: volt of the particles (kv) (default: 300 kV)
             spherical_aberr: spherical_aberr of the particles (mm) (default: 2.7 mm)
             seed: seed for parameter generation (default: 0)
- 
+
     """
     )
     return string
