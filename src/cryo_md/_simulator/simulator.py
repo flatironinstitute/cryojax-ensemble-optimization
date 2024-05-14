@@ -54,8 +54,8 @@ def simulator_(
     For the structural information of the models, the first row should be related to the variance of the Gaussian, e.g., the radius of the aminoacid. The second row should be related to the amplitude of the Gaussian, e.g., the number of electrons in the atom/residue (for coarse grained models)
     """
 
-    gauss_var = struct_info["gauss_var"]
-    gauss_amp_inv = 1.0 / struct_info["gauss_amp"]
+    gauss_var_inv = 1.0 / struct_info["gauss_var"]
+    gauss_amp = struct_info["gauss_amp"]
 
     # Rotate coordinates
     transf_coords = jnp.matmul(calc_rot_matrix(pose_params[2:]), coords)
@@ -65,15 +65,15 @@ def simulator_(
     gauss_x = (
         jnp.exp(
             -0.5
-            * gauss_amp_inv[None, :, :]
+            * gauss_var_inv[None, :, :]
             * ((grid[:, None] - transf_coords[0, :]) ** 2)[:, :, None]
         )
-        * gauss_var[None, :, :]
+        * gauss_amp[None, :, :]
     )
     gauss_y = (
         jnp.exp(
             -0.5
-            * gauss_amp_inv[None, :, :]
+            * gauss_var_inv[None, :, :]
             * ((grid[:, None] - transf_coords[1, :]) ** 2)[:, :, None]
         )
     )
@@ -110,9 +110,9 @@ def simulator_(
     ctf *= ctf_params[7] * jnp.exp(-ctf_params[6] / 4.0 * s2)
     ctf = ctf.reshape(*image.shape)
 
+    image /= jnp.linalg.norm(image)
     image_ft = jnp.fft.fftshift(jnp.fft.fft2(image))
     image = jnp.fft.ifft2(jnp.fft.ifftshift(image_ft * ctf)).real
-    image /= jnp.linalg.norm(image)
 
     return image
 

@@ -69,7 +69,7 @@ path = "src/cryo_md/__about__.py"
 
 
 [project.scripts]
-cryo_challenge = "cryo_md.command_line:main_commands"
+cryo_md = "cryo_md.command_line:main_commands"
 
 # ... other project metadata fields as specified in:
 #     https://packaging.python.org/en/latest/specifications/declaring-project-metadata/

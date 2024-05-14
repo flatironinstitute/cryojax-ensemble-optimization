@@ -158,7 +158,7 @@ class RelionDataLoader(Dataset):
             pidx = int(imgnamedf[0]) - 1
             with mrcfile.mmap(mrc_path, mode="r", permissive=True) as mrc:
                 proj = mrc.data[pidx]
-        finally:
+        except FileNotFoundError:
             raise Exception("Error loading image from mrcs file")
 
         # Read relion orientations and shifts

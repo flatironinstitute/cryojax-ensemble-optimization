@@ -23,11 +23,11 @@ def validate_config_generator_req_values(config):
     if np.all(np.array(config["particles_per_model"]) <= 0):
         raise ValueError("Particles per model must be greater than 0")
 
-    if np.all(np.array(config["defocus_u"]) <= 0):
-        raise ValueError("Defocus u must be greater than 0")
+    if np.all(np.array(config["defocus_u"]) < 0):
+        raise ValueError("Defocus u must be greater or equal to 0")
 
-    if np.all(np.array(config["defocus_v"]) <= 0):
-        raise ValueError("Defocus v must be greater than 0")
+    if np.all(np.array(config["defocus_v"]) < 0):
+        raise ValueError("Defocus v must be greater or equal to 0")
 
     if np.all(np.array(config["noise_snr"]) <= 0):
         raise ValueError("Noise snr must be greater than 0")
@@ -53,14 +53,14 @@ def validate_config_generator_req_values(config):
     if not os.path.exists(config["working_dir"]):
         raise FileNotFoundError(f"Working directory {config['working_dir']} does not exist.")
     
-    if "*" in config["init_models_fname"]:
-        models_fname = natsorted(glob.glob(config["init_models_fname"]))
+    if "*" in config["models_fname"]:
+        models_fname = natsorted(glob.glob(config["models_fname"]))
         if len(models_fname) == 0:
             raise FileNotFoundError(f"No files found with pattern {config['models_fname']}")
-        else:
-            models_fname = config["init_models_fname"]
-            if not os.path.exists(models_fname):
-                raise FileNotFoundError(f"Model {models_fname} does not exist.")
+    else:
+        models_fname = config["models_fname"]
+        if not os.path.exists(models_fname):
+            raise FileNotFoundError(f"Model {models_fname} does not exist.")
 
     return
 

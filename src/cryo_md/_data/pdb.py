@@ -10,7 +10,7 @@ import jax.numpy as jnp
 
 from .gemmi_utils import read_gemmi_atoms, extract_atomic_parameter
 
-def pdb_parser_all_atom_(fname: str) -> np.array:
+def pdb_parser_all_atom_(fname: str, config: dict) -> np.array:
     """
     Parses a pdb file and returns an atomic model of the protein. The atomic model is a 5xN array, where N is the number of atoms in the protein. The first three rows are the x, y, z coordinates of the atoms. The fourth row is the atomic number of the atoms. The fifth row is the variance of the atoms before the resolution is applied.
     Parameters
@@ -25,15 +25,23 @@ def pdb_parser_all_atom_(fname: str) -> np.array:
 
     """
 
+    univ = mda.Universe(fname)
+    atom_list = univ.select_atoms(config["atom_list_filter"]).indices
+
     atoms = read_gemmi_atoms(fname)
     ff_a = jnp.array(extract_atomic_parameter(atoms, "form_factor_a"))
     ff_b = jnp.array(extract_atomic_parameter(atoms, "form_factor_b"))
-    b_factor = jnp.array(extract_atomic_parameter(atoms, "B_factor"))
+    b_factor = (jnp.array(extract_atomic_parameter(atoms, "B_factor")) * 0.5 + 0.0) * 0.25
     invb = (4.0 * np.pi) / (ff_b + b_factor[:, None])
 
+    gauss_var = (ff_b + b_factor[:, None]) / (2.0 * np.pi)
+    gauss_amp = ff_a ** 2 * invb
+    gauss_var = gauss_var[atom_list]
+    gauss_amp = gauss_amp[atom_list]
+
     struct_info = {
-        "gauss_var": 8.0 / (ff_b + b_factor[:, None]),
-        "gauss_amp": ff_a ** 2 * invb,
+        "gauss_var": gauss_var,
+        "gauss_amp": gauss_amp,
     }
 
     return struct_info
@@ -115,7 +123,7 @@ def pdb_parser_resid_(fname: str) -> np.array:
     raise NotImplementedError("This function is not implemented yet.")
 
 
-def pdb_parser_cg_(fname: str, resolution: float) -> np.array:
+def pdb_parser_cg_(fname: str, config: dict) -> np.array:
     """
     Parses a pdb file and returns a coarsed grained atomic model of the protein. The atomic model is a 5xN array, where N is the number of residues in the protein. The first three rows are the x, y, z coordinates of the alpha carbons. The fourth row is the density of the residues, i.e., the total number of electrons. The fifth row is the radius of the residues squared, which we use as the variance of the residues for the forward model.
 
@@ -180,7 +188,7 @@ def pdb_parser_cg_(fname: str, resolution: float) -> np.array:
     univ = mda.Universe(fname)
     protein = univ.select_atoms("protein")
 
-    gauss_var = np.ones(protein.n_atoms) * resolution ** 2 / (2.0 * np.pi ** 2)
+    gauss_var = np.ones(protein.n_atoms) * config["resolution"] ** 2 / (2.0 * np.pi ** 2)
     gauss_amp = np.zeros(protein.n_atoms)
 
     counter = 0
@@ -200,7 +208,7 @@ def pdb_parser_cg_(fname: str, resolution: float) -> np.array:
     return struct_info
 
 
-def pdb_parser(input_file: str, mode: str, resolution: float) -> dict:
+def pdb_parser(input_file: str, config: dict) -> dict:
     """
     Parses a pdb file and returns an atomic model of the protein. The atomic model is a 5xN array, where N is the number of atoms or residues in the protein. The first three rows are the x, y, z coordinates of the atoms or residues. The fourth row is the atomic number of the atoms or the density of the residues. The fifth row is the variance of the atoms or residues, which is the resolution of the cryo-EM map divided by pi squared.
 
@@ -219,19 +227,19 @@ def pdb_parser(input_file: str, mode: str, resolution: float) -> dict:
         The atomic model of the protein.
     """
 
-    if mode == "resid":
+    if config["mode"] == "resid":
         struct_info = pdb_parser_resid_(input_file)
 
-    elif mode == "all-atom":
-        struct_info = pdb_parser_all_atom_(input_file)
+    elif config["mode"] == "all-atom":
+        struct_info = pdb_parser_all_atom_(input_file, config)
 
-    elif mode == "cg":
-        struct_info = pdb_parser_cg_(input_file, resolution)
+    elif config["mode"] == "cg":
+        struct_info = pdb_parser_cg_(input_file, config)
 
     else:
         raise ValueError("Mode must be either 'cg', 'resid' or 'all-atom'.")
 
-    return jnp.array(struct_info)
+    return struct_info
 
 def load_models(config):
     
@@ -268,6 +276,6 @@ def load_models(config):
         models.append(uni.select_atoms(config["atom_list_filter"]).positions.T)
 
     models = np.array(models)
-    struct_info = pdb_parser(model_path, config["mode"], config["resolution"])
+    struct_info = pdb_parser(model_path, config)
 
     return models, struct_info

@@ -19,10 +19,10 @@ def validate_config_optimization_values(config):
         models_fname = natsorted(glob.glob(config["init_models_fname"]))
         if len(models_fname) == 0:
             raise FileNotFoundError(f"No files found with pattern {config['models_fname']}")
-        else:
-            models_fname = config["init_models_fname"]
-            if not os.path.exists(models_fname):
-                raise FileNotFoundError(f"Model {models_fname} does not exist.")
+    else:
+        models_fname = config["init_models_fname"]
+        if not os.path.exists(models_fname):
+            raise FileNotFoundError(f"Model {models_fname} does not exist.")
             
     if not os.path.exists(config["ref_model_fname"]):
         raise FileNotFoundError(f"Reference model {config['ref_model_fname']} does not exist.")
