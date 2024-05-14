@@ -4,8 +4,8 @@ from MDAnalysis.analysis import align
 import numpy as np
 import jax.numpy as jnp
 
-from ._molecular_dynamics.md_sampling import MDSampler
-from ._molecular_dynamics.mdcg_sampling import MDCGSampler
+from ._molecular_dynamics.mdaa_simulator import MDSampler
+from ._molecular_dynamics.mdcg_simulator import MDCGSampler
 from ._optimization.optimizer import WeightOptimizer, PositionOptimizer
 from ._data.output_manager import OutputManager
 
