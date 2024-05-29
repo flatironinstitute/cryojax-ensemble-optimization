@@ -1,3 +1,18 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = [
+    "src/cryo_md",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = [
+    "src/cryo_md",
+]
+
+
 [project]
 name = "cryo_MD"
 authors = [
@@ -11,32 +26,59 @@ authors = [
 
 description = "My package description"
 readme = "README.rst"
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 keywords = ["CryoEM", "Molecular Dynamics", "single particle"]
-license = {text = "MIT"}
+license = "MIT"
 classifiers = [
-    "Programming Language :: Python :: 3",
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: Implementation :: PyPy",
 ]
 
 dependencies = [
     "numpy",
     "jax[cpu]",
     "matplotlib",
+    "jaxtyping",
+    "starfile",
+    "mrcfile",
+    "scipy",
+    "natsort",
+    "gemmi",
+    "MDAnalysis",
+    "bottleneck",
+    "numexpr",
+    "h5py",
 ]
-
-
 dynamic = ["version"]
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["cryo_md*"]
-
 [project.optional-dependencies]
-pdf = ["ReportLab>=1.2", "RXP"]
-rest = ["docutils>=0.3", "pack ==1.1, ==1.3"]
+dev = [
+  "pytest",
+  "mypy",
+  "pre-commit",
+  "ruff"
+]
+
+[project.urls]
+Documentation = "https://github.com/DSilva27/cryo_MD/blob/main/README.rst"
+Issues = "https://github.com/DSilva27/cryo_MD/issues"
+Source = "https://github.com/DSilva27/cryo_MD"
+
+[tool.hatch.version]
+path = "src/cryo_md/__about__.py"
+
 
 [project.scripts]
-my-script = "my_package.module:function"
+cryo_md = "cryo_md.command_line:main_commands"
 
 # ... other project metadata fields as specified in:
 #     https://packaging.python.org/en/latest/specifications/declaring-project-metadata/
+
+
+[tool.ruff.lint.isort]
+case-sensitive = true

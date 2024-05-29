@@ -1,9 +1,8 @@
 import MDAnalysis as mda
 import numpy as np
 import jax.numpy as jnp
-from jax.typing import ArrayLike
-from MDAnalysis.analysis import align, rms
-from typing import Tuple
+from jaxtyping import Array
+from MDAnalysis.analysis import align
 
 
 def get_MD_outputs(
@@ -11,7 +10,7 @@ def get_MD_outputs(
     directory_path: str,
     ref_universe: mda.Universe,
     filter: str,
-) -> ArrayLike:
+) -> Array:
     """
     Get MD outputs from OpenMM simulations
 
