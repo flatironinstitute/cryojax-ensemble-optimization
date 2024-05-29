@@ -15,8 +15,8 @@ def validate_config_optimization_values(config):
             f"Working Directory {config['working_dir']} does not exist."
         )
 
-    if not os.path.exists(config["starfile_fname"]):
-        raise FileNotFoundError(f"Starfile {config['starfile_fname']} does not exist.")
+    if not os.path.exists(config["starfile_path"]):
+        raise FileNotFoundError(f"Starfile {config['starfile_path']} does not exist.")
 
     if "*" in config["models_fname"]:
         models_fname = natsorted(glob.glob(config["models_fname"]))
@@ -60,15 +60,15 @@ def validate_pipeline_element(config: dict) -> dict:
     if config["type"] == "mdsampler":
         req_keys = {
             "mode": str,
-            "mdsampler_steps": Number,
+            "n_steps": Number,
             "mdsampler_force_constant": Number,
             "n_steps": Number,
         }
 
         optional_keys = {
-            "checkpoint_fname": [str, None],
+            "checkpoint_fnames": [str, None],
             "platform": [str, "CPU"],
-            "platform_properties": [dict, {"Threads": 1}],
+            "platform_properties": [dict, {"Threads": None}],
         }
 
         if config["mode"] == "cg":
@@ -95,6 +95,13 @@ def validate_pipeline_element(config: dict) -> dict:
 
     validate_generic_config_req(config, req_keys)
     config = validate_generic_config_opt(config, optional_keys)
+
+    if config["type"] == "mdsampler":
+        if config["checkpoint_fnames"] is not None:
+            if "*" in config["checkpoint_fnames"]:
+                config["checkpoint_fnames"] = natsorted(glob.glob(config["checkpoint_fnames"]))
+            else:
+                config["checkpoint_fnames"] = [config["checkpoint_fnames"]]
     return config
 
 
@@ -126,7 +133,7 @@ def read_optimization_config(config: dict) -> dict:
         "experiment_type": str,
         "mode": str,
         "working_dir": str,
-        "starfile_fname": str,
+        "starfile_path": str,
         "models_fname": str,
         "ref_model_fname": str,
         "pipeline": dict,
@@ -142,8 +149,16 @@ def read_optimization_config(config: dict) -> dict:
         "checkpoint_fname": [str, None],
         "n_models": [Number, n_models],
     }
+
+    if config["mode"] == "all-atom":
+        optional_keys["atom_list_filter"] = [str, "protein and not name H*"]
+
+    if config["mode"] == "coarse-grained":
+        optional_keys["atom_list_filter"] = [str, "protein"]
+
     config = validate_generic_config_opt(config, optional_keys)
     config["pipeline"] = read_pipeline_config(config["pipeline"])
 
     validate_config_optimization_values(config)
+
     return config

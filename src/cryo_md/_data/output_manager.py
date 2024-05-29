@@ -17,6 +17,10 @@ class OutputManager:
         self.file.close()
         return
 
+    def close(self):
+        self.file.close()
+        return
+
     def check_file(self, file_name: str):
         if os.path.exists(file_name):
             logging.warning("File already exists, creating backup...")

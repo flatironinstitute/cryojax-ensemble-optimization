@@ -27,7 +27,7 @@ class MDSampler:
         **kwargs,
     ) -> None:
         if checkpoint_fnames is None:
-            checkpoint_fnames = [None] * n_models
+            self.checkpoint_fnames = [None] * n_models
 
         else:
             self.checkpoint_fnames = checkpoint_fnames
@@ -46,7 +46,7 @@ class MDSampler:
                 logging.info(f"Generating checkpoint for model {i}")
 
                 self.generate_checkpoint(
-                    models_fname[i], f"checkpoint_model_{i}_tmp.chk"
+                    self.models_fname[i], f"checkpoint_model_{i}_tmp.chk"
                 )
                 self.checkpoint_fnames[i] = f"checkpoint_model_{i}_tmp.chk"
                 logging.info(
@@ -186,8 +186,8 @@ class MDSampler:
         )
         logging.info("  Positions updated.")
 
-        simulation.minimizeEnergy()
-        logging.info("  Energy minimized.")
+        #simulation.minimizeEnergy()
+        #logging.info("  Energy minimized.")
 
         logging.info(f"  Running simulation for {self.n_steps} steps...")
         simulation.step(self.n_steps)

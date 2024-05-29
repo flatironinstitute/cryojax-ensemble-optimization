@@ -248,10 +248,7 @@ def pdb_parser(input_file: str, config: dict) -> dict:
 def load_models(config):
     logging.info(f"Loading models {config['models_fname']}")
 
-    if "*" in config["models_fname"]:
-        models_fname = natsorted(glob.glob(config["models_fname"]))
-    else:
-        models_fname = [config["models_fname"]]
+    models_fname = config["models_fname"]
 
     logging.info("Models Loaded.")
 
@@ -263,21 +260,27 @@ def load_models(config):
     model_0 = mda.Universe(models_fname[0])
     model_0.atoms.translate(-model_0.atoms.center_of_mass())
 
-    logging.info(f"Using model {models_fname[0]} as reference.")
-    path_ref_model = (
-        os.path.join(config["output_path"], "ref_model.")
-        + models_fname[0].split(".")[-1]
-    )
-    model_0.atoms.write(path_ref_model)
-    logging.info(f"Reference model written to {path_ref_model}")
+    if "ref_model_fname" in config.keys():
+        path_ref_model = os.path.join(config["working_dir"], config["ref_model_fname"])
+        model_0 = mda.Universe(path_ref_model)
+        model_0.atoms.translate(-model_0.atoms.center_of_mass())
+        logging.info(f"Reference model loaded from {path_ref_model}")
+    
+    else:
+        logging.info(f"Using model {models_fname[0]} as reference.")
+        path_ref_model = (
+            os.path.join(config["output_path"], "ref_model.")
+            + os.path.basename(models_fname[0]).split(".")[-1]
+        )
+        model_0.atoms.write(path_ref_model)
+        logging.info(f"Reference model written to {path_ref_model}")
 
     for i in range(0, n_models):
-        model_path = os.path.join(config["working_dir"], models_fname[i])
-        uni = mda.Universe(model_path)
+        uni = mda.Universe(models_fname[i])
         align.alignto(uni, model_0, select=config["atom_list_filter"], weights="mass")
         models.append(uni.select_atoms(config["atom_list_filter"]).positions.T)
 
     models = np.array(models)
-    struct_info = pdb_parser(model_path, config)
+    struct_info = pdb_parser(models_fname[0], config)
 
     return models, struct_info

@@ -47,7 +47,12 @@ dependencies = [
     "starfile",
     "mrcfile",
     "scipy",
-    "natsort"
+    "natsort",
+    "gemmi",
+    "MDAnalysis",
+    "bottleneck",
+    "numexpr",
+    "h5py",
 ]
 dynamic = ["version"]
 

@@ -1,15 +1,100 @@
 import logging
 from tqdm import tqdm
+import MDAnalysis as mda
 from MDAnalysis.analysis import align
 import numpy as np
 import jax.numpy as jnp
 import os
+import h5py
+import matplotlib.pyplot as plt
 
 from ._molecular_dynamics.mdaa_simulator import MDSampler
 from ._molecular_dynamics.mdcg_simulator import MDCGSampler
 from ._optimization.optimizer import WeightOptimizer, PositionOptimizer
 from ._data.output_manager import OutputManager
 
+def plot_loss(loss_values, output_path):
+    # do a window averaging of the loss, window of 20
+
+    indices = np.arange(len(loss_values))
+    window_size = int(len(loss_values) * 0.1)
+
+    losses_avg = [loss_values[0]]
+    indices_avg = [indices[0]]
+    for i in range(len(loss_values)-window_size):
+        losses_avg.append(sum(loss_values[i:i+window_size])/window_size)
+        indices_avg.append(indices[i])
+        
+    losses_avg.append(loss_values[-1])
+    indices_avg.append(indices[-1])
+    
+    fig, ax = plt.subplots(1, 1, figsize=(10, 5))
+    ax.plot(indices, loss_values, label="Loss", color="blue", alpha=0.7)
+    ax.plot(indices_avg, losses_avg, label="Loss (smoothed)", color="red")
+
+    ax.set_xlabel("Step")
+    ax.set_ylabel("Loss")
+    ax.legend()
+
+    fig_path = os.path.join(output_path, "loss_curve.png")
+    plt.savefig(fig_path, dpi=300, bbox_inches="tight")
+    return
+
+def plot_weights(traj_wts, output_path):
+
+    fig, ax = plt.subplots(1, 1, figsize=(10, 5))
+    for i in range(traj_wts.shape[1]):
+        ax.plot(traj_wts[:, i], label=f"Weights Model {i+1}")
+        ax.set_xlabel("Iteration")
+        ax.set_ylabel("Weights")
+
+    ax.legend()
+    fig_path = os.path.join(output_path, "weights_curve.png")
+    plt.savefig(fig_path, dpi=300, bbox_inches="tight")
+    return
+
+
+def generate_outputs(universe, ref_universe, output_fname, atom_filter):
+    """
+    Generate outputs from the pipeline
+
+    Parameters
+    ----------
+    universe : MDAnalysis.Universe
+        Universe object with the optimized positions - should include the full system
+    ref_universe : MDAnalysis.Universe
+        Universe object with the reference structure
+    output_fname : str
+        Output file name
+    atom_filter : str
+        Atom selection string
+
+    Returns
+    -------
+    None
+
+    Generates PDB files for the trajectory of each optimized model. Plots the loss curve.
+    """
+
+    universe = universe.select_atoms(atom_filter)
+    with h5py.File(output_fname, "r") as file:
+
+        losses = file["losses"][:]
+        traj_wts = file["trajs_weights"][:]
+        n_frames, n_models, _, n_atoms = file["trajs_positions"].shape
+
+        for i in range(n_models):
+            traj_path = os.path.join(os.path.dirname(output_fname), f"traj_{i}.pdb")
+            with mda.Writer(traj_path, n_atoms) as W:
+                for j in range(n_frames):
+                    universe.atoms.positions = file["trajs_positions"][j, i, :, :].T
+                    align.alignto(universe, ref_universe, select=atom_filter, match_atoms=True)
+                    W.write(universe)
+
+        plot_loss(losses, os.path.dirname(output_fname))
+        plot_weights(traj_wts, os.path.dirname(output_fname))
+
+    return
 
 class Pipeline:
     def __init__(self, workflow, config):
@@ -148,7 +233,7 @@ class Pipeline:
 
         models_shape = (
             len(init_universes),
-            *init_universes[0].select_atoms("protein").atoms.positions.T.shape,
+            *init_universes[0].select_atoms(self.filter).atoms.positions.T.shape,
         )
 
         output_fname = os.path.join(
@@ -261,7 +346,8 @@ class Pipeline:
                         self.run_md_(step)
 
                     elif isinstance(step, WeightOptimizer):
-                        self.run_wts_opt_(step, image_stack)
+                        #self.run_wts_opt_(step, image_stack)
+                        pass
 
                     elif isinstance(step, PositionOptimizer):
                         loss = self.run_pos_opt_(step, image_stack)
@@ -273,7 +359,7 @@ class Pipeline:
                 self.output_manager.write(
                     np.array(
                         [
-                            univ.select_atoms("protein").atoms.positions.T
+                            univ.select_atoms(self.filter).atoms.positions.T
                             for univ in self.univ_md
                         ]
                     ),
@@ -291,5 +377,8 @@ class Pipeline:
 
             os.system(f"rm checkpoint_model_{i}_tmp.chk")
         logging.info(f"Output saved to {self.output_manager.file_name}.")
+        self.output_manager.close()
+
+        generate_outputs(self.univ_md[0], self.ref_universe, self.output_manager.file_name, self.filter)
 
         return

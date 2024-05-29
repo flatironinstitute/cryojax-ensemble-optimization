@@ -14,7 +14,6 @@ def compare_coords_with_img_(
     struct_info: Array,
     grid: Array,
     grid_f: Array,
-    res: float,
     pose_params: Array,
     ctf_params: Array,
     noise_var: Array,
@@ -34,8 +33,6 @@ def compare_coords_with_img_(
         Size of the box
     pixel_size : float
         Pixel size
-    res : float
-        Resolution of density map where this image comes from.
     var_imaging_args : Array
         Imaging parameters
 
@@ -45,7 +42,7 @@ def compare_coords_with_img_(
         Log-likelihood
     """
     image_coords = simulator_(
-        coords, struct_info, grid, grid_f, res, pose_params, ctf_params
+        coords, struct_info, grid, grid_f, pose_params, ctf_params
     )
 
     return -0.5 * jnp.linalg.norm(image_coords - image_ref) ** 2 / noise_var
@@ -54,12 +51,12 @@ def compare_coords_with_img_(
 batch_over_models_ = jax.jit(
     jax.vmap(
         compare_coords_with_img_,
-        in_axes=(0, None, None, None, None, None, None, None, None),
+        in_axes=(0, None, None, None, None, None, None, None),
     )
 )
 
 batch_over_images_ = jax.jit(
-    jax.vmap(batch_over_models_, in_axes=(None, 0, None, None, None, None, 0, 0, 0))
+    jax.vmap(batch_over_models_, in_axes=(None, 0, None, None, None, 0, 0, 0))
 )
 
 
@@ -70,7 +67,6 @@ def calc_lklhood_(
     struct_info: Array,
     grid: Array,
     grid_f: Array,
-    res: float,
     pose_params: Array,
     ctf_params: Array,
     noise_var: Array,
@@ -81,7 +77,6 @@ def calc_lklhood_(
         struct_info,
         grid,
         grid_f,
-        res,
         pose_params,
         ctf_params,
         noise_var,
@@ -93,7 +88,7 @@ def calc_lklhood_(
         a=lklhood_matrix, b=model_weights[None, :], axis=1
     )
 
-    log_lklhood = jnp.sum(log_lklhood)  # / log_lklhood.shape[0]
+    log_lklhood = jnp.mean(log_lklhood)  # / log_lklhood.shape[0]
 
     return log_lklhood
 
@@ -133,20 +128,19 @@ def calc_lkl_and_grad_struct(
     """
 
     for image_batch in image_stack:
-        logging.info(
+        logging.debug(
             f"Calculating likelihood and gradient for batch {image_batch['idx']}"
         )
         log_lklhood, grad_str = calc_lkl_and_grad_struct_(
-            models=models,
-            model_weights=model_weights,
-            images=image_batch["proj"],
-            struct_info=struct_info,
-            grid=image_stack.dataset.proj_grid,
-            grid_f=image_stack.dataset.ctf_grid,
-            res=config["resolution"],
-            pose_params=image_batch["pose_params"],
-            ctf_params=image_batch["ctf_params"],
-            noise_var=image_batch["noise_var"],
+            models,
+            model_weights,
+            image_batch["proj"],
+            struct_info,
+            image_stack.dataset.proj_grid,
+            image_stack.dataset.ctf_grid,
+            image_batch["pose_params"],
+            image_batch["ctf_params"],
+            image_batch["noise_var"],
         )
 
         break
@@ -188,16 +182,15 @@ def calc_lkl_and_grad_wts(
 
     for image_batch in image_stack:
         log_lklhood, grad_wts = calc_lkl_and_grad_wts_(
-            models=models,
-            model_weights=model_weights,
-            images=image_batch["proj"],
-            struct_info=struct_info,
-            grid=image_stack.dataset.proj_grid,
-            grid_f=image_stack.dataset.ctf_grid,
-            res=config["resolution"],
-            pose_params=image_batch["pose_params"],
-            ctf_params=image_batch["ctf_params"],
-            noise_var=image_batch["noise_var"],
+            models,
+            model_weights,
+            image_batch["proj"],
+            struct_info,
+            image_stack.dataset.proj_grid,
+            image_stack.dataset.ctf_grid,
+            image_batch["pose_params"],
+            image_batch["ctf_params"],
+            image_batch["noise_var"],
         )
 
         break

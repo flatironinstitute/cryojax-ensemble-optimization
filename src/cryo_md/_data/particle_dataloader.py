@@ -157,7 +157,7 @@ class RelionDataLoader(Dataset):
             mrc_path = os.path.join(self.data_path, imgnamedf[1])
             pidx = int(imgnamedf[0]) - 1
             with mrcfile.mmap(mrc_path, mode="r", permissive=True) as mrc:
-                proj = mrc.data[pidx]
+                proj = mrc.data[pidx].copy()
         except FileNotFoundError:
             raise Exception("Error loading image from mrcs file")
 

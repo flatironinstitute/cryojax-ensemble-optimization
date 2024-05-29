@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 import logging
 
-from .._likelihood.calc_lklhood import (
+from .._optimization.loss_and_gradients import (
     calc_lkl_and_grad_wts,
     calc_lkl_and_grad_struct,
 )
