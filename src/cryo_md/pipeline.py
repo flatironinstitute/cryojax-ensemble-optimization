@@ -13,6 +13,7 @@ from ._molecular_dynamics.mdcg_simulator import MDCGSampler
 from ._optimization.optimizer import WeightOptimizer, PositionOptimizer
 from ._data.output_manager import OutputManager
 
+
 def plot_loss(loss_values, output_path):
     # do a window averaging of the loss, window of 20
 
@@ -21,13 +22,13 @@ def plot_loss(loss_values, output_path):
 
     losses_avg = [loss_values[0]]
     indices_avg = [indices[0]]
-    for i in range(len(loss_values)-window_size):
-        losses_avg.append(sum(loss_values[i:i+window_size])/window_size)
+    for i in range(len(loss_values) - window_size):
+        losses_avg.append(sum(loss_values[i : i + window_size]) / window_size)
         indices_avg.append(indices[i])
-        
+
     losses_avg.append(loss_values[-1])
     indices_avg.append(indices[-1])
-    
+
     fig, ax = plt.subplots(1, 1, figsize=(10, 5))
     ax.plot(indices, loss_values, label="Loss", color="blue", alpha=0.7)
     ax.plot(indices_avg, losses_avg, label="Loss (smoothed)", color="red")
@@ -40,8 +41,8 @@ def plot_loss(loss_values, output_path):
     plt.savefig(fig_path, dpi=300, bbox_inches="tight")
     return
 
-def plot_weights(traj_wts, output_path):
 
+def plot_weights(traj_wts, output_path):
     fig, ax = plt.subplots(1, 1, figsize=(10, 5))
     for i in range(traj_wts.shape[1]):
         ax.plot(traj_wts[:, i], label=f"Weights Model {i+1}")
@@ -78,7 +79,6 @@ def generate_outputs(universe, ref_universe, output_fname, atom_filter):
 
     universe = universe.select_atoms(atom_filter)
     with h5py.File(output_fname, "r") as file:
-
         losses = file["losses"][:]
         traj_wts = file["trajs_weights"][:]
         n_frames, n_models, _, n_atoms = file["trajs_positions"].shape
@@ -88,13 +88,16 @@ def generate_outputs(universe, ref_universe, output_fname, atom_filter):
             with mda.Writer(traj_path, n_atoms) as W:
                 for j in range(n_frames):
                     universe.atoms.positions = file["trajs_positions"][j, i, :, :].T
-                    align.alignto(universe, ref_universe, select=atom_filter, match_atoms=True)
+                    align.alignto(
+                        universe, ref_universe, select=atom_filter, match_atoms=True
+                    )
                     W.write(universe)
 
         plot_loss(losses, os.path.dirname(output_fname))
         plot_weights(traj_wts, os.path.dirname(output_fname))
 
     return
+
 
 class Pipeline:
     def __init__(self, workflow, config):
@@ -378,6 +381,11 @@ class Pipeline:
         logging.info(f"Output saved to {self.output_manager.file_name}.")
         self.output_manager.close()
 
-        generate_outputs(self.univ_md[0], self.ref_universe, self.output_manager.file_name, self.filter)
+        generate_outputs(
+            self.univ_md[0],
+            self.ref_universe,
+            self.output_manager.file_name,
+            self.filter,
+        )
 
         return

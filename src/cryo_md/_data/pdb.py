@@ -1,6 +1,4 @@
 import logging
-from natsort import natsorted
-import glob
 import numpy as np
 import os
 import MDAnalysis as mda
@@ -265,7 +263,7 @@ def load_models(config):
         model_0 = mda.Universe(path_ref_model)
         model_0.atoms.translate(-model_0.atoms.center_of_mass())
         logging.info(f"Reference model loaded from {path_ref_model}")
-    
+
     else:
         logging.info(f"Using model {models_fname[0]} as reference.")
         path_ref_model = (
