@@ -1,31 +1,11 @@
 import os
 import sys
 import json
-import numpy as np
 import textwrap
-import glob
-from natsort import natsorted
 import logging
 
-from ._io_validators.validate_generation_config import read_generator_config
-from ._io_validators.validate_optimization_config import read_optimization_config
-
-
-def parse_structure_fnames(config):
-    if "*" in config["models_fname"]:
-        models_fname = natsorted(glob.glob(config["models_fname"]))
-    else:
-        models_fname = [config["models_fname"]]
-
-    for i in range(len(models_fname)):
-        models_fname[i] = os.path.join(config["working_dir"], models_fname[i])
-
-    config["models_fname"] = models_fname
-    logging.info("Using the following models...")
-    for i in range(len(models_fname)):
-        logging.info("  ", config["models_fname"][i])
-
-    return config
+from ._io_validators.validate_generation_config import GeneratorConfig
+from ._io_validators.validate_optimization_config import OptimizationConfig
 
 
 def load_config(config_file):
@@ -47,21 +27,22 @@ def load_config(config_file):
 
     with open(config_file, "r") as f:
         config = json.load(f)
+    logging.info("Loaded config file: {}".format(config_file))
 
     if "experiment_type" not in config:
         raise ValueError("experiment_type not found in config file")
 
     if config["experiment_type"] == "generator":
-        config = read_generator_config(config)
-        config["defocus_ang"] = list(np.radians(config["defocus_ang"]))
+        logging.info("Loading config in generator mode")
+        config = GeneratorConfig(**config).dict()
 
     elif config["experiment_type"] == "optimization":
-        config = read_optimization_config(config)
+        logging.info("Loading config in optimization mode")
+        config = OptimizationConfig(**config).dict()
 
     else:
         raise ValueError("experiment_type must be either generator or optimizer")
 
-    config = parse_structure_fnames(config)
     config["output_path"] = os.path.join(
         config["output_path"], config["experiment_name"]
     )
