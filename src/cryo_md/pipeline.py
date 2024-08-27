@@ -264,7 +264,7 @@ class Pipeline:
             )
             self.univ_md[i].atoms.positions = positions.copy()
             self.univ_md[i].select_atoms(self.filter).atoms.write(
-                f"positions_after_md.{self.filetype}"
+                f"positions_after_md_{i}.{self.filetype}"
             )
 
         return
@@ -346,8 +346,7 @@ class Pipeline:
                         self.run_md_(step)
 
                     elif isinstance(step, WeightOptimizer):
-                        #self.run_wts_opt_(step, image_stack)
-                        pass
+                        self.run_wts_opt_(step, image_stack)
 
                     elif isinstance(step, PositionOptimizer):
                         loss = self.run_pos_opt_(step, image_stack)

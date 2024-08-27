@@ -161,7 +161,7 @@ def main(args):
 
     config_fname = os.path.basename(args.config)
     with open(os.path.join(config["output_path"], config_fname), "w") as f:
-        json.dump(config, f, indent=4)
+        json.dump(config, f, indent=4, sort_keys=True)
 
     logging.info(
         "A copy of the used config file has been written to {}".format(

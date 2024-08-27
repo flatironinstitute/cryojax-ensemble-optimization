@@ -252,7 +252,7 @@ def load_models(config):
 
     logging.info("Models Loaded.")
 
-    logging.debug("Using models: {}".format(models_fname))
+    logging.info("Models loaded in the following order: {}".format(models_fname))
 
     n_models = len(models_fname)
 
