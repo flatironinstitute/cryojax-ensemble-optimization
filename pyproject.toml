@@ -53,6 +53,7 @@ dependencies = [
     "bottleneck",
     "numexpr",
     "h5py",
+    "pydantic"
 ]
 dynamic = ["version"]
 
