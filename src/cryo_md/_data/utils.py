@@ -10,6 +10,7 @@ import logging
 from ._io_validators.validate_generation_config import read_generator_config
 from ._io_validators.validate_optimization_config import read_optimization_config
 
+
 def parse_structure_fnames(config):
     if "*" in config["models_fname"]:
         models_fname = natsorted(glob.glob(config["models_fname"]))
@@ -20,11 +21,12 @@ def parse_structure_fnames(config):
         models_fname[i] = os.path.join(config["working_dir"], models_fname[i])
 
     config["models_fname"] = models_fname
-    logging.info(f"Using the following models...")
+    logging.info("Using the following models...")
     for i in range(len(models_fname)):
         logging.info("  ", config["models_fname"][i])
-        
+
     return config
+
 
 def load_config(config_file):
     """
@@ -60,8 +62,10 @@ def load_config(config_file):
         raise ValueError("experiment_type must be either generator or optimizer")
 
     config = parse_structure_fnames(config)
-    config["output_path"] = os.path.join(config["output_path"], config["experiment_name"])
-    
+    config["output_path"] = os.path.join(
+        config["output_path"], config["experiment_name"]
+    )
+
     return config
 
 

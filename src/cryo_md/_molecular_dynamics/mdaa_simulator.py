@@ -186,8 +186,8 @@ class MDSampler:
         )
         logging.info("  Positions updated.")
 
-        #simulation.minimizeEnergy()
-        #logging.info("  Energy minimized.")
+        # simulation.minimizeEnergy()
+        # logging.info("  Energy minimized.")
 
         logging.info(f"  Running simulation for {self.n_steps} steps...")
         simulation.step(self.n_steps)

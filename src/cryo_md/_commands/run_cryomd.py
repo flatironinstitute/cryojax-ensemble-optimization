@@ -5,8 +5,6 @@ import argparse
 import json
 import numpy as np
 import MDAnalysis as mda
-import glob
-from natsort import natsorted
 
 from .._data.utils import load_config, help_config_generator
 from .._data.pdb import load_models
@@ -25,7 +23,11 @@ def add_args(parser):
         "--config", type=str, help="Path to the config (yaml) file", required=True
     )
     parser.add_argument(
-        "--nprocs", type=int, default=1, required=False, help="Number of processors (only if using CPU)"
+        "--nprocs",
+        type=int,
+        default=1,
+        required=False,
+        help="Number of processors (only if using CPU)",
     )
     return parser
 
@@ -107,7 +109,6 @@ def generate_pipeline(config):
 
 
 def run_pipeline(pipeline, image_stack, config):
-
     models_fname = config["models_fname"]
     _, struct_info = load_models(config)
     init_universes = []
@@ -129,7 +130,6 @@ def run_pipeline(pipeline, image_stack, config):
 
 
 def main(args):
-
     nprocs = args.nprocs
     config = load_config(args.config)
 
@@ -138,7 +138,7 @@ def main(args):
             if config["pipeline"][key]["platform"] == "CPU":
                 if config["pipeline"][key]["platform_properties"]["Threads"] is None:
                     config["pipeline"][key]["platform_properties"]["Threads"] = nprocs
-        
+
     warnexists(config["output_path"])
     mkbasedir(config["output_path"])
 
@@ -171,11 +171,13 @@ def main(args):
 
     starfile_fname = os.path.basename(config["starfile_path"])
     starfile_path = os.path.dirname(config["starfile_path"])
-    
-    image_stack = load_starfile(starfile_path, starfile_fname, batch_size=config["batch_size"])
+
+    image_stack = load_starfile(
+        starfile_path, starfile_fname, batch_size=config["batch_size"]
+    )
     pipeline = generate_pipeline(config)
     run_pipeline(pipeline, image_stack, config)
-    
+
     return
 
 

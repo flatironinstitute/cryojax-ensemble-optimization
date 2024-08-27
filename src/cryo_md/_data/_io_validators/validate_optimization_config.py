@@ -62,7 +62,6 @@ def validate_pipeline_element(config: dict) -> dict:
             "mode": str,
             "n_steps": Number,
             "mdsampler_force_constant": Number,
-            "n_steps": Number,
         }
 
         optional_keys = {
@@ -99,7 +98,9 @@ def validate_pipeline_element(config: dict) -> dict:
     if config["type"] == "mdsampler":
         if config["checkpoint_fnames"] is not None:
             if "*" in config["checkpoint_fnames"]:
-                config["checkpoint_fnames"] = natsorted(glob.glob(config["checkpoint_fnames"]))
+                config["checkpoint_fnames"] = natsorted(
+                    glob.glob(config["checkpoint_fnames"])
+                )
             else:
                 config["checkpoint_fnames"] = [config["checkpoint_fnames"]]
     return config
