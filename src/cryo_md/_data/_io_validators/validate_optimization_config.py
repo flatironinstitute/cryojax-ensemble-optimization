@@ -44,6 +44,7 @@ class PipelinePosOpValidator(BaseModel):
 
 
 class PipelineMDSamplerAllAtomValidator(BaseModel):
+    type = "mdsampler"
     mode: str = "all-atom"
     n_steps: int
     mdsampler_force_constant: float
@@ -95,6 +96,7 @@ class PipelineMDSamplerAllAtomValidator(BaseModel):
 
 
 class PipelineMDSamplerCGValidator(BaseModel):
+    type = "mdsampler"
     mode: str = "cg"
     n_steps: int
     mdsampler_force_constant: float
