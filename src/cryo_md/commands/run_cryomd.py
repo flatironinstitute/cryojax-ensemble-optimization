@@ -3,17 +3,22 @@ import logging
 import os
 import argparse
 import json
+import yaml
 import numpy as np
 import MDAnalysis as mda
+import jax
 
-from .._data.utils import load_config, help_config_generator
-from .._data.pdb import load_models
-from .._molecular_dynamics.mdaa_simulator import MDSampler
-from .._molecular_dynamics.mdcg_simulator import MDCGSampler
-from .._optimization.optimizer import PositionOptimizer
-from .._optimization.optimizer import WeightOptimizer
+from cryojax.data import RelionDataset
+
+from ..data._atomic_model_loaders import _load_models_for_optimizer
+from ..data._config_readers.optimizer_config_reader import OptimizationConfig
+from ..molecular_dynamics.mdaa_simulator import MDSimulatorRMSDConstraint
+
+# from .._molecular_dynamics.mdcg_simulator import MDCGSampler
+from ..optimization.optimizers import PositionOptimizer
+from ..optimization.optimizers import WeightOptimizer
 from ..pipeline import Pipeline
-from .._data.particle_dataloader import load_starfile
+
 
 warnings.filterwarnings("ignore", module="MDAnalysis")
 
@@ -46,7 +51,7 @@ def warnexists(out):
         Warning("Warning: {} already exists. Overwriting.".format(out))
 
 
-def generate_pipeline(config):
+def generate_pipeline(config, dataset):
     """
     Generate the pipeline from the pipeline config
     """
@@ -56,29 +61,39 @@ def generate_pipeline(config):
     key_dtype = type(list(pipeline_config.keys())[0])
     steps_key = np.sort(list(pipeline_config.keys())).astype(key_dtype)
 
+    key = jax.random.PRNGKey(config["rng_seed"])
+
     for key in steps_key:
         pipeline_step = pipeline_config[key]
 
         if pipeline_step["type"] == "pos_opt":
+            key, subkey = jax.random.split(key)
             workflow.append(
                 PositionOptimizer(
-                    n_steps=pipeline_step["pos_opt_steps"],
-                    step_size=pipeline_step["pos_opt_stepsize"],
+                    rng_key=subkey,
+                    n_steps=pipeline_step["n_steps"],
+                    step_size=pipeline_step["step_size"],
+                    batch_size=config["batch_size"],
+                    dataset=dataset,
                 )
             )
 
         elif pipeline_step["type"] == "weight_opt":
+            key, subkey = jax.random.split(key)
             workflow.append(
                 WeightOptimizer(
-                    n_steps=pipeline_step["weight_opt_steps"],
-                    step_size=pipeline_step["weight_opt_stepsize"],
+                    rng_key=subkey,
+                    n_steps=pipeline_step["n_steps"],
+                    step_size=pipeline_step["step_size"],
+                    batch_size=config["batch_size"],
+                    dataset=dataset,
                 )
             )
 
         elif pipeline_step["type"] == "mdsampler":
             if pipeline_step["mode"] == "all-atom":
                 workflow.append(
-                    MDSampler(
+                    MDSimulatorRMSDConstraint(
                         models_fname=config["models_fname"],
                         restrain_force_constant=pipeline_step[
                             "mdsampler_force_constant"
@@ -90,30 +105,30 @@ def generate_pipeline(config):
                 )
 
             if pipeline_step["mode"] == "coarse-grained":
-                workflow.append(
-                    MDCGSampler(
-                        models_fname=config["models_fname"],
-                        top_file=pipeline_step["top_file"],
-                        restrain_force_constant=pipeline_step[
-                            "mdsampler_force_constant"
-                        ],
-                        epsilon_r=pipeline_step["epsilon_r"],
-                        n_steps=pipeline_step["n_steps"],
-                        n_models=config["n_models"],
-                        checkpoint_fnames=pipeline_step["checkpoint_fnames"],
-                    )
-                )
+                raise NotImplementedError
+                # workflow.append(
+                #     MDCGSampler(
+                #         models_fname=config["models_fname"],
+                #         top_file=pipeline_step["top_file"],
+                #         restrain_force_constant=pipeline_step[
+                #             "mdsampler_force_constant"
+                #         ],
+                #         epsilon_r=pipeline_step["epsilon_r"],
+                #         n_steps=pipeline_step["n_steps"],
+                #         n_models=config["n_models"],
+                #         checkpoint_fnames=pipeline_step["checkpoint_fnames"],
+                #     )
+                # )
 
     pipeline = Pipeline(workflow, config)
     return pipeline
 
 
-def run_pipeline(pipeline, image_stack, config):
-    models_fname = config["models_fname"]
-    _, struct_info = load_models(config)
+def run_pipeline(pipeline, config):
+    struct_info = _load_models_for_optimizer(config)
     init_universes = []
     for i in range(config["n_models"]):
-        init_universes.append(mda.Universe(models_fname[i]))
+        init_universes.append(mda.Universe(config["models_fname"][i]))
 
     ref_universe = mda.Universe(config["ref_model_fname"])
 
@@ -125,13 +140,16 @@ def run_pipeline(pipeline, image_stack, config):
         ref_universe,
     )
 
-    pipeline.run(image_stack)
+    pipeline.run()
     return
 
 
 def main(args):
     nprocs = args.nprocs
-    config = load_config(args.config)
+
+    with open(args.config, "r") as f:
+        config_json = json.load(f)
+        config = dict(OptimizationConfig(**config_json).model_dump())
 
     for key in config["pipeline"].keys():
         if "mdsampler" == config["pipeline"][key]["type"]:
@@ -161,7 +179,7 @@ def main(args):
 
     config_fname = os.path.basename(args.config)
     with open(os.path.join(config["output_path"], config_fname), "w") as f:
-        json.dump(config, f, indent=4, sort_keys=True)
+        json.dump(config_json, f, indent=4, sort_keys=True)
 
     logging.info(
         "A copy of the used config file has been written to {}".format(
@@ -169,14 +187,15 @@ def main(args):
         )
     )
 
-    starfile_fname = os.path.basename(config["starfile_path"])
-    starfile_path = os.path.dirname(config["starfile_path"])
-
-    image_stack = load_starfile(
-        starfile_path, starfile_fname, batch_size=config["batch_size"]
+    dataset = RelionDataset(
+        path_to_starfile=config["path_to_starfile"],
+        path_to_relion_project=config["path_to_relion_project"],
+        get_image_stack=True,
+        get_envelope_function=True,
     )
-    pipeline = generate_pipeline(config)
-    run_pipeline(pipeline, image_stack, config)
+
+    pipeline = generate_pipeline(config, dataset)
+    run_pipeline(pipeline, config)
 
     return
 
@@ -185,6 +204,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=help_config_generator(),
+        epilog=yaml.dump(OptimizationConfig.model_json_schema(), indent=4),
     )
     main(add_args(parser).parse_args())

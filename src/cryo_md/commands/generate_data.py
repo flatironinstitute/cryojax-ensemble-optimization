@@ -1,12 +1,14 @@
 import warnings
 import logging
 import os
+import sys
 import argparse
 import json
+import yaml
 
-from .._data.utils import load_config, help_config_generator
-from .._data.pdb import load_models
-from .._simulator.starfile_generator import simulate_stack
+
+from ..data._config_readers.generator_config_reader import GeneratorConfig
+from ..simulator._dataset_generator import simulate_relion_dataset
 
 warnings.filterwarnings("ignore", module="MDAnalysis")
 
@@ -33,16 +35,24 @@ def warnexists(out):
 
 
 def main(args):
-    config = load_config(args.config)
-    warnexists(config["output_path"])
-    mkbasedir(config["output_path"])
+    with open(args.config, "r") as f:
+        config_json = json.load(f)
+        config = dict(GeneratorConfig(**config_json).model_dump())
+
+    project_path = os.path.dirname(config["path_to_relion_project"])
+    warnexists(project_path)
+    mkbasedir(project_path)
+    print(
+        "A copy of the config file and the log will be written to {}".format(
+            project_path
+        )
+    )
+    sys.stdout.flush()
 
     # make copy of config to output_path
 
     logger = logging.getLogger()
-    logger_fname = os.path.join(
-        config["output_path"], config["experiment_name"] + ".log"
-    )
+    logger_fname = os.path.join(project_path, config["experiment_name"] + ".log")
     fhandler = logging.FileHandler(filename=logger_fname, mode="a")
     formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -52,31 +62,19 @@ def main(args):
     logger.setLevel(logging.INFO)
 
     config_fname = os.path.basename(args.config)
-    with open(os.path.join(config["output_path"], config_fname), "w") as f:
-        json.dump(config, f, indent=4, sort_keys=True)
+    with open(os.path.join(project_path, config_fname), "w") as f:
+        json.dump(config_json, f, indent=4, sort_keys=True)
 
     logging.info(
         "A copy of the used config file has been written to {}".format(
-            os.path.join(config["output_path"], config_fname)
+            os.path.join(project_path, config_fname)
         )
     )
 
-    models, struct_info = load_models(config)
-
     logging.info("Simulating particle stack...")
-    simulate_stack(
-        root_path=config["output_path"],
-        starfile_fname=config["starfile_fname"],
-        models=models,
-        struct_info=struct_info,
-        images_per_model=config["particles_per_model"],
-        config=config,
-        batch_size=config["batch_size"],
-        dtype=float,
-        seed=config["noise_seed"],
-    )
+    simulate_relion_dataset(config)
     logging.info("Simulation complete.")
-    logging.info("Output written to {}".format(config["output_path"]))
+    logging.info("Output written to {}".format(project_path))
 
     return
 
@@ -85,6 +83,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=help_config_generator(),
+        epilog=yaml.dump(GeneratorConfig.model_json_schema(), indent=4),
     )
     main(add_args(parser).parse_args())

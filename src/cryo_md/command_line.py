@@ -8,7 +8,7 @@ is used to create the commands during installation.
 import argparse
 import os
 from importlib import import_module
-from .__about__ import __version__
+from .cryomd_version import __version__
 
 
 def _get_commands(cmd_dir: str, doc_str: str = "") -> None:
@@ -57,6 +57,6 @@ def _get_commands(cmd_dir: str, doc_str: str = "") -> None:
 def main_commands():
     """Commands installed with package of the CryoEm Challenge."""
     _get_commands(
-        cmd_dir=os.path.join(os.path.dirname(__file__), "_commands"),
+        cmd_dir=os.path.join(os.path.dirname(__file__), "commands"),
         doc_str="Commands installed with cryo_md",
     )
