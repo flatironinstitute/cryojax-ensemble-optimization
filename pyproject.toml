@@ -41,9 +41,9 @@ classifiers = [
 
 dependencies = [
     "numpy",
-    "jax[cpu]",
-    "matplotlib",
+    "jax",
     "jaxtyping",
+    "matplotlib",
     "starfile",
     "mrcfile",
     "scipy",

@@ -7,51 +7,46 @@ run_md_openmm
     Run MD simulations using OpenMM
 """
 
-import numpy as np
 import logging
-import openmm
-import openmm.unit as openmm_unit
-import openmm.app as openmm_app
-import martini_openmm as martini
-from typing import Any
 import os
+from typing import List, Optional
+import numpy as np
+import openmm
+import openmm.app as openmm_app
+import openmm.unit as openmm_unit
 
 
-class MDCGSampler:
+class MDSimulatorRMSDConstraint:
     def __init__(
         self,
         models_fname: str,
-        top_file: str,
         restrain_force_constant: float,
         n_steps: int,
         n_models: int,
-        checkpoint_fnames: Any,
-        epsilon_r: float,
+        checkpoint_fnames: Optional[List[str]] = None,
         **kwargs,
     ) -> None:
         if checkpoint_fnames is None:
-            checkpoint_fnames = [None] * n_models
+            self.checkpoint_fnames = [""] * n_models
 
         else:
             self.checkpoint_fnames = checkpoint_fnames
 
         self.models_fname = models_fname
-        self.top_file = top_file
         self.restrain_force_constant = restrain_force_constant
         self.n_steps = n_steps
-        self.epsilon_r = epsilon_r
         self.n_models = n_models
 
         self.parse_kwargs(**kwargs)
-
+        self.define_forcefield()
         self.define_platform()
 
         for i in range(self.n_models):
-            if self.checkpoint_fnames[i] is None:
+            if self.checkpoint_fnames[i] == "":
                 logging.info(f"Generating checkpoint for model {i}")
 
                 self.generate_checkpoint(
-                    models_fname[i], f"checkpoint_model_{i}_tmp.chk"
+                    self.models_fname[i], f"checkpoint_model_{i}_tmp.chk"
                 )
                 self.checkpoint_fnames[i] = f"checkpoint_model_{i}_tmp.chk"
                 logging.info(
@@ -70,10 +65,14 @@ class MDCGSampler:
 
     def parse_kwargs(self, **kwargs):
         default_kwargs = {
-            "nonbondedCutoff": 1.1 * openmm_unit.nanometers,
-            "temperature": 310.0 * openmm_unit.kelvin,
-            "friction": 10.0 / openmm_unit.picosecond,
-            "timestep": 20 * openmm_unit.femtosecond,
+            "forcefield": "amber14-all.xml",
+            "water_model": "amber14/tip3p.xml",
+            "nonbondedMethod": openmm_app.PME,
+            "nonbondedCutoff": 1.0 * openmm_unit.nanometer,
+            "constraints": openmm_app.HBonds,
+            "temperature": 300.0 * openmm_unit.kelvin,
+            "friction": 1.0 / openmm_unit.picosecond,
+            "timestep": 0.002 * openmm_unit.picoseconds,
             "platform": "CPU",
             "properties": {"Threads": "1"},
         }
@@ -82,13 +81,12 @@ class MDCGSampler:
             "nonbondedCutoff": 1.0 * openmm_unit.nanometers,
             "temperature": 1.0 * openmm_unit.kelvin,
             "friction": 1.0 / openmm_unit.picosecond,
-            "timestep": 1.0 * openmm_unit.femtosecond,
+            "timestep": 1.0 * openmm_unit.picoseconds,
         }
 
         for key in kwargs:
             if key not in default_kwargs:
                 raise ValueError(f"Invalid argument {key}")
-
             if key in units:
                 kwargs[key] = kwargs[key] * units[key]
 
@@ -96,7 +94,7 @@ class MDCGSampler:
             if key not in kwargs:
                 kwargs[key] = value
 
-        self.config = kwargs
+        self.md_params = kwargs
 
         return
 
@@ -132,29 +130,35 @@ class MDCGSampler:
 
         return
 
+    def define_forcefield(self):
+        self.forcefield = openmm_app.ForceField(
+            self.md_params["forcefield"], self.md_params["water_model"]
+        )
+        return
+
     def define_platform(self):
-        self.platform = openmm.Platform.getPlatformByName(self.config["platform"])
+        self.platform = openmm.Platform.getPlatformByName(self.md_params["platform"])
         return
 
     def update_system(self, process_id, ref_position_file, restrain_atom_list):
-        conf = openmm_app.GromacsGroFile(self.models_fname[process_id])
-        conf_ref = openmm_app.GromacsGroFile(ref_position_file)
-
-        box_vectors = conf.getPeriodicBoxVectors()
-        top = martini.MartiniTopFile(
-            self.top_file,
-            periodicBoxVectors=box_vectors,
-            defines={},
-            epsilon_r=self.epsilon_r,
-        )
-
-        system = top.create_system(nonbonded_cutoff=self.config["nonbondedCutoff"])
-
         integrator = openmm.LangevinIntegrator(
-            self.config["temperature"], self.config["friction"], self.config["timestep"]
+            self.md_params["temperature"],
+            self.md_params["friction"],
+            self.md_params["timestep"],
         )
 
-        RMSD_value = openmm.RMSDForce(conf_ref.positions, restrain_atom_list)
+        pdb = openmm_app.PDBFile(self.models_fname[process_id])
+        pdb_ref = openmm_app.PDBFile(ref_position_file)
+        modeller = openmm_app.Modeller(pdb.topology, pdb.positions)
+
+        system = self.forcefield.createSystem(
+            modeller.topology,
+            nonbondedMethod=self.md_params["nonbondedMethod"],
+            nonbondedCutoff=self.md_params["nonbondedCutoff"],
+            constraints=self.md_params["constraints"],
+        )
+
+        RMSD_value = openmm.RMSDForce(pdb_ref.positions, restrain_atom_list)
 
         force_RMSD = openmm.CustomCVForce("0.5 * k * RMSD^2")
         force_RMSD.addGlobalParameter("k", self.restrain_force_constant)
@@ -163,10 +167,14 @@ class MDCGSampler:
         system.addForce(force_RMSD)
 
         simulation = openmm_app.Simulation(
-            top.topology, system, integrator, self.platform, self.config["properties"]
+            modeller.topology,
+            system,
+            integrator,
+            self.platform,
+            self.md_params["properties"],
         )
 
-        simulation.loadCheckpoint(f"sim_model_{process_id}.chk")
+        simulation.loadCheckpoint(self.checkpoint_fnames[process_id])
 
         return simulation
 
@@ -178,14 +186,15 @@ class MDCGSampler:
         )
         logging.info("  Positions updated.")
 
-        simulation.minimizeEnergy()
-        logging.info("  Energy minimized.")
+        # tolerance = 100 * openmm_unit.kilojoules_per_mole / openmm_unit.nanometer
+        # simulation.minimizeEnergy(tolerance)
+        # simulation.minimizeEnergy(maxIterations=self.n_steps)
+        # logging.info("  Energy minimized.")
 
         logging.info(f"  Running simulation for {self.n_steps} steps...")
         simulation.step(self.n_steps)
 
-        simulation.saveState(f"sim_model_{process_id}.state")
-        simulation.saveCheckpoint(f"sim_model_{process_id}.chk")
+        simulation.saveCheckpoint(self.checkpoint_fnames[process_id])
 
         positions = simulation.context.getState(getPositions=True).getPositions(
             asNumpy=True

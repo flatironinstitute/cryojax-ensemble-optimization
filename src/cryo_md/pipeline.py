@@ -8,10 +8,11 @@ import os
 import h5py
 import matplotlib.pyplot as plt
 
-from ._molecular_dynamics.mdaa_simulator import MDSampler
-from ._molecular_dynamics.mdcg_simulator import MDCGSampler
-from ._optimization.optimizer import WeightOptimizer, PositionOptimizer
-from ._data.output_manager import OutputManager
+from .molecular_dynamics.mdaa_simulator import MDSimulatorRMSDConstraint
+
+# from .molecular_dynamics.mdcg_simulator import MDCGSampler
+from .optimization.optimizers import WeightOptimizer, PositionOptimizer
+from .data._output_manager import OutputManager
 
 
 def plot_loss(loss_values, output_path):
@@ -77,17 +78,17 @@ def generate_outputs(universe, ref_universe, output_fname, atom_filter):
     Generates PDB files for the trajectory of each optimized model. Plots the loss curve.
     """
 
-    universe = universe.select_atoms(atom_filter)
+    universe = universe.select_atoms("protein")
     with h5py.File(output_fname, "r") as file:
-        losses = file["losses"][:]
-        traj_wts = file["trajs_weights"][:]
-        n_frames, n_models, _, n_atoms = file["trajs_positions"].shape
+        losses = file["losses"][1:]
+        traj_wts = file["trajs_weights"][1:]
+        n_frames, n_models, n_atoms, _ = file["trajs_positions"].shape
 
         for i in range(n_models):
             traj_path = os.path.join(os.path.dirname(output_fname), f"traj_{i}.pdb")
             with mda.Writer(traj_path, n_atoms) as W:
                 for j in range(n_frames):
-                    universe.atoms.positions = file["trajs_positions"][j, i, :, :].T
+                    universe.atoms.positions = file["trajs_positions"][j, i, :, :]
                     align.alignto(
                         universe, ref_universe, select=atom_filter, match_atoms=True
                     )
@@ -113,13 +114,13 @@ class Pipeline:
 
         self.workflow_types = []
         for i, step in enumerate(workflow):
-            if isinstance(step, MDSampler):
+            if isinstance(step, MDSimulatorRMSDConstraint):
                 self.workflow_types.append("MDSampler")
                 logging.info(f"Step {i}: MDSampler")
 
-            elif isinstance(step, MDCGSampler):
-                self.workflow_types.append("MDCGSampler")
-                logging.info(f"Step {i}: MDCGSampler")
+            # elif isinstance(step, MDCGSampler):
+            #     self.workflow_types.append("MDCGSampler")
+            #     logging.info(f"Step {i}: MDCGSampler")
 
             elif isinstance(step, WeightOptimizer):
                 self.workflow_types.append("WeightOptimizer")
@@ -204,12 +205,6 @@ class Pipeline:
                     "Invalid mode, must be 'all-atom' or 'resid' when using MDSampler"
                 )
 
-            if config["mode"] == "all-atom":
-                self.filter = "protein and not name H*"
-
-            elif config["mode"] == "resid":
-                self.filter = "protein and name CA"
-
             self.filetype = "pdb"
 
         if "MDCGSampler" in self.workflow_types:
@@ -217,11 +212,9 @@ class Pipeline:
                 logging.error("Cannot run all-atom optimization with CG MD")
                 raise ValueError("Cannot run all-atom optimization with CG MD")
 
-            elif config["mode"] == "coarse-grained":
-                self.filter = "protein"
-
             self.filetype = "gro"
 
+        self.atom_list_filter = config["atom_list_filter"]
         self.univ_md = []
         self.univ_pull = []
         self.ref_universe = ref_universe
@@ -232,17 +225,21 @@ class Pipeline:
             self.univ_md.append(init_universes[i].copy())
             self.univ_pull.append(init_universes[i].copy())
 
+            self.univ_md[i].atoms.write(f"INITIAL_MODEL_{i}.pdb")
+
         self.n_steps = config["n_steps"]
 
         models_shape = (
             len(init_universes),
-            *init_universes[0].select_atoms(self.filter).atoms.positions.T.shape,
+            *init_universes[0].select_atoms("protein").atoms.positions.shape,
         )
 
         output_fname = os.path.join(
             config["output_path"], config["experiment_name"] + ".h5"
         )
-        self.output_manager = OutputManager(output_fname, self.n_steps, models_shape)
+        self.output_manager = OutputManager(
+            output_fname, self.n_steps + 1, models_shape
+        )
 
         if init_weights is None:
             self.weights = jnp.ones(self.n_models) / self.n_models
@@ -250,8 +247,19 @@ class Pipeline:
         else:
             self.weights = init_weights.copy()
 
-        self.opt_atom_list = self.univ_md[0].select_atoms(self.filter).atoms.indices
+        self.opt_atom_list = (
+            self.univ_md[0].select_atoms(self.atom_list_filter).atoms.indices
+        )
         self.unit_cell = self.univ_md[0].atoms.dimensions
+
+        self.output_manager.write(
+            np.array(
+                [univ.select_atoms("protein").atoms.positions for univ in self.univ_md]
+            ),
+            self.weights,
+            0.0,
+            0,
+        )
 
         return
 
@@ -266,39 +274,48 @@ class Pipeline:
                 i, f"ref_positions.{self.filetype}", self.opt_atom_list
             )
             self.univ_md[i].atoms.positions = positions.copy()
-            self.univ_md[i].select_atoms(self.filter).atoms.write(
+            self.univ_md[i].select_atoms(self.atom_list_filter).atoms.write(
                 f"positions_after_md_{i}.{self.filetype}"
             )
 
         return
 
-    def run_wts_opt_(self, step, image_stack):
+    def run_wts_opt_(self, step):
         positions = np.zeros(
             (
                 self.n_models,
-                *self.ref_universe.select_atoms(self.filter).atoms.positions.T.shape,
+                *self.ref_universe.select_atoms(
+                    self.atom_list_filter
+                ).atoms.positions.shape,
             )
         )
 
         for i in range(self.n_models):
             dummy_univ = self.univ_md[i].copy()
             align.alignto(
-                dummy_univ, self.ref_universe, select=self.filter, match_atoms=True
+                dummy_univ,
+                self.ref_universe,
+                select=self.atom_list_filter,
+                match_atoms=True,
             )
-            positions[i] = dummy_univ.select_atoms(self.filter).atoms.positions.T
+            positions[i] = dummy_univ.select_atoms(
+                self.atom_list_filter
+            ).atoms.positions
 
         positions = jnp.array(positions)
         self.weights = step.run(
-            positions, self.weights, image_stack, self.struct_info, self.config
+            positions, self.weights, self.struct_info, self.config["noise_variance"]
         )
 
         return
 
-    def run_pos_opt_(self, step, image_stack):
+    def run_pos_opt_(self, step):
         positions = np.zeros(
             (
                 self.n_models,
-                *self.ref_universe.select_atoms(self.filter).atoms.positions.T.shape,
+                *self.ref_universe.select_atoms(
+                    self.atom_list_filter
+                ).atoms.positions.shape,
             )
         )
 
@@ -308,16 +325,21 @@ class Pipeline:
             # dummy_univ.atoms.write(f"model_before_opt_{i}.pdb")
 
             align.alignto(
-                dummy_univ, self.ref_universe, select=self.filter, match_atoms=True
+                dummy_univ,
+                self.ref_universe,
+                select=self.atom_list_filter,
+                match_atoms=True,
             )
 
-            positions[i] = dummy_univ.select_atoms(self.filter).atoms.positions.T
+            positions[i] = dummy_univ.select_atoms(
+                self.atom_list_filter
+            ).atoms.positions
 
         logging.debug(f"Optimized_positions: {positions}")
 
         positions = jnp.array(positions)
         positions, loss = step.run(
-            positions, self.weights, image_stack, self.struct_info, self.config
+            positions, self.weights, self.struct_info, self.config["noise_variance"]
         )
 
         logging.debug(f"Optimized_positions: {positions}")
@@ -325,34 +347,45 @@ class Pipeline:
         for i in range(self.n_models):
             dummy_univ = self.univ_md[i].copy()
             align.alignto(
-                dummy_univ, self.ref_universe, select=self.filter, match_atoms=True
+                dummy_univ,
+                self.ref_universe,
+                select=self.atom_list_filter,
+                match_atoms=True,
             )
-            dummy_univ.select_atoms(self.filter).atoms.positions = positions[i].T
+            dummy_univ.select_atoms(self.atom_list_filter).atoms.positions = positions[
+                i
+            ]
 
             align.alignto(
-                dummy_univ, self.univ_md[i], select=self.filter, match_atoms=True
+                dummy_univ,
+                self.univ_md[i],
+                select=self.atom_list_filter,
+                match_atoms=True,
             )
             self.univ_pull[i].atoms.positions = dummy_univ.atoms.positions.copy()
-            self.univ_pull[i].select_atoms(self.filter).atoms.write(
+            self.univ_pull[i].select_atoms(self.atom_list_filter).atoms.write(
                 f"model_after_opt_{i}.pdb"
             )
 
         return loss
 
-    def run(self, image_stack):
+    def run(self):
         logging.info(f"Running pipeline for {self.n_steps} steps...")
 
+        loss = None
         with tqdm(range(self.n_steps), unit="step") as pbar:
             for counter in pbar:
                 for step in self.workflow:
-                    if isinstance(step, MDSampler) or isinstance(step, MDCGSampler):
+                    if isinstance(
+                        step, MDSimulatorRMSDConstraint
+                    ):  # or isinstance(step, MDCGSampler):
                         self.run_md_(step)
 
                     elif isinstance(step, WeightOptimizer):
-                        self.run_wts_opt_(step, image_stack)
+                        self.run_wts_opt_(step)
 
                     elif isinstance(step, PositionOptimizer):
-                        loss = self.run_pos_opt_(step, image_stack)
+                        loss = self.run_pos_opt_(step)
 
                     else:
                         continue
@@ -361,13 +394,13 @@ class Pipeline:
                 self.output_manager.write(
                     np.array(
                         [
-                            univ.select_atoms(self.filter).atoms.positions.T
+                            univ.select_atoms("protein").atoms.positions
                             for univ in self.univ_md
                         ]
                     ),
                     self.weights,
                     loss,
-                    counter,
+                    counter + 1,
                 )
 
         logging.info("Pipeline finished.")
@@ -385,7 +418,7 @@ class Pipeline:
             self.univ_md[0],
             self.ref_universe,
             self.output_manager.file_name,
-            self.filter,
+            self.atom_list_filter,
         )
 
         return

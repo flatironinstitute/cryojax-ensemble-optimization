@@ -50,4 +50,6 @@ class OutputManager:
         self.trajs_weights[step] = weights
         self.losses[step] = loss
 
+        self.file.flush()
+
         return
