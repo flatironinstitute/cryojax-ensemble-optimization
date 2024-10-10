@@ -186,11 +186,13 @@ class MDSimulatorRMSDConstraint:
         )
         logging.info("  Positions updated.")
 
-        # simulation.minimizeEnergy()
-        logging.info("  Energy minimized.")
+        # tolerance = 100 * openmm_unit.kilojoules_per_mole / openmm_unit.nanometer
+        # simulation.minimizeEnergy(tolerance)
+        # simulation.minimizeEnergy(maxIterations=self.n_steps)
+        # logging.info("  Energy minimized.")
 
-        # logging.info(f"  Running simulation for {self.n_steps} steps...")
-        simulation.step(100)  # self.n_steps)
+        logging.info(f"  Running simulation for {self.n_steps} steps...")
+        simulation.step(self.n_steps)
 
         simulation.saveCheckpoint(self.checkpoint_fnames[process_id])
 

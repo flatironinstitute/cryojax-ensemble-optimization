@@ -21,7 +21,7 @@ class _PipelineWeightOpValidator(BaseModel):
     @field_validator("weight_opt_steps")
     @classmethod
     def validate_weight_opt_steps(cls, value):
-        if value <= 0:
+        if value < 0:
             raise ValueError("Number of steps must be greater than 0")
         return value
 
@@ -188,6 +188,15 @@ class OptimizationConfig(BaseModel):
     # Image and MD stuff
     resolution: float
     atom_list_filter: Optional[str] = None
+    noise_variance: float
+    rng_seed: int = 0
+
+    @field_validator("noise_variance", mode="before")
+    @classmethod
+    def validate_noise_variance(cls, v):
+        if v <= 0:
+            raise ValueError("Noise variance must be greater than 0")
+        return v
 
     @field_validator("mode", mode="before")
     @classmethod
@@ -235,7 +244,7 @@ class OptimizationConfig(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def validate_atom_list_filter(self):
+    def validate_config(self):
         if isinstance(self.models_fname, str):
             if "*" in self.models_fname:
                 models_fname = natsorted(
@@ -250,9 +259,12 @@ class OptimizationConfig(BaseModel):
             else:
                 models_fname = [self.models_fname]
 
-        else:
+        elif isinstance(self.models_fname, list):
             assert len(self.models_fname) > 0, "No models Given."
             models_fname = self.models_fname
+
+        else:
+            raise ValueError("models_fname must be a string or a list of strings.")
 
         for i in range(len(models_fname)):
             models_fname[i] = os.path.join(
@@ -275,7 +287,7 @@ class OptimizationConfig(BaseModel):
             ref_model_path
         ), f"Reference model {ref_model_path} does not exist."
 
-        if self.atom_list_filter is None:
+        if self.atom_list_filter is not None:
             u = mda.Universe(ref_model_path)
             try:
                 u.select_atoms(self.atom_list_filter)
@@ -361,7 +373,10 @@ class OptimizationConfig(BaseModel):
         # serialize checkpoint names in samplers
         for key in self.pipeline.keys():
             if self.pipeline[key]["step_type"] == "mdsampler":
-                if self.pipeline[key]["checkpoint_fnames"] is not None:
+                if (
+                    "checkpoint_fnames" in self.pipeline[key].keys()
+                    and self.pipeline[key]["checkpoint_fnames"] is not None
+                ):
                     if isinstance(self.pipeline[key]["checkpoint_fnames"], str):
                         if "*" in self.pipeline[key]["checkpoint_fnames"]:
                             checkpoint_fnames = natsorted(

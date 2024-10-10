@@ -28,9 +28,9 @@ def _load_models_for_data_generator(config: dict) -> tuple[np.ndarray, dict]:
     logging.info(f"Reference model written to {path_ref_model}")
 
     logging.info("Confirming that all models have the same structural information.")
-    struct_info = pdb_parser(config["models_fname"][0], config)
+    struct_info = pdb_parser(config["models_fname"][0])
     for filename in config["models_fname"]:
-        tmp_struct_info = pdb_parser(filename, config)
+        tmp_struct_info = pdb_parser(filename)
 
         for key, value in tmp_struct_info.items():
             assert (
@@ -53,11 +53,11 @@ def _load_models_for_data_generator(config: dict) -> tuple[np.ndarray, dict]:
 
 def _load_models_for_optimizer(config: dict) -> dict[str, np.ndarray]:
     logging.info("Loading structural information for the first model.")
-    struct_info = pdb_parser(config["models_fname"][0], config)
+    struct_info = pdb_parser(config["models_fname"][0])
 
     logging.info("Confirming that all models have the same structural information.")
     for filename in config["models_fname"]:
-        tmp_struct_info = pdb_parser(filename, config)
+        tmp_struct_info = pdb_parser(filename)
 
         for key, value in tmp_struct_info.items():
             assert (
@@ -67,11 +67,11 @@ def _load_models_for_optimizer(config: dict) -> dict[str, np.ndarray]:
     logging.info("Structural information consistent across all models.")
 
     logging.info("Confirming that reference model has the same structural information.")
-    struct_info_ref = pdb_parser(config["ref_model_fname"], config)
+    struct_info_ref = pdb_parser(config["ref_model_fname"])
     for key, value in struct_info_ref.items():
         assert (
             struct_info[key] == value
-        ), f"Structural information mismatch between reference model and given models: {key} {value} {struct_info[key]}"
+        ).all(), f"Structural information mismatch between reference model and given models: {key} {value} {struct_info[key]}"
     logging.info(
         "Structural information consistent between reference model and given models."
     )

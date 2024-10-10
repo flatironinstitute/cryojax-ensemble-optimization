@@ -76,7 +76,7 @@ class GeneratorConfig(BaseModel):
     path_to_models: str = Field(
         description="Path to the directory containing the atomic models for image generation."
     )
-    models_fname: str = Field(
+    models_fname: Union[str, List[str]] = Field(
         description="Filename of the atomic model(s) to use for image generation. If a pattern is provided, all files matching the pattern will be used. The atomic models should be in path_to_models."
     )
     path_to_relion_project: str = Field(
@@ -140,15 +140,22 @@ class GeneratorConfig(BaseModel):
                 f"Working directory {self.path_to_models} does not exist."
             )
 
-        if "*" in self.models_fname:
-            models_fname = os.path.join(self.path_to_models, self.models_fname)
-            models_fname = natsorted(glob.glob(models_fname))
-            if len(models_fname) == 0:
-                raise FileNotFoundError(
-                    f"No files found with pattern {self.models_fname}"
-                )
+        if isinstance(self.models_fname, str):
+            if "*" in self.models_fname:
+                models_fname = os.path.join(self.path_to_models, self.models_fname)
+                models_fname = natsorted(glob.glob(models_fname))
+                if len(models_fname) == 0:
+                    raise FileNotFoundError(
+                        f"No files found with pattern {self.models_fname}"
+                    )
+            else:
+                models_fname = [self.models_fname]
+
+        elif isinstance(self.models_fname, list):
+            models_fname = self.models_fname
+
         else:
-            models_fname = [self.models_fname]
+            raise ValueError("models_fname must be a string or a list of strings.")
 
         for i in range(len(models_fname)):
             models_fname[i] = os.path.join(self.path_to_models, models_fname[i])
@@ -166,11 +173,14 @@ class GeneratorConfig(BaseModel):
 
     @field_serializer("models_fname")
     def serialize_models_fname(self, v):
-        if "*" in v:
-            v = os.path.join(self.path_to_models, v)
-            v = natsorted(glob.glob(v))
-        else:
-            v = [os.path.join(self.path_to_models, v)]
+        if isinstance(v, str):
+            if "*" in v:
+                v = os.path.join(self.path_to_models, v)
+                v = natsorted(glob.glob(v))
+            else:
+                v = [os.path.join(self.path_to_models, v)]
+        elif isinstance(v, list):
+            v = [os.path.join(self.path_to_models, i) for i in v]
         return v
 
     @field_serializer("offset_x_in_angstroms")

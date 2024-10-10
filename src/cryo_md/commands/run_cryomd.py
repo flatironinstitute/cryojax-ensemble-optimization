@@ -63,34 +63,34 @@ def generate_pipeline(config, dataset):
 
     key = jax.random.PRNGKey(config["rng_seed"])
 
-    for key in steps_key:
-        pipeline_step = pipeline_config[key]
+    for step_key in steps_key:
+        pipeline_step = pipeline_config[step_key]
 
-        if pipeline_step["type"] == "pos_opt":
+        if pipeline_step["step_type"] == "pos_opt":
             key, subkey = jax.random.split(key)
             workflow.append(
                 PositionOptimizer(
                     rng_key=subkey,
-                    n_steps=pipeline_step["n_steps"],
-                    step_size=pipeline_step["step_size"],
+                    n_steps=pipeline_step["pos_opt_steps"],
+                    step_size=pipeline_step["pos_opt_stepsize"],
                     batch_size=config["batch_size"],
                     dataset=dataset,
                 )
             )
 
-        elif pipeline_step["type"] == "weight_opt":
+        elif pipeline_step["step_type"] == "weight_opt":
             key, subkey = jax.random.split(key)
             workflow.append(
                 WeightOptimizer(
                     rng_key=subkey,
-                    n_steps=pipeline_step["n_steps"],
-                    step_size=pipeline_step["step_size"],
+                    n_steps=pipeline_step["weight_opt_steps"],
+                    step_size=pipeline_step["weight_opt_stepsize"],
                     batch_size=config["batch_size"],
                     dataset=dataset,
                 )
             )
 
-        elif pipeline_step["type"] == "mdsampler":
+        elif pipeline_step["step_type"] == "mdsampler":
             if pipeline_step["mode"] == "all-atom":
                 workflow.append(
                     MDSimulatorRMSDConstraint(
@@ -99,7 +99,7 @@ def generate_pipeline(config, dataset):
                             "mdsampler_force_constant"
                         ],
                         n_steps=pipeline_step["n_steps"],
-                        n_models=config["n_models"],
+                        n_models=config["max_n_models"],
                         checkpoint_fnames=pipeline_step["checkpoint_fnames"],
                     )
                 )
@@ -127,17 +127,21 @@ def generate_pipeline(config, dataset):
 def run_pipeline(pipeline, config):
     struct_info = _load_models_for_optimizer(config)
     init_universes = []
-    for i in range(config["n_models"]):
+    for i in range(config["max_n_models"]):
         init_universes.append(mda.Universe(config["models_fname"][i]))
+
+    logging.info(
+        f"Initial models loaded from {config['models_fname'][:config['max_n_models']]}"
+    )
 
     ref_universe = mda.Universe(config["ref_model_fname"])
 
     logging.info("Preparing pipeline for run...")
     pipeline.prepare_for_run_(
-        config,
-        init_universes,
-        struct_info,
-        ref_universe,
+        config=config,
+        init_universes=init_universes,
+        struct_info=struct_info,
+        ref_universe=ref_universe,
     )
 
     pipeline.run()
@@ -152,7 +156,7 @@ def main(args):
         config = dict(OptimizationConfig(**config_json).model_dump())
 
     for key in config["pipeline"].keys():
-        if "mdsampler" == config["pipeline"][key]["type"]:
+        if "mdsampler" == config["pipeline"][key]["step_type"]:
             if config["pipeline"][key]["platform"] == "CPU":
                 if config["pipeline"][key]["platform_properties"]["Threads"] is None:
                     config["pipeline"][key]["platform_properties"]["Threads"] = nprocs

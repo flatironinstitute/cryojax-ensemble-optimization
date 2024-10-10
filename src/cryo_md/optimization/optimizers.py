@@ -37,9 +37,43 @@ class WeightOptimizer:
 
         else:
             loss = None
-            for _ in range(self.n_steps):
-                self.key, subkey = jax.random.split(self.key)
 
+            # n_batches = self.dataset_size // self.batch_size
+            # batch_residual = self.dataset_size % self.batch_size
+
+            # if batch_residual > 0:
+            #     n_batches += 1
+
+            # for i in range(self.n_steps):
+            #     grad_wts = jnp.zeros_like(weights)
+            #     loss = 0.0
+            #     for j in range(n_batches):
+
+            #         if j == n_batches - 1 and batch_residual > 0:
+            #             relion_stack = self.dataset[j * self.batch_size :]
+            #         else:
+            #             relion_stack = self.dataset[j * self.batch_size : (j + 1) * self.batch_size]
+
+            #         relion_stack_vmap, relion_stack_novmap = eqx.partition(
+            #             relion_stack, self.filter_spec_for_vmap
+            #         )
+            #         loss, grad_wts_tmp = compute_loss_and_grads_weights(
+            #             atom_positions=atom_positions,
+            #             model_weights=weights,
+            #             relion_stack_vmap=relion_stack_vmap,
+            #             args=(
+            #                 structural_info["atom_identities"],
+            #                 structural_info["b_factors"],
+            #                 noise_variance,
+            #                 relion_stack_novmap,
+            #             ),
+            #         )
+
+            #         grad_wts += grad_wts_tmp
+            #         loss += loss
+
+            for i in range(self.n_steps):
+                self.key, subkey = jax.random.split(self.key)
                 subset_idx = jax.random.choice(
                     subkey, self.dataset_size, (self.batch_size,), replace=False
                 )
@@ -48,6 +82,7 @@ class WeightOptimizer:
                 relion_stack_vmap, relion_stack_novmap = eqx.partition(
                     relion_stack, self.filter_spec_for_vmap
                 )
+
                 loss, grad_wts = compute_loss_and_grads_weights(
                     atom_positions=atom_positions,
                     model_weights=weights,
@@ -64,6 +99,8 @@ class WeightOptimizer:
                 weights = weights - self.step_size * grad_wts
                 weights = jnp.maximum(weights, jnp.zeros_like(weights))
                 weights /= jnp.sum(weights)
+
+                logging.info(f"i={i}, loss={loss}. Weights: {weights}")
 
                 logging.debug(f"Weights: {weights}; Loss: {loss}")
 
@@ -89,6 +126,7 @@ class PositionOptimizer:
         return
 
     def run(self, positions, weights, structural_info, noise_variance):
+        # traj = np.zeros((self.n_steps, *positions.shape))
         # get batch_size n random indices from self.dataset_size
         logging.info("Running position optimization...")
         loss = None
@@ -115,23 +153,25 @@ class PositionOptimizer:
                 ),
             )
 
-            # print(grads.shape)
-            # print(jnp.linalg.norm(positions, axis=(1, 2)))
-            # print(jnp.linalg.norm(grads, axis=(1, 2)))
+            # logging.info(grads.shape)
+            # logging.info(jnp.linalg.norm(positions, axis=(1, 2)))
+            # logging.info(jnp.linalg.norm(grads, axis=(1, 2)))
 
             norms = jnp.max(jnp.abs(grads), axis=(2), keepdims=True)
             grads /= norms  # jnp.maximum(norms, jnp.ones_like(norms))
             # grads /= jnp.linalg.norm(grads, axis=(1, 2), keepdims=True)
 
-            # print(jnp.linalg.norm(grads, axis=(1, 2)))
+            # logging.info(jnp.linalg.norm(grads, axis=(1, 2)))
 
             positions = positions - self.step_size * grads
+            # traj[i] = positions
 
-            print(f"i={i}, loss={loss}")
+            logging.info(f"i={i}, loss={loss}")
+            # print(f"i={i}, loss={loss}")
 
         logging.info(f"Optimization done. Final loss: {loss}.")
 
-        return positions, loss
+        return positions, loss  # , traj
 
 
 def _get_particle_stack_filter_spec(particle_stack):

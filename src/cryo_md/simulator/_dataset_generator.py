@@ -86,6 +86,7 @@ def simulate_relion_dataset(config: dict):
         _compute_noisy_image,
         args,
         seed=new_seed,
+        batch_size_per_mrc=1000,
         overwrite=config["overwrite"],
     )
     logging.info(

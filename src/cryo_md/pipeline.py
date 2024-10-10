@@ -78,11 +78,11 @@ def generate_outputs(universe, ref_universe, output_fname, atom_filter):
     Generates PDB files for the trajectory of each optimized model. Plots the loss curve.
     """
 
-    universe = universe.select_atoms(atom_filter)
+    universe = universe.select_atoms("protein")
     with h5py.File(output_fname, "r") as file:
-        losses = file["losses"][:]
-        traj_wts = file["trajs_weights"][:]
-        n_frames, n_models, _, n_atoms = file["trajs_positions"].shape
+        losses = file["losses"][1:]
+        traj_wts = file["trajs_weights"][1:]
+        n_frames, n_models, n_atoms, _ = file["trajs_positions"].shape
 
         for i in range(n_models):
             traj_path = os.path.join(os.path.dirname(output_fname), f"traj_{i}.pdb")
@@ -225,19 +225,21 @@ class Pipeline:
             self.univ_md.append(init_universes[i].copy())
             self.univ_pull.append(init_universes[i].copy())
 
+            self.univ_md[i].atoms.write(f"INITIAL_MODEL_{i}.pdb")
+
         self.n_steps = config["n_steps"]
 
         models_shape = (
             len(init_universes),
-            *init_universes[0]
-            .select_atoms(self.atom_list_filter)
-            .atoms.positions.shape,
+            *init_universes[0].select_atoms("protein").atoms.positions.shape,
         )
 
         output_fname = os.path.join(
             config["output_path"], config["experiment_name"] + ".h5"
         )
-        self.output_manager = OutputManager(output_fname, self.n_steps, models_shape)
+        self.output_manager = OutputManager(
+            output_fname, self.n_steps + 1, models_shape
+        )
 
         if init_weights is None:
             self.weights = jnp.ones(self.n_models) / self.n_models
@@ -249,6 +251,15 @@ class Pipeline:
             self.univ_md[0].select_atoms(self.atom_list_filter).atoms.indices
         )
         self.unit_cell = self.univ_md[0].atoms.dimensions
+
+        self.output_manager.write(
+            np.array(
+                [univ.select_atoms("protein").atoms.positions for univ in self.univ_md]
+            ),
+            self.weights,
+            0.0,
+            0,
+        )
 
         return
 
@@ -292,7 +303,9 @@ class Pipeline:
             ).atoms.positions
 
         positions = jnp.array(positions)
-        self.weights = step.run(positions, self.weights, self.struct_info)
+        self.weights = step.run(
+            positions, self.weights, self.struct_info, self.config["noise_variance"]
+        )
 
         return
 
@@ -325,7 +338,9 @@ class Pipeline:
         logging.debug(f"Optimized_positions: {positions}")
 
         positions = jnp.array(positions)
-        positions, loss = step.run(positions, self.weights, self.struct_info)
+        positions, loss = step.run(
+            positions, self.weights, self.struct_info, self.config["noise_variance"]
+        )
 
         logging.debug(f"Optimized_positions: {positions}")
 
@@ -379,13 +394,13 @@ class Pipeline:
                 self.output_manager.write(
                     np.array(
                         [
-                            univ.select_atoms(self.atom_list_filter).atoms.positions
+                            univ.select_atoms("protein").atoms.positions
                             for univ in self.univ_md
                         ]
                     ),
                     self.weights,
                     loss,
-                    counter,
+                    counter + 1,
                 )
 
         logging.info("Pipeline finished.")
