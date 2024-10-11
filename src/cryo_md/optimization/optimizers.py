@@ -1,16 +1,41 @@
 import logging
 
-import numpy as np
 import jax
 import jax.numpy as jnp
 import equinox as eqx
+import jax_dataloader as jdl
+
+from jaxopt import ProjectedGradient
+from jaxopt.projection import projection_simplex
+
 from cryojax import get_filter_spec
 from cryojax.image.operators import FourierGaussian
+from cryojax.data import RelionDataset, RelionParticleStack
+
 
 from .loss_and_gradients import (
     compute_loss_and_grads_positions,
-    compute_loss_and_grads_weights,
+    compute_lklhood_matrix,
 )
+
+
+@eqx.filter_jit
+def compute_loss(weights, lklhood_matrix):
+    log_lklhood = jax.scipy.special.logsumexp(
+        a=lklhood_matrix, b=weights[None, :], axis=1
+    )
+    return -jnp.mean(log_lklhood)
+
+
+class CustomJaxDataset(jdl.Dataset):
+    def __init__(self, cryojax_dataset: RelionDataset):
+        self.cryojax_dataset = cryojax_dataset
+
+    def __getitem__(self, index) -> RelionParticleStack:
+        return self.cryojax_dataset[index]
+
+    def __len__(self) -> int:
+        return len(self.cryojax_dataset)
 
 
 class WeightOptimizer:
@@ -22,8 +47,17 @@ class WeightOptimizer:
         self.step_size = step_size
         self.filter_spec_for_vmap = _get_particle_stack_filter_spec(dataset[0:2])
         self.batch_size = batch_size
-        self.dataset = dataset
         self.dataset_size = len(dataset)
+
+        self.dataloader = jdl.DataLoader(
+            CustomJaxDataset(
+                dataset
+            ),  # Can be a jdl.Dataset or pytorch or huggingface or tensorflow dataset
+            backend="jax",  # Use 'jax' backend for loading data
+            batch_size=self.batch_size,  # Batch size
+            shuffle=True,  # Shuffle the dataloader every iteration or not
+            drop_last=False,  # Drop the last batch or not
+        )
 
         self.key = rng_key
         return
@@ -33,78 +67,31 @@ class WeightOptimizer:
 
         if self.n_steps == 0:
             logging.info("No optimization steps requested. Returning initial weights.")
-            return weights
 
         else:
-            loss = None
-
-            # n_batches = self.dataset_size // self.batch_size
-            # batch_residual = self.dataset_size % self.batch_size
-
-            # if batch_residual > 0:
-            #     n_batches += 1
-
-            # for i in range(self.n_steps):
-            #     grad_wts = jnp.zeros_like(weights)
-            #     loss = 0.0
-            #     for j in range(n_batches):
-
-            #         if j == n_batches - 1 and batch_residual > 0:
-            #             relion_stack = self.dataset[j * self.batch_size :]
-            #         else:
-            #             relion_stack = self.dataset[j * self.batch_size : (j + 1) * self.batch_size]
-
-            #         relion_stack_vmap, relion_stack_novmap = eqx.partition(
-            #             relion_stack, self.filter_spec_for_vmap
-            #         )
-            #         loss, grad_wts_tmp = compute_loss_and_grads_weights(
-            #             atom_positions=atom_positions,
-            #             model_weights=weights,
-            #             relion_stack_vmap=relion_stack_vmap,
-            #             args=(
-            #                 structural_info["atom_identities"],
-            #                 structural_info["b_factors"],
-            #                 noise_variance,
-            #                 relion_stack_novmap,
-            #             ),
-            #         )
-
-            #         grad_wts += grad_wts_tmp
-            #         loss += loss
-
-            for i in range(self.n_steps):
-                self.key, subkey = jax.random.split(self.key)
-                subset_idx = jax.random.choice(
-                    subkey, self.dataset_size, (self.batch_size,), replace=False
-                )
-                relion_stack = self.dataset[np.asarray(subset_idx)]
-
+            for batch in self.dataloader:
                 relion_stack_vmap, relion_stack_novmap = eqx.partition(
-                    relion_stack, self.filter_spec_for_vmap
+                    batch, self.filter_spec_for_vmap
                 )
-
-                loss, grad_wts = compute_loss_and_grads_weights(
-                    atom_positions=atom_positions,
-                    model_weights=weights,
-                    relion_stack_vmap=relion_stack_vmap,
-                    args=(
+                lklhood_matrix = compute_lklhood_matrix(
+                    atom_positions,
+                    relion_stack_vmap,
+                    (
                         structural_info["atom_identities"],
                         structural_info["b_factors"],
                         noise_variance,
                         relion_stack_novmap,
                     ),
                 )
+                break
 
-                # weights = jax.nn.sigmoid(weights - self.step_size * grad_wts)
-                weights = weights - self.step_size * grad_wts
-                weights = jnp.maximum(weights, jnp.zeros_like(weights))
-                weights /= jnp.sum(weights)
+            pg = ProjectedGradient(fun=compute_loss, projection=projection_simplex)
+            weights = pg.run(weights, lklhood_matrix=lklhood_matrix).params
+            loss = compute_loss(weights, lklhood_matrix)
 
-                logging.info(f"i={i}, loss={loss}. Weights: {weights}")
-
-                logging.debug(f"Weights: {weights}; Loss: {loss}")
-
-            logging.info(f"Optimization done. Final loss: {loss}.")
+            logging.info(
+                f"Optimization done. Final loss: {loss}. Final weights: {weights}."
+            )
 
         return weights
 
@@ -118,8 +105,17 @@ class PositionOptimizer:
         self.step_size = step_size
         self.filter_spec_for_vmap = _get_particle_stack_filter_spec(dataset[0:2])
         self.batch_size = batch_size
-        self.dataset = dataset
+
         self.dataset_size = len(dataset)
+        self.dataloader = jdl.DataLoader(
+            CustomJaxDataset(
+                dataset
+            ),  # Can be a jdl.Dataset or pytorch or huggingface or tensorflow dataset
+            backend="jax",  # Use 'jax' backend for loading data
+            batch_size=self.batch_size,  # Batch size
+            shuffle=True,  # Shuffle the dataloader every iteration or not
+            drop_last=False,  # Drop the last batch or not
+        )
 
         self.key = rng_key
 
@@ -131,14 +127,9 @@ class PositionOptimizer:
         logging.info("Running position optimization...")
         loss = None
         for i in range(self.n_steps):
-            self.key, subkey = jax.random.split(self.key)
-            subset_idx = jax.random.choice(
-                subkey, self.dataset_size, (self.batch_size,), replace=False
-            )
-            relion_stack = self.dataset[np.asarray(subset_idx)]
-
+            batch = next(iter(self.dataloader))
             relion_stack_vmap, relion_stack_novmap = eqx.partition(
-                relion_stack, self.filter_spec_for_vmap
+                batch, self.filter_spec_for_vmap
             )
 
             loss, grads = compute_loss_and_grads_positions(

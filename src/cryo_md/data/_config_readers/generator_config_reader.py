@@ -7,7 +7,7 @@ from pydantic import BaseModel, model_validator, field_serializer, Field
 import jax.numpy as jnp
 
 
-class GeneratorConfig(BaseModel):
+class GeneratorConfig(BaseModel, extra="forbid"):
     """
     Parameters for the data generation pipeline.
 
