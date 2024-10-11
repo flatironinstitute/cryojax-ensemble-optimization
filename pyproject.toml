@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build]
@@ -71,7 +71,10 @@ Issues = "https://github.com/DSilva27/cryo_MD/issues"
 Source = "https://github.com/DSilva27/cryo_MD"
 
 [tool.hatch.version]
-path = "src/cryo_md/__about__.py"
+source="vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/cryo_md/cryomd_version.py"
 
 
 [project.scripts]
