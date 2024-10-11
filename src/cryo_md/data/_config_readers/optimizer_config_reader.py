@@ -13,7 +13,7 @@ import logging
 from typing import List, Optional, Union
 
 
-class _PipelineWeightOpValidator(BaseModel):
+class _PipelineWeightOpValidator(BaseModel, extra="forbid"):
     step_type: str = "weight_opt"
     weight_opt_steps: int
     weight_opt_stepsize: float
@@ -33,7 +33,7 @@ class _PipelineWeightOpValidator(BaseModel):
         return value
 
 
-class _PipelinePosOpValidator(BaseModel):
+class _PipelinePosOpValidator(BaseModel, extra="forbid"):
     step_type: str = "pos_opt"
     pos_opt_steps: int
     pos_opt_stepsize: float
@@ -53,7 +53,7 @@ class _PipelinePosOpValidator(BaseModel):
         return value
 
 
-class _PipelineMDSamplerAllAtomValidator(BaseModel):
+class _PipelineMDSamplerAllAtomValidator(BaseModel, extra="forbid"):
     step_type: str = "mdsampler"
     mode: str = "all-atom"
     n_steps: int
@@ -92,7 +92,7 @@ class _PipelineMDSamplerAllAtomValidator(BaseModel):
         return v
 
 
-class _PipelineMDSamplerCGValidator(BaseModel):
+class _PipelineMDSamplerCGValidator(BaseModel, extra="forbid"):
     step_type: str = "mdsampler"
     mode: str = "cg"
     n_steps: int
@@ -165,7 +165,7 @@ class _PipelineMDSamplerCGValidator(BaseModel):
         return v
 
 
-class OptimizationConfig(BaseModel):
+class OptimizationConfig(BaseModel, extra="forbid"):
     experiment_name: str
     mode: str
 

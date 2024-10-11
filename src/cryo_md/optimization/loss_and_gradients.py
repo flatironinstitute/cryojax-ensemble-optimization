@@ -11,6 +11,7 @@ import cryojax.simulator as cxs
 from ..simulator._distributions import VarianceMarginalizedWhiteGaussianNoise
 
 
+@eqx.filter_jit
 @partial(eqx.filter_vmap, in_axes=(None, 0, None), out_axes=eqxi.if_mapped(axis=0))
 @partial(eqx.filter_vmap, in_axes=(0, None, None), out_axes=eqxi.if_mapped(axis=0))
 def compute_lklhood_matrix(atom_positions, relion_stack_vmap, args):

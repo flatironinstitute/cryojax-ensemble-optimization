@@ -251,7 +251,7 @@ def _compute_noisy_image(
     potentials, potential_integrator, weights, noise_variance = args
 
     key, subkey = jax.random.split(key)
-    structure_id = jax.random.categorical(subkey, weights)
+    structure_id = jax.random.choice(subkey, weights.shape[0], p=weights)
 
     structural_ensemble = cxs.DiscreteStructuralEnsemble(
         potentials,
