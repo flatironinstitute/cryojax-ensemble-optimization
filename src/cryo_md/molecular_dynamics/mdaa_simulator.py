@@ -19,7 +19,7 @@ import openmm.unit as openmm_unit
 class MDSimulatorRMSDConstraint:
     def __init__(
         self,
-        models_fname: str,
+        models_fname: List[str],
         restrain_force_constant: float,
         n_steps: int,
         n_models: int,

@@ -4,9 +4,6 @@ import os
 import argparse
 import json
 import yaml
-import numpy as np
-import MDAnalysis as mda
-import jax
 
 from cryojax.data import RelionDataset
 
@@ -15,8 +12,7 @@ from ..data._config_readers.optimizer_config_reader import OptimizationConfig
 from ..molecular_dynamics.mdaa_simulator import MDSimulatorRMSDConstraint
 
 # from .._molecular_dynamics.mdcg_simulator import MDCGSampler
-from ..optimization.optimizers import PositionOptimizer
-from ..optimization.optimizers import WeightOptimizer
+from ..optimization.optimizers import EnsembleOptimizer
 from ..pipeline import Pipeline
 
 
@@ -55,97 +51,38 @@ def generate_pipeline(config, dataset):
     """
     Generate the pipeline from the pipeline config
     """
-    pipeline_config = config["pipeline"]
-    workflow = []
 
-    key_dtype = type(list(pipeline_config.keys())[0])
-    steps_key = np.sort(list(pipeline_config.keys())).astype(key_dtype)
+    structural_info = _load_models_for_optimizer(config)
 
-    key = jax.random.PRNGKey(config["rng_seed"])
+    md_sampler = MDSimulatorRMSDConstraint(
+        models_fname=config["models_fnames"],
+        restrain_force_constant=config["md_sampler_config"]["mdsampler_force_constant"],
+        n_steps=config["md_sampler_config"]["n_steps"],
+        n_models=config["max_n_models"],
+        checkpoint_fnames=config["checkpoints_fnames"],
+        platform=config["md_sampler_config"]["platform"],
+        properties=config["md_sampler_config"]["platform_properties"],
+    )
 
-    for step_key in steps_key:
-        pipeline_step = pipeline_config[step_key]
+    ensemble_optimizer = EnsembleOptimizer(
+        step_size=config["ensemble_optimizer_config"]["step_size"],
+        batch_size=config["ensemble_optimizer_config"]["batch_size"],
+        dataset=dataset,
+        init_weights=config["ensemble_optimizer_config"]["init_weights"],
+        structural_info=structural_info,
+        noise_variance=config["ensemble_optimizer_config"]["noise_variance"],
+        n_steps=config["ensemble_optimizer_config"]["n_steps"],
+    )
 
-        if pipeline_step["step_type"] == "pos_opt":
-            key, subkey = jax.random.split(key)
-            workflow.append(
-                PositionOptimizer(
-                    rng_key=subkey,
-                    n_steps=pipeline_step["pos_opt_steps"],
-                    step_size=pipeline_step["pos_opt_stepsize"],
-                    batch_size=config["batch_size"],
-                    dataset=dataset,
-                )
-            )
-
-        elif pipeline_step["step_type"] == "weight_opt":
-            key, subkey = jax.random.split(key)
-            workflow.append(
-                WeightOptimizer(
-                    rng_key=subkey,
-                    n_steps=pipeline_step["weight_opt_steps"],
-                    step_size=pipeline_step["weight_opt_stepsize"],
-                    batch_size=config["batch_size"],
-                    dataset=dataset,
-                )
-            )
-
-        elif pipeline_step["step_type"] == "mdsampler":
-            if pipeline_step["mode"] == "all-atom":
-                workflow.append(
-                    MDSimulatorRMSDConstraint(
-                        models_fname=config["models_fname"],
-                        restrain_force_constant=pipeline_step[
-                            "mdsampler_force_constant"
-                        ],
-                        n_steps=pipeline_step["n_steps"],
-                        n_models=config["max_n_models"],
-                        checkpoint_fnames=pipeline_step["checkpoint_fnames"],
-                    )
-                )
-
-            if pipeline_step["mode"] == "coarse-grained":
-                raise NotImplementedError
-                # workflow.append(
-                #     MDCGSampler(
-                #         models_fname=config["models_fname"],
-                #         top_file=pipeline_step["top_file"],
-                #         restrain_force_constant=pipeline_step[
-                #             "mdsampler_force_constant"
-                #         ],
-                #         epsilon_r=pipeline_step["epsilon_r"],
-                #         n_steps=pipeline_step["n_steps"],
-                #         n_models=config["n_models"],
-                #         checkpoint_fnames=pipeline_step["checkpoint_fnames"],
-                #     )
-                # )
-
-    pipeline = Pipeline(workflow, config)
+    pipeline = Pipeline(
+        experiment_name=config["experiment_name"],
+        ensemble_optimizer=ensemble_optimizer,
+        md_sampler=md_sampler,
+        init_models_path=config["models_fnames"],
+        ref_model_path=config["ref_model_fname"],
+        atom_list_filter=config["atom_list_filter"],
+    )
     return pipeline
-
-
-def run_pipeline(pipeline, config):
-    struct_info = _load_models_for_optimizer(config)
-    init_universes = []
-    for i in range(config["max_n_models"]):
-        init_universes.append(mda.Universe(config["models_fname"][i]))
-
-    logging.info(
-        f"Initial models loaded from {config['models_fname'][:config['max_n_models']]}"
-    )
-
-    ref_universe = mda.Universe(config["ref_model_fname"])
-
-    logging.info("Preparing pipeline for run...")
-    pipeline.prepare_for_run_(
-        config=config,
-        init_universes=init_universes,
-        struct_info=struct_info,
-        ref_universe=ref_universe,
-    )
-
-    pipeline.run()
-    return
 
 
 def main(args):
@@ -155,14 +92,13 @@ def main(args):
         config_json = json.load(f)
         config = dict(OptimizationConfig(**config_json).model_dump())
 
-    for key in config["pipeline"].keys():
-        if "mdsampler" == config["pipeline"][key]["step_type"]:
-            if config["pipeline"][key]["platform"] == "CPU":
-                if config["pipeline"][key]["platform_properties"]["Threads"] is None:
-                    config["pipeline"][key]["platform_properties"]["Threads"] = nprocs
+    if config["md_sampler_config"]["platform"] == "CPU":
+        if config["md_sampler_config"]["platform_properties"]["Threads"] is None:
+            config["md_sampler_config"]["platform_properties"]["Threads"] = str(nprocs)
 
     warnexists(config["output_path"])
     mkbasedir(config["output_path"])
+    mkbasedir("tmp")
 
     logger_fname = os.path.join(
         config["output_path"], config["experiment_name"] + ".log"
@@ -199,7 +135,7 @@ def main(args):
     )
 
     pipeline = generate_pipeline(config, dataset)
-    run_pipeline(pipeline, config)
+    pipeline.run(n_steps=config["n_steps"], output_path=config["output_path"])
 
     return
 

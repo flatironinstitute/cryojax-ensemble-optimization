@@ -9,56 +9,58 @@ from pydantic import (
     field_serializer,
     model_serializer,
 )
-import logging
 from typing import List, Optional, Union
+import jax.numpy as jnp
 
 
-class _PipelineWeightOpValidator(BaseModel, extra="forbid"):
-    step_type: str = "weight_opt"
-    weight_opt_steps: int
-    weight_opt_stepsize: float
+class _EnsembleOptimizerValidator(BaseModel, extra="forbid"):
+    n_steps: int = 1
+    step_size: float
+    batch_size: int
+    init_weights: Optional[List[float]] = None
+    noise_variance: float
 
-    @field_validator("weight_opt_steps")
-    @classmethod
-    def validate_weight_opt_steps(cls, value):
-        if value < 0:
-            raise ValueError("Number of steps must be greater than 0")
-        return value
-
-    @field_validator("weight_opt_stepsize")
-    @classmethod
-    def validate_weight_opt_stepsize(cls, value):
-        if value <= 0:
-            raise ValueError("Stepsize must be greater than 0")
-        return value
-
-
-class _PipelinePosOpValidator(BaseModel, extra="forbid"):
-    step_type: str = "pos_opt"
-    pos_opt_steps: int
-    pos_opt_stepsize: float
-
-    @field_validator("pos_opt_steps")
+    @field_validator("n_steps")
     @classmethod
     def validate_pos_opt_steps(cls, value):
         if value <= 0:
             raise ValueError("Number of steps must be greater than 0")
         return value
 
-    @field_validator("pos_opt_stepsize")
+    @field_validator("step_size")
     @classmethod
     def validate_pos_opt_stepsize(cls, value):
         if value <= 0:
             raise ValueError("Stepsize must be greater than 0")
         return value
 
+    @field_validator("noise_variance", mode="before")
+    @classmethod
+    def validate_noise_variance(cls, v):
+        if v <= 0:
+            raise ValueError("Noise variance must be greater than 0")
+        return v
+
+    @field_validator("batch_size")
+    @classmethod
+    def validate_batch_size(cls, v):
+        if v <= 0:
+            raise ValueError("Batch size must be greater than 0")
+        return v
+
+    @field_serializer("init_weights")
+    def serialize_init_weights(self, v):
+        if v is not None:
+            v = jnp.array(v)
+            v = v / jnp.sum(v)
+
+        return v
+
 
 class _PipelineMDSamplerAllAtomValidator(BaseModel, extra="forbid"):
-    step_type: str = "mdsampler"
     mode: str = "all-atom"
     n_steps: int
     mdsampler_force_constant: float
-    checkpoint_fnames: Optional[Union[str, List[str]]] = None
     platform: str = "CPU"
     platform_properties: dict = {"Threads": None}
 
@@ -171,7 +173,8 @@ class OptimizationConfig(BaseModel, extra="forbid"):
 
     # I/O
     path_to_models_and_chkpoints: str
-    models_fname: Union[str, List[str]]
+    models_fnames: Union[str, List[str]]
+    checkpoints_fnames: Optional[Union[str, List[str]]] = None
     ref_model_fname: str
     path_to_starfile: str
     path_to_relion_project: str
@@ -179,24 +182,15 @@ class OptimizationConfig(BaseModel, extra="forbid"):
     max_n_models: Optional[int] = None
 
     # Pipeline
-    pipeline: dict
+    md_sampler_config: dict
+    ensemble_optimizer_config: dict
 
     # Optimization
     n_steps: int
-    batch_size: int
 
     # Image and MD stuff
-    resolution: float
     atom_list_filter: Optional[str] = None
-    noise_variance: float
     rng_seed: int = 0
-
-    @field_validator("noise_variance", mode="before")
-    @classmethod
-    def validate_noise_variance(cls, v):
-        if v <= 0:
-            raise ValueError("Noise variance must be greater than 0")
-        return v
 
     @field_validator("mode", mode="before")
     @classmethod
@@ -236,49 +230,91 @@ class OptimizationConfig(BaseModel, extra="forbid"):
             raise ValueError("Number of steps must be greater than 0")
         return v
 
-    @field_validator("resolution")
-    @classmethod
-    def validate_resolution(cls, v):
-        if v <= 0:
-            raise ValueError("Resolution must be greater than 0")
-        return v
-
     @model_validator(mode="after")
     def validate_config(self):
-        if isinstance(self.models_fname, str):
-            if "*" in self.models_fname:
-                models_fname = natsorted(
+        if isinstance(self.models_fnames, str):
+            if "*" in self.models_fnames:
+                models_fnames = natsorted(
                     glob.glob(
-                        self.models_fname, root_dir=self.path_to_models_and_chkpoints
+                        self.models_fnames, root_dir=self.path_to_models_and_chkpoints
                     )
                 )
-                if len(models_fname) == 0:
+                if len(models_fnames) == 0:
                     raise FileNotFoundError(
-                        f"No files found with pattern {self.models_fname}"
+                        f"No files found with pattern {self.models_fnames}"
                     )
             else:
-                models_fname = [self.models_fname]
+                models_fnames = [self.models_fnames]
 
-        elif isinstance(self.models_fname, list):
-            assert len(self.models_fname) > 0, "No models Given."
-            models_fname = self.models_fname
+        elif isinstance(self.models_fnames, list):
+            assert len(self.models_fnames) > 0, "No models Given."
+            models_fnames = self.models_fnames
 
         else:
-            raise ValueError("models_fname must be a string or a list of strings.")
+            raise ValueError("models_fnames must be a string or a list of strings.")
 
-        for i in range(len(models_fname)):
-            models_fname[i] = os.path.join(
-                self.path_to_models_and_chkpoints, models_fname[i]
+        for i in range(len(models_fnames)):
+            models_fnames[i] = os.path.join(
+                self.path_to_models_and_chkpoints, models_fnames[i]
             )
             assert os.path.exists(
-                models_fname[i]
-            ), f"Model {models_fname[i]} does not exist."
+                models_fnames[i]
+            ), f"Model {models_fnames[i]} does not exist."
+
+        if self.checkpoints_fnames is not None:
+            if isinstance(self.checkpoints_fnames, str):
+                if "*" in self.checkpoints_fnames:
+                    checkpoints_fnames = natsorted(
+                        glob.glob(
+                            self.checkpoints_fnames,
+                            root_dir=self.path_to_models_and_chkpoints,
+                        )
+                    )
+                    if len(checkpoints_fnames) == 0:
+                        raise FileNotFoundError(
+                            f"No files found with pattern {self.checkpoints_fnames}"
+                        )
+                else:
+                    checkpoints_fnames = [self.checkpoints_fnames]
+
+            elif isinstance(self.checkpoints_fnames, list):
+                assert len(self.checkpoints_fnames) > 0, "No checkpoints Given."
+                checkpoints_fnames = self.checkpoints_fnames
+
+            else:
+                raise ValueError(
+                    "checkpoints_fnames must be a string or a list of strings."
+                )
+
+            for i in range(len(checkpoints_fnames)):
+                checkpoints_fnames[i] = os.path.join(
+                    self.path_to_models_and_chkpoints, checkpoints_fnames[i]
+                )
+                assert os.path.exists(
+                    checkpoints_fnames[i]
+                ), f"Checkpoint {checkpoints_fnames[i]} does not exist."
+
+        else:
+            checkpoints_fnames = None
 
         if self.max_n_models is not None:
-            if len(models_fname) < self.max_n_models:
+            if len(models_fnames) < self.max_n_models:
                 raise ValueError(
-                    f"Number of models {len(models_fname)} is less than max_n_models {self.max_n_models}"
+                    f"Number of models {len(models_fnames)} is less than max_n_models {self.max_n_models}"
                 )
+
+            if checkpoints_fnames is not None:
+                assert len(checkpoints_fnames[: self.max_n_models]) == len(
+                    models_fnames[: self.max_n_models]
+                ), "Number of checkpoints does not match number of models"
+
+        elif self.max_n_models is None and checkpoints_fnames is not None:
+            assert len(checkpoints_fnames) == len(
+                models_fnames
+            ), "Number of checkpoints does not match number of models"
+
+        else:
+            pass
 
         ref_model_path = os.path.join(
             self.path_to_models_and_chkpoints, self.ref_model_fname
@@ -296,38 +332,40 @@ class OptimizationConfig(BaseModel, extra="forbid"):
 
         return self
 
-    @field_validator("pipeline")
-    def validate_pipeline(cls, v):
-        for key in v.keys():
-            if v[key]["step_type"] == "mdsampler":
-                if v[key]["mode"] == "all-atom":
-                    _PipelineMDSamplerAllAtomValidator(**v[key])
-
-                elif v[key]["mode"] == "cg":
-                    # v[key] = _PipelineMDSamplerCGValidator(**v[key])
-                    raise NotImplementedError("CG mode not implemented yet")
-
-                else:
-                    raise ValueError(f"Invalid mode {v[key]['mode']}")
-
-            elif v[key]["step_type"] == "weight_opt":
-                _PipelineWeightOpValidator(**v[key])
-
-            elif v[key]["step_type"] == "pos_opt":
-                _PipelinePosOpValidator(**v[key])
-
-            else:
-                raise ValueError(f"Invalid pipeline element {v[key]}")
-
+    @field_validator("ensemble_optimizer_config")
+    @classmethod
+    def validate_ensemble_opt_config(cls, v):
+        _EnsembleOptimizerValidator(**v)
         return v
 
-    @field_serializer("atom_list_filter")
-    def serialize_atom_list_filter(self, v):
-        if v is None:
-            if self.mode == "all-atom":
-                v = "protein and not name H*"
-            elif self.mode == "cg":
-                v = "protein"
+    @field_validator("md_sampler_config")
+    @classmethod
+    def validate_md_sampler_config(cls, v):
+        _PipelineMDSamplerAllAtomValidator(**v)
+        return v
+
+    @field_validator("output_path")
+    @classmethod
+    def serialize_output_path(cls, v):
+        if not os.path.exists(v):
+            new_path = os.path.join(v, "Job001")
+
+        else:
+            # list all subdirectories
+            subdirs = [f for f in os.listdir(v) if os.path.isdir(os.path.join(v, f))]
+
+            # get the last job number
+            job_numbers = []
+            for subdir in subdirs:
+                if subdir.startswith("Job"):
+                    job_numbers.append(int(subdir[3:]))
+            job_numbers = sorted(job_numbers)
+            if len(job_numbers) == 0:
+                new_path = os.path.join(v, "Job001")
+            else:
+                new_path = os.path.join(v, f"Job{job_numbers[-1]+1:03d}")
+
+        v = new_path
         return v
 
     @model_serializer
@@ -336,118 +374,95 @@ class OptimizationConfig(BaseModel, extra="forbid"):
         Need to serialize this elements as a model since they need each other
         """
 
+        if self.atom_list_filter is None:
+            if self.mode == "all-atom":
+                self.atom_list_filter = "protein and not name H*"
+            elif self.mode == "cg":
+                self.atom_list_filter = "protein"
+
         # Serialize model files
-        if isinstance(self.models_fname, str):
-            if "*" in self.models_fname:
-                models_fname = natsorted(
+        if isinstance(self.models_fnames, str):
+            if "*" in self.models_fnames:
+                models_fnames = natsorted(
                     glob.glob(
-                        self.models_fname, root_dir=self.path_to_models_and_chkpoints
+                        self.models_fnames, root_dir=self.path_to_models_and_chkpoints
                     )
                 )
-                if len(models_fname) == 0:
+                if len(models_fnames) == 0:
                     raise FileNotFoundError(
-                        f"No files found with pattern {self.models_fname}"
+                        f"No files found with pattern {self.models_fnames}"
                     )
             else:
-                models_fname = [self.models_fname]
+                models_fnames = [self.models_fnames]
 
         else:
-            models_fname = self.models_fname
+            models_fnames = self.models_fnames
+
+        if self.checkpoints_fnames is not None:
+            if isinstance(self.checkpoints_fnames, str):
+                if "*" in self.checkpoints_fnames:
+                    checkpoints_fnames = natsorted(
+                        glob.glob(
+                            self.checkpoints_fnames,
+                            root_dir=self.path_to_models_and_chkpoints,
+                        )
+                    )
+                    if len(checkpoints_fnames) == 0:
+                        raise FileNotFoundError(
+                            f"No files found with pattern {self.checkpoints_fnames}"
+                        )
+                else:
+                    checkpoints_fnames = [self.checkpoints_fnames]
+
+            else:
+                checkpoints_fnames = self.checkpoints_fnames
+
+        else:
+            checkpoints_fnames = None
 
         if self.max_n_models is not None:
-            models_fname = models_fname[: self.max_n_models]
+            models_fnames = models_fnames[: self.max_n_models]
+            checkpoints_fnames = (
+                checkpoints_fnames[: self.max_n_models]
+                if checkpoints_fnames is not None
+                else None
+            )
 
         else:
-            self.max_n_models = len(models_fname)
+            self.max_n_models = len(models_fnames)
 
-        self.models_fname = []
-        for i in range(len(models_fname)):
-            self.models_fname.append(
-                os.path.join(self.path_to_models_and_chkpoints, models_fname[i])
+        self.models_fnames = []
+        for i in range(len(models_fnames)):
+            self.models_fnames.append(
+                os.path.join(self.path_to_models_and_chkpoints, models_fnames[i])
             )
+
+        if checkpoints_fnames is not None:
+            self.checkpoints_fnames = []
+            for i in range(len(checkpoints_fnames)):
+                self.checkpoints_fnames.append(
+                    os.path.join(
+                        self.path_to_models_and_chkpoints, checkpoints_fnames[i]
+                    )
+                )
+        else:
+            self.checkpoints_fnames = None
 
         self.ref_model_fname = os.path.join(
             self.path_to_models_and_chkpoints, self.ref_model_fname
         )
 
-        # serialize checkpoint names in samplers
-        for key in self.pipeline.keys():
-            if self.pipeline[key]["step_type"] == "mdsampler":
-                if (
-                    "checkpoint_fnames" in self.pipeline[key].keys()
-                    and self.pipeline[key]["checkpoint_fnames"] is not None
-                ):
-                    if isinstance(self.pipeline[key]["checkpoint_fnames"], str):
-                        if "*" in self.pipeline[key]["checkpoint_fnames"]:
-                            checkpoint_fnames = natsorted(
-                                glob.glob(
-                                    self.pipeline[key]["checkpoint_fnames"],
-                                    root_dir=self.path_to_models_and_chkpoints,
-                                )
-                            )
-                            if len(checkpoint_fnames) == 0:
-                                raise FileNotFoundError(
-                                    f"No files found with pattern {checkpoint_fnames}"
-                                )
-                        else:
-                            checkpoint_fnames = [
-                                self.pipeline[key]["checkpoint_fnames"]
-                            ]
+        # serialize other configs
+        self.ensemble_optimizer_config = dict(
+            _EnsembleOptimizerValidator(**self.ensemble_optimizer_config).model_dump()
+        )
 
-                    else:
-                        checkpoint_fnames = self.pipeline[key]["checkpoint_fnames"]
+        if self.ensemble_optimizer_config["init_weights"] is None:
+            weights = jnp.ones(self.max_n_models) / self.max_n_models
+            self.ensemble_optimizer_config["init_weights"] = weights
 
-                    checkpoint_fnames = checkpoint_fnames[: self.max_n_models]
-                    assert (
-                        len(checkpoint_fnames) == len(self.models_fname)
-                    ), f"Number of checkpoint files {len(checkpoint_fnames)} does not match number of models {len(self.models_fname)}"
+        self.md_sampler_config = dict(
+            _PipelineMDSamplerAllAtomValidator(**self.md_sampler_config).model_dump()
+        )
 
-                    self.pipeline[key]["checkpoint_fnames"] = []
-                    for i in range(len(checkpoint_fnames)):
-                        self.pipeline[key]["checkpoint_fnames"].append(
-                            os.path.join(
-                                self.path_to_models_and_chkpoints, checkpoint_fnames[i]
-                            )
-                        )
-
-                    for i in range(len(self.pipeline[key]["checkpoint_fnames"])):
-                        assert os.path.exists(
-                            self.pipeline[key]["checkpoint_fnames"][i]
-                        ), f"Checkpoint {self.pipeline[key]['checkpoint_fnames'][i]} does not exist."
-
-                    logging.info(
-                        f"Checkpoint files for pipeline step {key} were set to {self.pipeline[key]['checkpoint_fnames']}"
-                    )
-                    logging.info("Models and checkpoints will be linked as")
-                    for i in range(len(self.pipeline[key]["checkpoint_fnames"])):
-                        logging.info(
-                            f"Model {self.models_fname[i]} with checkpoint {self.pipeline[key]['checkpoint_fnames'][i]}"
-                        )
-
-                else:
-                    continue
-
-        # Serialize pipeline
-        for key in self.pipeline.keys():
-            if self.pipeline[key]["step_type"] == "mdsampler":
-                if self.pipeline[key]["mode"] == "all-atom":
-                    self.pipeline[key] = dict(
-                        _PipelineMDSamplerAllAtomValidator(
-                            **self.pipeline[key]
-                        ).model_dump()
-                    )
-                elif self.pipeline[key]["mode"] == "cg":
-                    self.pipeline[key] = dict(
-                        _PipelineMDSamplerCGValidator(**self.pipeline[key]).model_dump()
-                    )
-
-            elif self.pipeline[key]["step_type"] == "weight_opt":
-                self.pipeline[key] = dict(
-                    _PipelineWeightOpValidator(**self.pipeline[key]).model_dump()
-                )
-
-            elif self.pipeline[key]["step_type"] == "pos_opt":
-                self.pipeline[key] = dict(
-                    _PipelinePosOpValidator(**self.pipeline[key]).model_dump()
-                )
         return self

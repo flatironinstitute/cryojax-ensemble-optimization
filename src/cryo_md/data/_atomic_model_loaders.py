@@ -10,26 +10,26 @@ from ._pdb import pdb_parser
 def _load_models_for_data_generator(config: dict) -> tuple[np.ndarray, dict]:
     logging.info(
         "Models will be loaded in the following order: {}".format(
-            config["models_fname"]
+            config["models_fnames"]
         )
     )
 
-    n_models = len(config["models_fname"])
+    n_models = len(config["models_fnames"])
 
-    model_0 = mda.Universe(config["models_fname"][0])
+    model_0 = mda.Universe(config["models_fnames"][0])
     model_0.atoms.translate(-model_0.atoms.center_of_mass())
 
-    logging.info(f"Using model {config['models_fname'][0]} as reference.")
+    logging.info(f"Using model {config['models_fnames'][0]} as reference.")
     path_ref_model = (
         os.path.join(config["path_to_relion_project"], "ref_model.")
-        + os.path.basename(config["models_fname"][0]).split(".")[-1]
+        + os.path.basename(config["models_fnames"][0]).split(".")[-1]
     )
     model_0.atoms.write(path_ref_model)
     logging.info(f"Reference model written to {path_ref_model}")
 
     logging.info("Confirming that all models have the same structural information.")
-    struct_info = pdb_parser(config["models_fname"][0])
-    for filename in config["models_fname"]:
+    struct_info = pdb_parser(config["models_fnames"][0])
+    for filename in config["models_fnames"]:
         tmp_struct_info = pdb_parser(filename)
 
         for key, value in tmp_struct_info.items():
@@ -41,7 +41,7 @@ def _load_models_for_data_generator(config: dict) -> tuple[np.ndarray, dict]:
     logging.info("Loading models.")
     models = []
     for i in range(0, n_models):
-        uni = mda.Universe(config["models_fname"][i])
+        uni = mda.Universe(config["models_fnames"][i])
         align.alignto(uni, model_0, select="protein and not name H*", weights="mass")
         models.append(uni.select_atoms("protein and not name H*").positions)
     logging.info("Models loaded.")
@@ -53,10 +53,10 @@ def _load_models_for_data_generator(config: dict) -> tuple[np.ndarray, dict]:
 
 def _load_models_for_optimizer(config: dict) -> dict[str, np.ndarray]:
     logging.info("Loading structural information for the first model.")
-    struct_info = pdb_parser(config["models_fname"][0])
+    struct_info = pdb_parser(config["models_fnames"][0])
 
     logging.info("Confirming that all models have the same structural information.")
-    for filename in config["models_fname"]:
+    for filename in config["models_fnames"]:
         tmp_struct_info = pdb_parser(filename)
 
         for key, value in tmp_struct_info.items():

@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from .molecular_dynamics.mdaa_simulator import MDSimulatorRMSDConstraint
 
 # from .molecular_dynamics.mdcg_simulator import MDCGSampler
-from .optimization.optimizers import WeightOptimizer, PositionOptimizer
+from .optimization.optimizers import EnsembleOptimizer
 from .data._output_manager import OutputManager
 
 
@@ -101,225 +101,84 @@ def generate_outputs(universe, ref_universe, output_fname, atom_filter):
 
 
 class Pipeline:
-    def __init__(self, workflow, config):
-        self.check_steps(workflow)
-        self.workflow = workflow
-        self.config = config
+    def __init__(
+        self,
+        experiment_name: str,
+        ensemble_optimizer: EnsembleOptimizer,
+        md_sampler: MDSimulatorRMSDConstraint,
+        init_models_path: list[str],
+        ref_model_path: str,
+        atom_list_filter: str = "protein and not name H*",
+    ):
+        self.experiment_name = experiment_name
+        self.ensemble_optimizer = ensemble_optimizer
+        self.md_sampler = md_sampler
+
+        univ_init, self.ref_universe = _load_universes(init_models_path, ref_model_path)
+        self.univ_md = [u.copy() for u in univ_init]
+        self.univ_pull = [u.copy() for u in univ_init]
+        self.atom_list_filter = atom_list_filter
+        self.opt_atom_list = (
+            self.univ_md[0].select_atoms(self.atom_list_filter).atoms.indices
+        )
+
         # self.output_manager = output_manager
-
-        return
-
-    def check_steps(self, workflow):
-        logging.info("Reading pipeline workflow...")
-
-        self.workflow_types = []
-        for i, step in enumerate(workflow):
-            if isinstance(step, MDSimulatorRMSDConstraint):
-                self.workflow_types.append("MDSampler")
-                logging.info(f"Step {i}: MDSampler")
-
-            # elif isinstance(step, MDCGSampler):
-            #     self.workflow_types.append("MDCGSampler")
-            #     logging.info(f"Step {i}: MDCGSampler")
-
-            elif isinstance(step, WeightOptimizer):
-                self.workflow_types.append("WeightOptimizer")
-                logging.info(f"Step {i}: WeightOptimizer")
-
-            elif isinstance(step, PositionOptimizer):
-                self.workflow_types.append("PositionOptimizer")
-                logging.info(f"Step {i}: PositionOptimizer")
-
-            else:
-                logging.error(
-                    f"Invalid step {i}, must be MDSampler, WeightOptimizer, or PositionOptimizer"
-                )
-                raise ValueError(
-                    f"Invalid step type: {type(step)}, must be MDSampler, WeightOptimizer, or PositionOptimizer"
-                )
-        logging.info(f"Loaded workflow with steps: {self.workflow_types}")
-        logging.info("Checking if workflow is valid")
-        self.workflow_is_valid()
-        logging.info("Workflow check complete.")
-
-        return
-
-    def workflow_is_valid(self):
-        if all(x in ["MDCGSampler", "MDSampler"] for x in self.workflow_types):
-            logging.error("Workflow cannot contain MDCGSampler and MDSampler")
-            raise ValueError("Workflow cannot contain MDCGSampler and MDSampler")
-
-        if not any(x in ["MDCGSampler", "MDSampler"] for x in self.workflow_types):
-            logging.error(
-                "Workflow must contain at least one of MDCGSampler or MDSampler"
-            )
-            raise ValueError(
-                "Workflow must contain at least one of MDCGSampler or MDSampler"
-            )
-
-        if "WeightOptimizer" not in self.workflow_types:
-            logging.error("Workflow must contain at least one WeightOptimizer")
-            raise NotImplementedError(
-                "Workflow must contain at least one WeightOptimizer"
-            )
-
-        if "PositionOptimizer" not in self.workflow_types:
-            logging.error("Workflow must contain at least one PositionOptimizer")
-            raise NotImplementedError(
-                "Workflow must contain at least one PositionOptimizer"
-            )
-
-        for i in range(len(self.workflow_types)):
-            logging.info(f"Checking step {i} with type: {self.workflow_types[i]}")
-            if i == 0 and self.workflow_types[i] != "WeightOptimizer":
-                logging.error("First step must be WeightOptimizer")
-                raise NotImplementedError("First step must be WeightOptimizer")
-
-            if i == 1 and self.workflow_types[i] != "PositionOptimizer":
-                logging.error("Second step must be PositionOptimizer")
-                raise NotImplementedError("Second step must be PositionOptimizer")
-
-            if i > 1 and self.workflow_types[i] not in ["MDSampler", "MDCGSampler"]:
-                logging.error(f"Step {i} is {self.workflow_types[i]}")
-                logging.error("All steps after second must be MDSampler or MDCGSampler")
-                raise NotImplementedError(
-                    "All steps after second must be MDSampler or MDCGSampler"
-                )
 
         return
 
     def prepare_for_run_(
         self,
-        config,
-        init_universes,
-        struct_info,
-        ref_universe,
+        n_steps,
+        output_path,
         init_weights=None,
     ):
-        if "MDSampler" in self.workflow_types:
-            if config["mode"] not in ["all-atom", "resid"]:
-                logging.error(
-                    "Invalid mode, must be 'all-atom' or 'resid' when using MDSampler"
-                )
-                raise ValueError(
-                    "Invalid mode, must be 'all-atom' or 'resid' when using MDSampler"
-                )
-
-            self.filetype = "pdb"
-
-        if "MDCGSampler" in self.workflow_types:
-            if config["mode"] in ["all-atom", "resid"]:
-                logging.error("Cannot run all-atom optimization with CG MD")
-                raise ValueError("Cannot run all-atom optimization with CG MD")
-
-            self.filetype = "gro"
-
-        self.atom_list_filter = config["atom_list_filter"]
-        self.univ_md = []
-        self.univ_pull = []
-        self.ref_universe = ref_universe
-        self.n_models = len(init_universes)
-        self.struct_info = struct_info
-
-        for i in range(len(init_universes)):
-            self.univ_md.append(init_universes[i].copy())
-            self.univ_pull.append(init_universes[i].copy())
-
-            self.univ_md[i].atoms.write(f"INITIAL_MODEL_{i}.pdb")
-
-        self.n_steps = config["n_steps"]
-
         models_shape = (
-            len(init_universes),
-            *init_universes[0].select_atoms("protein").atoms.positions.shape,
+            len(self.univ_md),
+            *self.univ_md[0].select_atoms("protein").atoms.positions.shape,
         )
 
-        output_fname = os.path.join(
-            config["output_path"], config["experiment_name"] + ".h5"
-        )
-        self.output_manager = OutputManager(
-            output_fname, self.n_steps + 1, models_shape
-        )
+        output_fname = os.path.join(output_path, self.experiment_name + ".h5")
+        output_manager = OutputManager(output_fname, n_steps + 1, models_shape)
 
-        if init_weights is None:
-            self.weights = jnp.ones(self.n_models) / self.n_models
-
-        else:
-            self.weights = init_weights.copy()
-
-        self.opt_atom_list = (
-            self.univ_md[0].select_atoms(self.atom_list_filter).atoms.indices
-        )
-        self.unit_cell = self.univ_md[0].atoms.dimensions
-
-        self.output_manager.write(
+        output_manager.write(
             np.array(
                 [univ.select_atoms("protein").atoms.positions for univ in self.univ_md]
             ),
-            self.weights,
+            self.ensemble_optimizer.weights,
             0.0,
             0,
         )
 
-        return
+        return output_manager
 
-    def run_md_(self, step):
-        for i in range(self.n_models):
-            self.univ_md[i].atoms.write(f"positions.{self.filetype}")
-            self.univ_pull[i].atoms.write(f"ref_positions.{self.filetype}")
+    def run_md(self):
+        for i in range(len(self.univ_md)):
+            self.univ_md[i].atoms.write("tmp/positions.pdb")
+            self.univ_pull[i].atoms.write("tmp/ref_positions.pdb")
 
             # self.univ_md[i].atoms.write(f"md_init_model_{i}.pdb")
             # self.univ_pull[i].atoms.write(f"md_pull_model_{i}.pdb")
-            positions = step.run(
-                i, f"ref_positions.{self.filetype}", self.opt_atom_list
+            positions = self.md_sampler.run(
+                i, "tmp/ref_positions.pdb", self.opt_atom_list
             )
             self.univ_md[i].atoms.positions = positions.copy()
             self.univ_md[i].select_atoms(self.atom_list_filter).atoms.write(
-                f"positions_after_md_{i}.{self.filetype}"
+                f"tmp/positions_after_md_{i}.pdb"
             )
 
         return
 
-    def run_wts_opt_(self, step):
+    def run_ensemble_optimizer(self):
         positions = np.zeros(
             (
-                self.n_models,
+                len(self.univ_md),
                 *self.ref_universe.select_atoms(
                     self.atom_list_filter
                 ).atoms.positions.shape,
             )
         )
 
-        for i in range(self.n_models):
-            dummy_univ = self.univ_md[i].copy()
-            align.alignto(
-                dummy_univ,
-                self.ref_universe,
-                select=self.atom_list_filter,
-                match_atoms=True,
-            )
-            positions[i] = dummy_univ.select_atoms(
-                self.atom_list_filter
-            ).atoms.positions
-
-        positions = jnp.array(positions)
-        self.weights = step.run(
-            positions, self.weights, self.struct_info, self.config["noise_variance"]
-        )
-
-        return
-
-    def run_pos_opt_(self, step):
-        positions = np.zeros(
-            (
-                self.n_models,
-                *self.ref_universe.select_atoms(
-                    self.atom_list_filter
-                ).atoms.positions.shape,
-            )
-        )
-
-        for i in range(self.n_models):
+        for i in range(len(self.univ_md)):
             dummy_univ = self.univ_md[i].copy()
 
             # dummy_univ.atoms.write(f"model_before_opt_{i}.pdb")
@@ -338,13 +197,11 @@ class Pipeline:
         logging.debug(f"Optimized_positions: {positions}")
 
         positions = jnp.array(positions)
-        positions, loss = step.run(
-            positions, self.weights, self.struct_info, self.config["noise_variance"]
-        )
+        positions, weights, loss = self.ensemble_optimizer.run(positions)
 
         logging.debug(f"Optimized_positions: {positions}")
 
-        for i in range(self.n_models):
+        for i in range(len(self.univ_md)):
             dummy_univ = self.univ_md[i].copy()
             align.alignto(
                 dummy_univ,
@@ -364,61 +221,65 @@ class Pipeline:
             )
             self.univ_pull[i].atoms.positions = dummy_univ.atoms.positions.copy()
             self.univ_pull[i].select_atoms(self.atom_list_filter).atoms.write(
-                f"model_after_opt_{i}.pdb"
+                f"tmp/model_after_opt_{i}.pdb"
             )
 
-        return loss
+        return loss, weights
 
-    def run(self):
-        logging.info(f"Running pipeline for {self.n_steps} steps...")
+    def run(self, n_steps, output_path):
+        output_manager = self.prepare_for_run_(n_steps, output_path)
+
+        logging.info(f"Running pipeline for {n_steps} steps...")
 
         loss = None
-        with tqdm(range(self.n_steps), unit="step") as pbar:
+        with tqdm(range(n_steps), unit="step") as pbar:
             for counter in pbar:
-                for step in self.workflow:
-                    if isinstance(
-                        step, MDSimulatorRMSDConstraint
-                    ):  # or isinstance(step, MDCGSampler):
-                        self.run_md_(step)
+                # run optimization
+                loss, weights = self.run_ensemble_optimizer()
 
-                    elif isinstance(step, WeightOptimizer):
-                        self.run_wts_opt_(step)
-
-                    elif isinstance(step, PositionOptimizer):
-                        loss = self.run_pos_opt_(step)
-
-                    else:
-                        continue
+                # run MD
+                self.run_md()
 
                 pbar.set_postfix(loss=loss)
-                self.output_manager.write(
+                output_manager.write(
                     np.array(
                         [
                             univ.select_atoms("protein").atoms.positions
                             for univ in self.univ_md
                         ]
                     ),
-                    self.weights,
+                    weights,
                     loss,
                     counter + 1,
                 )
 
         logging.info("Pipeline finished.")
-        logging.info("Saving last checkpoints to output path...")
-        for i in range(self.n_models):
+        logging.info("Saving last checkpoints and atomic structures to output path...")
+        for i in range(len(self.univ_md)):
             os.system(
-                f"cp checkpoint_model_{i}_tmp.chk {self.config['output_path']}/checkpoint_model_{i}.chk"
+                f"cp checkpoint_model_{i}_tmp.chk {output_path}/checkpoint_model_{i}.chk"
             )
 
+            self.univ_md[i].atoms.write(f"{output_path}/model_{i}.pdb")
+
             os.system(f"rm checkpoint_model_{i}_tmp.chk")
-        logging.info(f"Output saved to {self.output_manager.file_name}.")
-        self.output_manager.close()
+        logging.info(f"Output saved to {output_manager.file_name}.")
+        output_manager.close()
 
         generate_outputs(
             self.univ_md[0],
             self.ref_universe,
-            self.output_manager.file_name,
+            output_manager.file_name,
             self.atom_list_filter,
         )
 
         return
+
+
+def _load_universes(init_models_path, ref_model_path):
+    init_universes = []
+    for i in range(len(init_models_path)):
+        init_universes.append(mda.Universe(init_models_path[i]))
+
+    ref_universe = mda.Universe(ref_model_path)
+    return init_universes, ref_universe
