@@ -5,18 +5,13 @@ import jax.numpy as jnp
 import equinox as eqx
 import jax_dataloader as jdl
 
-from jaxopt import ProjectedGradient
-from jaxopt.projection import projection_simplex
 
 from cryojax import get_filter_spec
 from cryojax.image.operators import FourierGaussian
 from cryojax.data import RelionDataset, RelionParticleStack
 
 
-from .loss_and_gradients import (
-    compute_loss_and_grads_positions,
-    compute_lklhood_matrix,
-)
+from .loss_and_gradients import compute_loss_weights_and_grads
 
 
 @eqx.filter_jit
@@ -38,66 +33,17 @@ class CustomJaxDataset(jdl.Dataset):
         return len(self.cryojax_dataset)
 
 
-class WeightOptimizer:
-    def __init__(self, rng_key, n_steps, step_size, batch_size, dataset):
-        assert n_steps >= 0, "Number of steps must be greater than 0"
-        assert step_size > 0, "Step size must be greater than 0"
-
-        self.n_steps = n_steps
-        self.step_size = step_size
-        self.filter_spec_for_vmap = _get_particle_stack_filter_spec(dataset[0:2])
-        self.batch_size = batch_size
-        self.dataset_size = len(dataset)
-
-        self.dataloader = jdl.DataLoader(
-            CustomJaxDataset(
-                dataset
-            ),  # Can be a jdl.Dataset or pytorch or huggingface or tensorflow dataset
-            backend="jax",  # Use 'jax' backend for loading data
-            batch_size=self.batch_size,  # Batch size
-            shuffle=True,  # Shuffle the dataloader every iteration or not
-            drop_last=False,  # Drop the last batch or not
-        )
-
-        self.key = rng_key
-        return
-
-    def run(self, atom_positions, weights, structural_info, noise_variance):
-        logging.info(f"Running weight optimization for {self.n_steps} steps...")
-
-        if self.n_steps == 0:
-            logging.info("No optimization steps requested. Returning initial weights.")
-
-        else:
-            for batch in self.dataloader:
-                relion_stack_vmap, relion_stack_novmap = eqx.partition(
-                    batch, self.filter_spec_for_vmap
-                )
-                lklhood_matrix = compute_lklhood_matrix(
-                    atom_positions,
-                    relion_stack_vmap,
-                    (
-                        structural_info["atom_identities"],
-                        structural_info["b_factors"],
-                        noise_variance,
-                        relion_stack_novmap,
-                    ),
-                )
-                break
-
-            pg = ProjectedGradient(fun=compute_loss, projection=projection_simplex)
-            weights = pg.run(weights, lklhood_matrix=lklhood_matrix).params
-            loss = compute_loss(weights, lklhood_matrix)
-
-            logging.info(
-                f"Optimization done. Final loss: {loss}. Final weights: {weights}."
-            )
-
-        return weights
-
-
-class PositionOptimizer:
-    def __init__(self, rng_key, step_size, batch_size, dataset, n_steps=1):
+class EnsembleOptimizer:
+    def __init__(
+        self,
+        step_size,
+        batch_size,
+        dataset,
+        init_weights,
+        structural_info,
+        noise_variance,
+        n_steps=1,
+    ):
         assert step_size > 0, "Step size must be greater than 0"
         assert n_steps > 0, "Number of steps must be greater than 0"
 
@@ -117,52 +63,48 @@ class PositionOptimizer:
             drop_last=False,  # Drop the last batch or not
         )
 
-        self.key = rng_key
+        self.weights = init_weights
+        self.loss = None
+        self.structural_info = structural_info
+        self.noise_variance = noise_variance
 
         return
 
-    def run(self, positions, weights, structural_info, noise_variance):
+    def run(self, positions):
         # traj = np.zeros((self.n_steps, *positions.shape))
         # get batch_size n random indices from self.dataset_size
         logging.info("Running position optimization...")
-        loss = None
+
         for i in range(self.n_steps):
             batch = next(iter(self.dataloader))
             relion_stack_vmap, relion_stack_novmap = eqx.partition(
                 batch, self.filter_spec_for_vmap
             )
 
-            loss, grads = compute_loss_and_grads_positions(
+            outputs, grads = compute_loss_weights_and_grads(
                 atom_positions=positions,
-                model_weights=weights,
+                weights=self.weights,
                 relion_stack_vmap=relion_stack_vmap,
                 args=(
-                    structural_info["atom_identities"],
-                    structural_info["b_factors"],
-                    noise_variance,
+                    self.structural_info["atom_identities"],
+                    self.structural_info["b_factors"],
+                    self.noise_variance,
                     relion_stack_novmap,
                 ),
             )
 
-            # logging.info(grads.shape)
-            # logging.info(jnp.linalg.norm(positions, axis=(1, 2)))
-            # logging.info(jnp.linalg.norm(grads, axis=(1, 2)))
+            self.loss, self.weights = outputs
 
-            norms = jnp.max(jnp.abs(grads), axis=(2), keepdims=True)
-            grads /= norms  # jnp.maximum(norms, jnp.ones_like(norms))
-            # grads /= jnp.linalg.norm(grads, axis=(1, 2), keepdims=True)
-
-            # logging.info(jnp.linalg.norm(grads, axis=(1, 2)))
+            norms = jnp.linalg.norm(grads, axis=(2), keepdims=True)
+            grads /= norms
 
             positions = positions - self.step_size * grads
-            # traj[i] = positions
 
-            logging.info(f"i={i}, loss={loss}")
-            # print(f"i={i}, loss={loss}")
+            logging.info(f"i={i}, loss={self.loss}, weights={self.weights}")
 
-        logging.info(f"Optimization done. Final loss: {loss}.")
+        logging.info(f"Optimization done. Final loss: {self.loss}.")
 
-        return positions, loss  # , traj
+        return positions, self.weights, self.loss
 
 
 def _get_particle_stack_filter_spec(particle_stack):

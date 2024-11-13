@@ -76,7 +76,7 @@ class GeneratorConfig(BaseModel, extra="forbid"):
     path_to_models: str = Field(
         description="Path to the directory containing the atomic models for image generation."
     )
-    models_fname: Union[str, List[str]] = Field(
+    models_fnames: Union[str, List[str]] = Field(
         description="Filename of the atomic model(s) to use for image generation. If a pattern is provided, all files matching the pattern will be used. The atomic models should be in path_to_models."
     )
     path_to_relion_project: str = Field(
@@ -140,27 +140,27 @@ class GeneratorConfig(BaseModel, extra="forbid"):
                 f"Working directory {self.path_to_models} does not exist."
             )
 
-        if isinstance(self.models_fname, str):
-            if "*" in self.models_fname:
-                models_fname = os.path.join(self.path_to_models, self.models_fname)
-                models_fname = natsorted(glob.glob(models_fname))
-                if len(models_fname) == 0:
+        if isinstance(self.models_fnames, str):
+            if "*" in self.models_fnames:
+                models_fnames = os.path.join(self.path_to_models, self.models_fnames)
+                models_fnames = natsorted(glob.glob(models_fnames))
+                if len(models_fnames) == 0:
                     raise FileNotFoundError(
-                        f"No files found with pattern {self.models_fname}"
+                        f"No files found with pattern {self.models_fnames}"
                     )
             else:
-                models_fname = [self.models_fname]
+                models_fnames = [self.models_fnames]
 
-        elif isinstance(self.models_fname, list):
-            models_fname = self.models_fname
+        elif isinstance(self.models_fnames, list):
+            models_fnames = self.models_fnames
 
         else:
-            raise ValueError("models_fname must be a string or a list of strings.")
+            raise ValueError("models_fnames must be a string or a list of strings.")
 
-        for i in range(len(models_fname)):
-            models_fname[i] = os.path.join(self.path_to_models, models_fname[i])
-            if not os.path.exists(models_fname[i]):
-                raise FileNotFoundError(f"Model {models_fname[i]} does not exist.")
+        for i in range(len(models_fnames)):
+            models_fnames[i] = os.path.join(self.path_to_models, models_fnames[i])
+            if not os.path.exists(models_fnames[i]):
+                raise FileNotFoundError(f"Model {models_fnames[i]} does not exist.")
 
         return self
 
@@ -171,7 +171,7 @@ class GeneratorConfig(BaseModel, extra="forbid"):
         v = jnp.array(v)
         return v / jnp.sum(v)
 
-    @field_serializer("models_fname")
+    @field_serializer("models_fnames")
     def serialize_models_fname(self, v):
         if isinstance(v, str):
             if "*" in v:

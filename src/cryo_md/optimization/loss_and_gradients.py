@@ -5,6 +5,9 @@ import jax.numpy as jnp
 import equinox as eqx
 import equinox.internal as eqxi
 
+from jaxopt import ProjectedGradient
+from jaxopt.projection import projection_simplex
+
 
 import cryojax.simulator as cxs
 
@@ -61,18 +64,21 @@ def compute_lklhood_matrix(atom_positions, relion_stack_vmap, args):
 #     return distribution.log_likelihood(relion_stack.image_stack)
 
 
-def compute_loss(atom_positions, model_weights, relion_stack_vmap, args):
-    lklhood_matrix = compute_lklhood_matrix(atom_positions, relion_stack_vmap, args)
+@eqx.filter_jit
+def compute_loss(weights, lklhood_matrix):
     log_lklhood = jax.scipy.special.logsumexp(
-        a=lklhood_matrix, b=model_weights[None, :], axis=1
+        a=lklhood_matrix, b=weights[None, :], axis=1
     )
-
     return -jnp.mean(log_lklhood)
 
 
-compute_loss_and_grads_positions = eqx.filter_jit(
-    jax.value_and_grad(compute_loss, argnums=0)
-)
-compute_loss_and_grads_weights = eqx.filter_jit(
-    jax.value_and_grad(compute_loss, argnums=1)
-)
+@eqx.filter_jit
+@partial(jax.value_and_grad, argnums=0, has_aux=True)
+def compute_loss_weights_and_grads(atom_positions, weights, relion_stack_vmap, args):
+    lklhood_matrix = compute_lklhood_matrix(atom_positions, relion_stack_vmap, args)
+
+    pg = ProjectedGradient(fun=compute_loss, projection=projection_simplex)
+    weights = pg.run(weights, lklhood_matrix=lklhood_matrix).params
+    weights = jax.nn.softmax(weights)
+
+    return compute_loss(weights, lklhood_matrix), weights
