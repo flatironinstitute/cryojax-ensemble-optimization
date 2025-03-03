@@ -131,7 +131,7 @@ def main(args):
         path_to_starfile=config["path_to_starfile"],
         path_to_relion_project=config["path_to_relion_project"],
         get_image_stack=True,
-        get_envelope_function=True,
+        get_envelope_function=False,
     )
 
     pipeline = generate_pipeline(config, dataset)
