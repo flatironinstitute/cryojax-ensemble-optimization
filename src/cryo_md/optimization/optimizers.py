@@ -6,10 +6,10 @@ import equinox as eqx
 import jax_dataloader as jdl
 
 
-from cryojax import get_filter_spec
+from cryojax.utils import get_filter_spec
 from cryojax.image.operators import FourierGaussian
-from cryojax.data import RelionDataset, RelionParticleStack
-
+from cryojax.data import RelionParticleDataset, RelionParticleStack
+from cryojax.constants import get_tabulated_scattering_factor_parameters
 
 from .loss_and_gradients import compute_loss_weights_and_grads
 
@@ -23,7 +23,7 @@ def compute_loss(weights, lklhood_matrix):
 
 
 class CustomJaxDataset(jdl.Dataset):
-    def __init__(self, cryojax_dataset: RelionDataset):
+    def __init__(self, cryojax_dataset: RelionParticleDataset):
         self.cryojax_dataset = cryojax_dataset
 
     def __getitem__(self, index) -> RelionParticleStack:
@@ -66,6 +66,9 @@ class EnsembleOptimizer:
         self.weights = init_weights
         self.loss = None
         self.structural_info = structural_info
+        self.parameter_table = get_tabulated_scattering_factor_parameters(
+            structural_info["atom_identities"]
+        )
         self.noise_variance = noise_variance
 
         return
@@ -88,6 +91,7 @@ class EnsembleOptimizer:
                 args=(
                     self.structural_info["atom_identities"],
                     self.structural_info["b_factors"],
+                    self.parameter_table,
                     self.noise_variance,
                     relion_stack_novmap,
                 ),
@@ -112,32 +116,32 @@ def _get_particle_stack_filter_spec(particle_stack):
 
 
 def _pointer_to_vmapped_parameters(particle_stack):
-    if isinstance(particle_stack.transfer_theory.envelope, FourierGaussian):
+    if isinstance(particle_stack.parameters.transfer_theory.envelope, FourierGaussian):
         output = (
-            particle_stack.transfer_theory.ctf.defocus_in_angstroms,
-            particle_stack.transfer_theory.ctf.astigmatism_in_angstroms,
-            particle_stack.transfer_theory.ctf.astigmatism_angle,
-            particle_stack.transfer_theory.ctf.phase_shift,
-            particle_stack.transfer_theory.envelope.b_factor,
-            particle_stack.transfer_theory.envelope.amplitude,
-            particle_stack.pose.offset_x_in_angstroms,
-            particle_stack.pose.offset_y_in_angstroms,
-            particle_stack.pose.view_phi,
-            particle_stack.pose.view_theta,
-            particle_stack.pose.view_psi,
+            particle_stack.parameters.transfer_theory.ctf.defocus_in_angstroms,
+            particle_stack.parameters.transfer_theory.ctf.astigmatism_in_angstroms,
+            particle_stack.parameters.transfer_theory.ctf.astigmatism_angle,
+            particle_stack.parameters.transfer_theory.ctf.phase_shift,
+            particle_stack.parameters.transfer_theory.envelope.b_factor,
+            particle_stack.parameters.transfer_theory.envelope.amplitude,
+            particle_stack.parameters.pose.offset_x_in_angstroms,
+            particle_stack.parameters.pose.offset_y_in_angstroms,
+            particle_stack.parameters.pose.view_phi,
+            particle_stack.parameters.pose.view_theta,
+            particle_stack.parameters.pose.view_psi,
             particle_stack.image_stack,
         )
     else:
         output = (
-            particle_stack.transfer_theory.ctf.defocus_in_angstroms,
-            particle_stack.transfer_theory.ctf.astigmatism_in_angstroms,
-            particle_stack.transfer_theory.ctf.astigmatism_angle,
-            particle_stack.transfer_theory.ctf.phase_shift,
-            particle_stack.pose.offset_x_in_angstroms,
-            particle_stack.pose.offset_y_in_angstroms,
-            particle_stack.pose.view_phi,
-            particle_stack.pose.view_theta,
-            particle_stack.pose.view_psi,
+            particle_stack.parameters.transfer_theory.ctf.defocus_in_angstroms,
+            particle_stack.parameters.transfer_theory.ctf.astigmatism_in_angstroms,
+            particle_stack.parameters.transfer_theory.ctf.astigmatism_angle,
+            particle_stack.parameters.transfer_theory.ctf.phase_shift,
+            particle_stack.parameters.pose.offset_x_in_angstroms,
+            particle_stack.parameters.pose.offset_y_in_angstroms,
+            particle_stack.parameters.pose.view_phi,
+            particle_stack.parameters.pose.view_theta,
+            particle_stack.parameters.pose.view_psi,
             particle_stack.image_stack,
         )
     return output

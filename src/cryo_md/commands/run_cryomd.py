@@ -5,7 +5,7 @@ import argparse
 import json
 import yaml
 
-from cryojax.data import RelionDataset
+from cryojax.data import RelionParticleDataset, RelionParticleMetadata
 
 from ..data._atomic_model_loaders import _load_models_for_optimizer
 from ..data._config_readers.optimizer_config_reader import OptimizationConfig
@@ -127,12 +127,12 @@ def main(args):
         )
     )
 
-    dataset = RelionDataset(
+    metadata = RelionParticleMetadata(
         path_to_starfile=config["path_to_starfile"],
         path_to_relion_project=config["path_to_relion_project"],
-        get_image_stack=True,
-        get_envelope_function=False,
+        get_envelope_function=True,
     )
+    dataset = RelionParticleDataset(metadata)
 
     pipeline = generate_pipeline(config, dataset)
     pipeline.run(n_steps=config["n_steps"], output_path=config["output_path"])

@@ -1,7 +1,6 @@
 from functools import partial
 
 import equinox as eqx
-import equinox.internal as eqxi
 import jax
 import jax.numpy as jnp
 
@@ -9,7 +8,7 @@ import cryojax.simulator as cxs
 
 
 @eqx.filter_jit
-@partial(eqx.filter_vmap, in_axes=(0, 0, None), out_axes=eqxi.if_mapped(axis=0))
+@partial(eqx.filter_vmap, in_axes=(0, 0, None), out_axes=0)
 def _compute_noise_variance(key, relion_particle_stack_vmap, args):
     relion_particle_stack_novmap, potentials, potential_integrator, mask, config = args
     relion_particle_stack = eqx.combine(
