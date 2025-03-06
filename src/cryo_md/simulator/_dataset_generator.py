@@ -6,16 +6,15 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float, PRNGKeyArray
 import equinox as eqx
-import equinox.internal as eqxi
 
 from cryojax.data import (
-    RelionParticleStack,
-    RelionDataset,
+    RelionParticleParameters,
+    RelionParticleMetadata,
     write_simulated_image_stack_from_starfile,
     write_starfile_with_particle_parameters,
 )
 import cryojax.simulator as cxs
-from cryojax import get_filter_spec
+from cryojax.utils import get_filter_spec
 from cryojax.image.operators import FourierGaussian, CircularCosineMask
 from cryojax.rotations import SO3
 
@@ -30,9 +29,14 @@ def simulate_relion_dataset(config: dict):
     logging.info("Generating Starfile...")
     key = jax.random.PRNGKey(config["rng_seed"])
     key, *subkeys = jax.random.split(key, config["number_of_images"] + 1)
-    particle_stack = _make_particle_stack(jnp.array(subkeys), config)
+    particle_parameters_vmap, particle_parameters_novmap = _make_particle_parameters(
+        jnp.array(subkeys), config
+    )
+    particle_parameters = eqx.combine(
+        particle_parameters_vmap, particle_parameters_novmap
+    )
     write_starfile_with_particle_parameters(
-        particle_stack,
+        particle_parameters,
         config["path_to_starfile"],
         mrc_batch_size=config["batch_size"],
         overwrite=config["overwrite"],
@@ -42,10 +46,9 @@ def simulate_relion_dataset(config: dict):
     # load starfile
 
     logging.info("Loading generated starfile...")
-    dataset = RelionDataset(
+    metadata = RelionParticleMetadata(
         path_to_starfile=config["path_to_starfile"],
         path_to_relion_project=config["path_to_relion_project"],
-        get_image_stack=False,  # not loading particles as they don't exist yet
         get_envelope_function=True,
     )
     logging.info("Starfile loaded.")
@@ -74,7 +77,7 @@ def simulate_relion_dataset(config: dict):
     # estimate noise variance
     logging.info("Estimating noise variance...")
     noise_variance, key = _estimate_noise_variance(
-        key, dataset, (potentials, potential_integrator, config)
+        key, metadata, (potentials, potential_integrator, config)
     )
     logging.info(f"Noise variance estimated. Value: {noise_variance}")
 
@@ -82,7 +85,7 @@ def simulate_relion_dataset(config: dict):
     new_seed = int(jax.random.randint(key, minval=0, maxval=1000000, shape=()))
     logging.info("Generating images with random seed {}".format(new_seed))
     write_simulated_image_stack_from_starfile(
-        dataset,
+        metadata,
         _compute_noisy_image,
         args,
         seed=new_seed,
@@ -96,7 +99,7 @@ def simulate_relion_dataset(config: dict):
 
 
 def _estimate_noise_variance(
-    key: PRNGKeyArray, dataset: RelionDataset, args: Any
+    key: PRNGKeyArray, dataset: RelionParticleMetadata, args: Any
 ) -> Tuple[Float, PRNGKeyArray]:
     potentials, potential_integrator, config = args
 
@@ -125,8 +128,10 @@ def _estimate_noise_variance(
     return noise_var, key
 
 
-@partial(eqx.filter_vmap, in_axes=(0, None), out_axes=eqxi.if_mapped(axis=0))
-def _make_particle_stack(key: PRNGKeyArray, config: dict) -> RelionParticleStack:
+@partial(eqx.filter_vmap, in_axes=(0, None), out_axes=(eqx.if_array(0), None))
+def _make_particle_parameters(
+    key: PRNGKeyArray, config: dict
+) -> RelionParticleParameters:
     instrument_config = cxs.InstrumentConfig(
         shape=(config["box_size"], config["box_size"]),
         pixel_size=config["pixel_size"],
@@ -224,7 +229,6 @@ def _make_particle_stack(key: PRNGKeyArray, config: dict) -> RelionParticleStack
             defocus_in_angstroms=defocus_in_angstroms,
             astigmatism_in_angstroms=astigmatism_in_angstroms,
             astigmatism_angle=astigmatism_angle,
-            voltage_in_kilovolts=instrument_config.voltage_in_kilovolts,
             spherical_aberration_in_mm=spherical_aberration_in_mm,
             amplitude_contrast_ratio=amplitude_contrast_ratio,
             phase_shift=phase_shift,
@@ -232,17 +236,28 @@ def _make_particle_stack(key: PRNGKeyArray, config: dict) -> RelionParticleStack
         envelope=FourierGaussian(b_factor=b_factor, amplitude=ctf_scale_factor),
     )
 
-    relion_particle_stack = RelionParticleStack(
+    relion_particle_parameters = RelionParticleParameters(
         instrument_config=instrument_config,
         pose=pose,
         transfer_theory=transfer_theory,
     )
-    return relion_particle_stack
+
+    filter_spec = get_filter_spec(
+        relion_particle_parameters,
+        lambda x: (
+            x.instrument_config.voltage_in_kilovolts,
+            x.instrument_config.pixel_size,
+            x.transfer_theory.ctf.amplitude_contrast_ratio,
+            x.transfer_theory.ctf.spherical_aberration_in_mm,
+        ),
+        inverse=True,
+    )
+    return eqx.partition(relion_particle_parameters, filter_spec)
 
 
 def _compute_noisy_image(
     key: PRNGKeyArray,
-    relion_particle_stack: RelionParticleStack,
+    relion_particle_stack: RelionParticleParameters,
     args: Any,
 ) -> Float[
     Array,

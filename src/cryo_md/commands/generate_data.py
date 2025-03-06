@@ -63,7 +63,7 @@ def main(args):
 
     config_fname = os.path.basename(args.config)
     with open(os.path.join(project_path, config_fname), "w") as f:
-        json.dump(config_json, f, indent=4, sort_keys=True)
+        json.dump(config_json, f, indent=4, sort_keys=False)
 
     logging.info(
         "A copy of the used config file has been written to {}".format(
