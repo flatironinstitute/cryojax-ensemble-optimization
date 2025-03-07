@@ -1,10 +1,10 @@
-import numpy as np
-
+import MDAnalysis as mda
 import jax.numpy as jnp
+from jaxtyping import Array
 from cryojax.io import read_atoms_from_pdb_or_cif
 
 
-def pdb_parser_all_atom_(fname: str) -> dict[str, np.ndarray]:
+def pdb_parser_all_atom_(fname: str) -> dict[str, Array]:
     """
     Parses a pdb file and returns an atomic model of the protein. The atomic model is a 5xN array, where N is the number of atoms in the protein. The first three rows are the x, y, z coordinates of the atoms. The fourth row is the atomic number of the atoms. The fifth row is the variance of the atoms before the resolution is applied.
     Parameters
@@ -19,17 +19,18 @@ def pdb_parser_all_atom_(fname: str) -> dict[str, np.ndarray]:
 
     """
 
+    atom_indices = mda.Universe(fname).select_atoms("protein and not element H").indices
     _, atom_identities, b_factors = read_atoms_from_pdb_or_cif(
         fname,
         center=True,
         get_b_factors=True,
-        atom_filter="protein and not element H",
+        atom_filter="all",
         is_assembly=False,
     )
 
     struct_info = {
-        "atom_identities": jnp.array(atom_identities),
-        "b_factors": jnp.array(b_factors),
+        "atom_identities": jnp.array(atom_identities[atom_indices]),
+        "b_factors": jnp.array(b_factors[atom_indices]),
     }
 
     return struct_info
