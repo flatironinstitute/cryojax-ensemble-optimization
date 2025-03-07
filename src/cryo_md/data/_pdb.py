@@ -19,7 +19,7 @@ def pdb_parser_all_atom_(fname: str) -> dict[str, Array]:
 
     """
 
-    atom_indices = mda.Universe(fname).select_atoms("protein and not element H").indices
+    atom_indices = mda.Universe(fname).select_atoms("protein and not name H*").indices
     _, atom_identities, b_factors = read_atoms_from_pdb_or_cif(
         fname,
         center=True,
