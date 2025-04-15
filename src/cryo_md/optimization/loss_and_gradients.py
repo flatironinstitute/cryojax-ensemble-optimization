@@ -14,14 +14,12 @@ from ..simulator._distributions import VarianceMarginalizedWhiteGaussianNoise
 
 
 @eqx.filter_jit
-@partial(eqx.filter_vmap, in_axes=(None, 0, None), out_axes=0)
+@partial(eqx.filter_vmap, in_axes=(None, eqx.if_array(0), None), out_axes=0)
 @partial(eqx.filter_vmap, in_axes=(0, None, None), out_axes=0)
-def compute_lklhood_matrix(atom_positions, relion_stack_vmap, args):
-    atom_identities, b_factors, parameter_table, noise_variance, relion_stack_novmap = (
+def compute_lklhood_matrix(atom_positions, relion_stack, args):
+    atom_identities, b_factors, parameter_table, noise_variance = (
         args
     )
-
-    relion_stack = eqx.combine(relion_stack_vmap, relion_stack_novmap)
 
     potential = cxs.PengAtomicPotential(
         atom_positions,
@@ -39,7 +37,7 @@ def compute_lklhood_matrix(atom_positions, relion_stack_vmap, args):
         transfer_theory=relion_stack.parameters.transfer_theory,
     )
 
-    imaging_pipeline = cxs.ContrastImagingPipeline(
+    imaging_pipeline = cxs.ContrastImageModel(
         relion_stack.parameters.instrument_config, scattering_theory
     )
     distribution = VarianceMarginalizedWhiteGaussianNoise(imaging_pipeline)
@@ -64,7 +62,7 @@ def compute_lklhood_matrix(atom_positions, relion_stack_vmap, args):
 #         transfer_theory=relion_stack.transfer_theory,
 #     )
 
-#     imaging_pipeline = cxs.ContrastImagingPipeline(
+#     imaging_pipeline = cxs.ContrastImageModel(
 #         relion_stack.instrument_config, scattering_theory
 #     )
 #     distribution = WhiteGaussianNoise(imaging_pipeline, noise_variance)

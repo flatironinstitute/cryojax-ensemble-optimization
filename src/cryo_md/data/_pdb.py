@@ -1,7 +1,7 @@
 import MDAnalysis as mda
 import jax.numpy as jnp
 from jaxtyping import Array
-from cryojax.io import read_atoms_from_pdb_or_cif
+from cryojax.io import read_atoms_from_pdb
 
 
 def pdb_parser_all_atom_(fname: str) -> dict[str, Array]:
@@ -20,12 +20,11 @@ def pdb_parser_all_atom_(fname: str) -> dict[str, Array]:
     """
 
     atom_indices = mda.Universe(fname).select_atoms("protein and not name H*").indices
-    _, atom_identities, b_factors = read_atoms_from_pdb_or_cif(
+    _, atom_identities, b_factors = read_atoms_from_pdb(
         fname,
         center=True,
-        get_b_factors=True,
-        atom_filter="all",
-        is_assembly=False,
+        loads_b_factors=True,
+        select="all",
     )
 
     struct_info = {

@@ -5,10 +5,7 @@ import jax.numpy as jnp
 import equinox as eqx
 import jax_dataloader as jdl
 
-
-from cryojax.utils import get_filter_spec
-from cryojax.image.operators import FourierGaussian
-from cryojax.data import RelionParticleDataset, RelionParticleStack
+from cryojax.data import RelionParticleParameterDataset, RelionParticleStackDataset
 from cryojax.constants import get_tabulated_scattering_factor_parameters
 
 from .loss_and_gradients import compute_loss_weights_and_grads
@@ -23,10 +20,10 @@ def compute_loss(weights, lklhood_matrix):
 
 
 class CustomJaxDataset(jdl.Dataset):
-    def __init__(self, cryojax_dataset: RelionParticleDataset):
+    def __init__(self, cryojax_dataset: RelionParticleParameterDataset):
         self.cryojax_dataset = cryojax_dataset
 
-    def __getitem__(self, index) -> RelionParticleStack:
+    def __getitem__(self, index) -> RelionParticleStackDataset:
         return self.cryojax_dataset[index]
 
     def __len__(self) -> int:
@@ -49,7 +46,6 @@ class EnsembleOptimizer:
 
         self.n_steps = n_steps
         self.step_size = step_size
-        self.filter_spec_for_vmap = _get_particle_stack_filter_spec(dataset[0:2])
         self.batch_size = batch_size
 
         self.dataset_size = len(dataset)
@@ -80,20 +76,16 @@ class EnsembleOptimizer:
 
         for i in range(self.n_steps):
             batch = next(iter(self.dataloader))
-            relion_stack_vmap, relion_stack_novmap = eqx.partition(
-                batch, self.filter_spec_for_vmap
-            )
 
             outputs, grads = compute_loss_weights_and_grads(
                 atom_positions=positions,
                 weights=self.weights,
-                relion_stack_vmap=relion_stack_vmap,
+                relion_stack=batch,
                 args=(
                     self.structural_info["atom_identities"],
                     self.structural_info["b_factors"],
                     self.parameter_table,
                     self.noise_variance,
-                    relion_stack_novmap,
                 ),
             )
 
@@ -111,37 +103,3 @@ class EnsembleOptimizer:
         return positions, self.weights, self.loss
 
 
-def _get_particle_stack_filter_spec(particle_stack):
-    return get_filter_spec(particle_stack, _pointer_to_vmapped_parameters)
-
-
-def _pointer_to_vmapped_parameters(particle_stack):
-    if isinstance(particle_stack.parameters.transfer_theory.envelope, FourierGaussian):
-        output = (
-            particle_stack.parameters.transfer_theory.ctf.defocus_in_angstroms,
-            particle_stack.parameters.transfer_theory.ctf.astigmatism_in_angstroms,
-            particle_stack.parameters.transfer_theory.ctf.astigmatism_angle,
-            particle_stack.parameters.transfer_theory.ctf.phase_shift,
-            particle_stack.parameters.transfer_theory.envelope.b_factor,
-            particle_stack.parameters.transfer_theory.envelope.amplitude,
-            particle_stack.parameters.pose.offset_x_in_angstroms,
-            particle_stack.parameters.pose.offset_y_in_angstroms,
-            particle_stack.parameters.pose.view_phi,
-            particle_stack.parameters.pose.view_theta,
-            particle_stack.parameters.pose.view_psi,
-            particle_stack.image_stack,
-        )
-    else:
-        output = (
-            particle_stack.parameters.transfer_theory.ctf.defocus_in_angstroms,
-            particle_stack.parameters.transfer_theory.ctf.astigmatism_in_angstroms,
-            particle_stack.parameters.transfer_theory.ctf.astigmatism_angle,
-            particle_stack.parameters.transfer_theory.ctf.phase_shift,
-            particle_stack.parameters.pose.offset_x_in_angstroms,
-            particle_stack.parameters.pose.offset_y_in_angstroms,
-            particle_stack.parameters.pose.view_phi,
-            particle_stack.parameters.pose.view_theta,
-            particle_stack.parameters.pose.view_psi,
-            particle_stack.image_stack,
-        )
-    return output

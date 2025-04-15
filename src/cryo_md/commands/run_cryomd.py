@@ -5,7 +5,7 @@ import argparse
 import json
 import yaml
 
-from cryojax.data import RelionParticleDataset, RelionParticleMetadata
+from cryojax.data import RelionParticleParameterDataset, RelionParticleStackDataset
 
 from ..data._atomic_model_loaders import _load_models_for_optimizer
 from ..data._config_readers.optimizer_config_reader import OptimizationConfig
@@ -47,7 +47,7 @@ def warnexists(out):
         Warning("Warning: {} already exists. Overwriting.".format(out))
 
 
-def generate_pipeline(config, dataset):
+def generate_pipeline(config, particle_stack):
     """
     Generate the pipeline from the pipeline config
     """
@@ -67,7 +67,7 @@ def generate_pipeline(config, dataset):
     ensemble_optimizer = EnsembleOptimizer(
         step_size=config["ensemble_optimizer_config"]["step_size"],
         batch_size=config["ensemble_optimizer_config"]["batch_size"],
-        dataset=dataset,
+        particle_stack=particle_stack,
         init_weights=config["ensemble_optimizer_config"]["init_weights"],
         structural_info=structural_info,
         noise_variance=config["ensemble_optimizer_config"]["noise_variance"],
@@ -127,14 +127,14 @@ def main(args):
         )
     )
 
-    metadata = RelionParticleMetadata(
+    parameter_dataset = RelionParticleParameterDataset(
         path_to_starfile=config["path_to_starfile"],
         path_to_relion_project=config["path_to_relion_project"],
-        get_envelope_function=True,
+        loads_envelope=True,
     )
-    dataset = RelionParticleDataset(metadata)
+    particle_stack = RelionParticleStackDataset(parameter_dataset)
 
-    pipeline = generate_pipeline(config, dataset)
+    pipeline = generate_pipeline(config, particle_stack)
     pipeline.run(n_steps=config["n_steps"], output_path=config["output_path"])
 
     return

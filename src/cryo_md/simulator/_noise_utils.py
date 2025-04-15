@@ -8,12 +8,9 @@ import cryojax.simulator as cxs
 
 
 @eqx.filter_jit
-@partial(eqx.filter_vmap, in_axes=(0, 0, None), out_axes=0)
-def _compute_noise_variance(key, relion_particle_stack_vmap, args):
-    relion_particle_stack_novmap, potentials, potential_integrator, mask, config = args
-    relion_particle_stack = eqx.combine(
-        relion_particle_stack_vmap, relion_particle_stack_novmap
-    )
+@partial(eqx.filter_vmap, in_axes=(0, eqx.if_array(0), None), out_axes=0)
+def _compute_noise_variance(key, relion_particle_stack, args):
+    potentials, potential_integrator, mask, config = args
 
     key, subkey = jax.random.split(key)
 
@@ -38,11 +35,11 @@ def _compute_noise_variance(key, relion_particle_stack_vmap, args):
         relion_particle_stack.transfer_theory,
     )
 
-    imaging_pipeline = cxs.ContrastImagingPipeline(
+    image_model = cxs.ContrastImageModel(
         relion_particle_stack.instrument_config, scattering_theory
     )
 
-    signal = imaging_pipeline.render(get_real=True)
+    signal = image_model.render(outputs_real_space=True)
     signal /= jnp.linalg.norm(signal)
     # signal -= jnp.sum(signal * mask.array) / jnp.sum(mask.array)
 
