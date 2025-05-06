@@ -168,7 +168,7 @@ class VarianceMarginalizedWhiteGaussianNoise(AbstractDistribution, strict=True):
         c = jnp.mean(signal)
         o = jnp.mean(observed)
 
-        scale = (co / cc - o) / (1 - c)
+        scale = (co - c * o) / (cc - c ** 2)
         bias = o - scale * c
 
         return (2 - N) * jnp.log(jnp.linalg.norm(scale * signal - observed + bias))
