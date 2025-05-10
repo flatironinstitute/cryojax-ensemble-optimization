@@ -4,37 +4,32 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build]
 include = [
-    "src/cryo_md",
+    "src/cryojax_ensemble_refinement",
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = [
-    "src/cryo_md",
+    "src/cryojax_ensemble_refinement",
 ]
 
 
 [project]
-name = "cryo_MD"
+name = "cryoJAX-Ensemble-Refinement"
 authors = [
     {name = "David Silva Sanchez", email = "david.silva@yale.edu"},
     {name = "Erik Henning Thiede"},
-    {name = "Wai Shing Tang"},
     {name = "Pilar Cossio"},
     {name = "Roy Lederman"},
-    {name = "Aditya Rangan"}
 ]
 
 description = "My package description"
 readme = "README.rst"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 keywords = ["CryoEM", "Molecular Dynamics", "single particle"]
 license = "MIT"
 classifiers = [
   "Development Status :: 4 - Beta",
   "Programming Language :: Python",
-  "Programming Language :: Python :: 3.8",
-  "Programming Language :: Python :: 3.9",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
@@ -66,23 +61,35 @@ dev = [
 ]
 
 [project.urls]
-Documentation = "https://github.com/DSilva27/cryo_MD/blob/main/README.rst"
-Issues = "https://github.com/DSilva27/cryo_MD/issues"
-Source = "https://github.com/DSilva27/cryo_MD"
+Documentation = "https://github.com/DSilva27/cryojax-ensemble-refinement/blob/main/README.rst"
+Issues = "https://github.com/DSilva27/cryojax-ensemble-refinement/issues"
+Source = "https://github.com/DSilva27/cryojax-ensemble-refinement"
 
 [tool.hatch.version]
 source="vcs"
 
 [tool.hatch.build.hooks.vcs]
-version-file = "src/cryo_md/cryomd_version.py"
+version-file = "src/cryojax_ensemble_refinement/cryojax_ensemble_refinement_version.py"
 
 
 [project.scripts]
-cryo_md = "cryo_md.command_line:main_commands"
+cryojax_ensemble_refinement = "cryojax_ensemble_refinement.command_line:main_commands"
 
-# ... other project metadata fields as specified in:
-#     https://packaging.python.org/en/latest/specifications/declaring-project-metadata/
-
+[tool.ruff]
+extend-include = ["*.ipynb"]
+lint.fixable = ["I001", "F401"]
+line-length = 90
+lint.ignore = ["E402", "E721", "E731", "E741", "F722"]
+lint.select = ["E", "F", "I001"]
+src = ["src"]
 
 [tool.ruff.lint.isort]
-case-sensitive = true
+combine-as-imports = true
+extra-standard-library = ["typing_extensions"]
+lines-after-imports = 2
+order-by-type = false
+
+[tool.pyright]
+reportIncompatibleMethodOverride = true
+reportIncompatibleVariableOverride = false  # Incompatible with eqx.AbstractVar
+include = ["cryojax", "tests"]

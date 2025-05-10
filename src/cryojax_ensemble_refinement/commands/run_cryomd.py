@@ -12,7 +12,7 @@ from ..data._config_readers.optimizer_config_reader import OptimizationConfig
 from ..molecular_dynamics.mdaa_simulator import MDSimulatorRMSDConstraint
 
 # from .._molecular_dynamics.mdcg_simulator import MDCGSampler
-from ..optimization.optimizers import EnsembleOptimizer
+from ..likelihood_optimization.deprc_optimizers import EnsembleOptimizer
 from ..pipeline import Pipeline
 
 

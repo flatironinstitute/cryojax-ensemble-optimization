@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from .molecular_dynamics.mdaa_simulator import MDSimulatorRMSDConstraint
 
 # from .molecular_dynamics.mdcg_simulator import MDCGSampler
-from .optimization.optimizers import EnsembleOptimizer
+from .likelihood_optimization.deprc_optimizers import EnsembleOptimizer
 from .data._output_manager import OutputManager
 
 

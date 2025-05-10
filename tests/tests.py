@@ -1,14 +1,16 @@
-import numpy as np
-import jax
-from jax.config import config as jax_config
-from parameterized import parameterized
 import unittest
 
-from cryo_md.lklhood_and_grads import (
+import jax
+import numpy as np
+from jax.config import config as jax_config
+from parameterized import parameterized
+
+from cryojax_ensemble_refinement.lklhood_and_grads import (
     calc_lklhood,
     calc_lklhood_grad_strucs,
     calc_lklhood_grad_weights,
 )
+
 
 jax_config.update("jax_enable_x64", True)
 

@@ -8,7 +8,7 @@ is used to create the commands during installation.
 import argparse
 import os
 from importlib import import_module
-from .cryomd_version import __version__
+from .cryojax_ensemble_refinement_version import __version__
 
 
 def _get_commands(cmd_dir: str, doc_str: str = "") -> None:

@@ -26,7 +26,7 @@ def simulate_relion_dataset(config: dict):
     # Write starfile
 
     logging.info("Generating Starfile...")
-    key = jax.random.PRNGKey(config["rng_seed"])
+    key = jax.random.key(config["rng_seed"])
     key, *subkeys = jax.random.split(key, config["number_of_images"] + 1)
     particle_parameters = _make_particle_parameters(
         jnp.array(subkeys), config
@@ -58,9 +58,6 @@ def simulate_relion_dataset(config: dict):
 
     atom_positions, struct_info = load_models(config)
     for i in range(len(atom_positions)):
-        # tmp_potential = cxs.PengAtomicPotential(atom_positions, atom_identities, b_factors)
-        # tmp_voxel_grid = tmp_potential.as_real_voxel_grid(shape=(config["box_size"], config["box_size"], config["box_size"]), voxel_size=config["pixel_size"])
-        # potentials.append(cxs.FourierVoxelGridPotential.from_real_voxel_grid(tmp_voxel_grid, config["pixel_size"], pad_scale=2.0))
         potentials.append(
             cxs.PengAtomicPotential(
                 atom_positions[i],

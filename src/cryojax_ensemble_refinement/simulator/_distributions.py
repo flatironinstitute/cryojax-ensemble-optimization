@@ -9,7 +9,7 @@ from cryojax.inference.distributions import AbstractDistribution
 from cryojax.simulator import AbstractImageModel
 from cryojax.image import rfftn
 
-from .._errors import error_if_not_positive
+from ..internal._errors import error_if_not_positive
 
 
 class WhiteGaussianNoise(AbstractDistribution, strict=True):

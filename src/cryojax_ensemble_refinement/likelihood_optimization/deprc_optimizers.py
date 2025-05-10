@@ -8,7 +8,7 @@ import jax_dataloader as jdl
 from cryojax.data import RelionParticleParameterDataset, RelionParticleStackDataset
 from cryojax.constants import get_tabulated_scattering_factor_parameters
 
-from .loss_and_gradients import compute_loss_weights_and_grads
+from .deprc_loss_and_gradients import compute_loss_weights_and_grads
 
 
 @eqx.filter_jit
