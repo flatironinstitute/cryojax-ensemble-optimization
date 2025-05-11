@@ -2,12 +2,12 @@ import os
 from typing import Any, List, Tuple
 from typing_extensions import override
 
+import jax.numpy as jnp
 import mdtraj
+from equinox import Module
 from jax_dataloader import DataLoader
 from jaxtyping import Array, Float, Int
 from pydantic import DirectoryPath
-from equinox import Module
-import jax.numpy as jnp
 
 from ..likelihood_optimization.optimizers import (
     IterativeEnsembleOptimizer,
@@ -16,10 +16,9 @@ from ..likelihood_optimization.optimizers import (
 from ..prior_projection._molecular_dynamics._openmm import (
     SteeredMolecularDynamicsSimulator,
 )
-from .base_pipeline import AbstractEnsembleRefinementPipeline
 
 
-#class EnsembleRefinementOpenMMPipeline(AbstractEnsembleRefinementPipeline):
+# class EnsembleRefinementOpenMMPipeline(AbstractEnsembleRefinementPipeline):
 class EnsembleRefinementOpenMMPipeline(Module):
     """
     Ensemble refinement pipeline using OpenMM for molecular dynamics simulation.
@@ -115,7 +114,10 @@ class EnsembleRefinementOpenMMPipeline(Module):
         """
         # Project the weights
         weights = ProjGradDescWeightOptimizer()(
-            walkers[:, self.atom_indices_for_opt], weights, dataloader, args_for_likelihood_optimizer
+            walkers[:, self.atom_indices_for_opt],
+            weights,
+            dataloader,
+            args_for_likelihood_optimizer,
         )
 
         return walkers, weights

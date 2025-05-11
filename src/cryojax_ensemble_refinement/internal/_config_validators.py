@@ -400,9 +400,9 @@ class cryojaxERConfig(BaseModel, extra="forbid"):
         ref_model_path = Path(
             os.path.join(self.path_to_models_and_chkpoints, self.ref_model_fname)
         )
-        assert ref_model_path.exists(), (
-            f"Reference model {ref_model_path} does not exist."
-        )
+        assert (
+            ref_model_path.exists()
+        ), f"Reference model {ref_model_path} does not exist."
         self.ref_model_fname = ref_model_path
 
         if self.atom_list_filter is not None:

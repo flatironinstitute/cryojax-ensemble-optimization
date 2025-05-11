@@ -12,9 +12,8 @@ from abc import abstractmethod
 from typing import List, Optional
 
 import equinox as eqx
-import mdtraj
-import numpy as np
 import jax.numpy as jnp
+import mdtraj
 import openmm
 import openmm.app as openmm_app
 import openmm.unit as openmm_unit
@@ -86,7 +85,6 @@ class SteeredMolecularDynamicsSimulator:
             self.path_to_checkpoint = path_to_sim_checkpoint
 
     def __call__(self, positions_for_bias: Float[Array, "n_atoms 3"]):
-
         RMSD_value = openmm.RMSDForce(
             mdtraj.Trajectory(
                 positions_for_bias / 10.0, self.modeller.topology
@@ -131,7 +129,6 @@ def _generate_checkpoint(
     platform: openmm.Platform,
     platform_properties: dict,
 ) -> None:
-    
     integrator = _create_integrator(parameters_for_md)
     system = _create_system(parameters_for_md, forcefield, modeller.topology)
     simulation = openmm_app.Simulation(

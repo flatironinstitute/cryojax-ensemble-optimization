@@ -65,7 +65,7 @@ def compute_likelihood_matrix(
     **Arguments:**
     - `ensemble_walkers`: The walkers of the ensemble. This is a 3D array
         with shape (n_walkers, n_atoms, 3).
-    - `relion_stack`: A cryojax `ParticleStack` object containing the images and parameters. 
+    - `relion_stack`: A cryojax `ParticleStack` object containing the images and parameters.
     - `gaussian_amplitudes`: The amplitudes for the GMM atom potential.
     - `gaussian_variances`: The variances for the GMM atom potential.
     - `noise_variance`: The noise variance for the imaging pipeline. If None, the
