@@ -266,9 +266,9 @@ class cryojaxERConfig(BaseModel, extra="forbid"):
         ref_model_path = Path(
             os.path.join(self.path_to_models_and_chkpoints, self.ref_model_fname)
         )
-        assert ref_model_path.exists(), (
-            f"Reference model {ref_model_path} does not exist."
-        )
+        assert (
+            ref_model_path.exists()
+        ), f"Reference model {ref_model_path} does not exist."
 
         if self.atom_list_filter is not None:
             try:
@@ -310,4 +310,3 @@ class cryojaxERConfig(BaseModel, extra="forbid"):
                 new_path = os.path.join(v, f"Job{job_numbers[-1] + 1:03d}")
 
         return new_path
-

@@ -10,6 +10,7 @@ run_md_openmm
 import logging
 import os
 from typing import List, Optional
+
 import numpy as np
 import openmm
 import openmm.app as openmm_app
@@ -58,9 +59,7 @@ class MDSimulatorRMSDConstraint:
                     f"Checkpoint for model {i} found at {self.checkpoint_fnames[i]}."
                 )
                 logging.info("Creating copy...")
-                os.system(
-                    f"cp {self.checkpoint_fnames[i]} checkpoint_model_{i}_tmp.chk"
-                )
+                os.system(f"cp {self.checkpoint_fnames[i]} checkpoint_model_{i}_tmp.chk")
                 self.checkpoint_fnames[i] = f"checkpoint_model_{i}_tmp.chk"
 
     def parse_kwargs(self, **kwargs):

@@ -65,7 +65,6 @@ class SteepestDescWalkerPositionsOptimizer(
     n_steps: int
 
     def __init__(self, step_size: Float, n_steps: int):
-
         assert step_size > 0, "Step size must be greater than 0"
         assert n_steps > 0, "Number of steps must be greater than 0"
 
@@ -104,6 +103,7 @@ class IterativeEnsembleOptimizer(AbstractEnsembleParameterOptimizer):
             )
         return walkers, weights
 
+
 @eqx.filter_jit
 def _optimize_weights(
     weights: Float[Array, " n_walkers"],
@@ -139,6 +139,7 @@ def _optimize_walkers_positions(
 
     return walkers - step_size * gradients
 
+
 @eqx.filter_jit
 def _optimize_ensemble(
     walkers: Float[Array, "n_walkers n_atoms 3"],
@@ -169,11 +170,10 @@ def _optimize_ensemble(
     **Returns:**
         The optimized walkers and weights of the ensemble.
     """
-    @partial(jax.grad, argums=0, has_aux=True)
+
+    @partial(jax.grad, argnums=0, has_aux=True)
     def _loss_fn(walkers, weights):
-        likelihood_matrix = compute_likelihood_matrix(
-            walkers, relion_stack, *args
-        )
+        likelihood_matrix = compute_likelihood_matrix(walkers, relion_stack, *args)
         weights = _optimize_weights(weights, likelihood_matrix)
         weights = jax.nn.softmax(weights)
         loss = neg_log_likelihood_from_weights(weights, likelihood_matrix)
@@ -188,6 +188,7 @@ def _optimize_ensemble(
     walkers = walkers - step_size * gradients
 
     return walkers, weights
+
 
 def _compute_full_likelihood_matrix(
     walkers: Float[Array, "n_walkers n_atoms 3"],

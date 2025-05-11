@@ -1,7 +1,7 @@
-import MDAnalysis as mda
 import jax.numpy as jnp
-from jaxtyping import Array
+import MDAnalysis as mda
 from cryojax.io import read_atoms_from_pdb
+from jaxtyping import Array
 
 
 def pdb_parser_all_atom_(fname: str) -> dict[str, Array]:

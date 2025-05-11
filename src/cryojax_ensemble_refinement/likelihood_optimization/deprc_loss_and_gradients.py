@@ -1,14 +1,11 @@
 from functools import partial
 
+import cryojax.simulator as cxs
+import equinox as eqx
 import jax
 import jax.numpy as jnp
-import equinox as eqx
-
 from jaxopt import ProjectedGradient
 from jaxopt.projection import projection_simplex
-
-
-import cryojax.simulator as cxs
 
 from ..simulator._distributions import VarianceMarginalizedWhiteGaussianNoise
 
@@ -17,9 +14,7 @@ from ..simulator._distributions import VarianceMarginalizedWhiteGaussianNoise
 @partial(eqx.filter_vmap, in_axes=(None, eqx.if_array(0), None), out_axes=0)
 @partial(eqx.filter_vmap, in_axes=(0, None, None), out_axes=0)
 def compute_lklhood_matrix(atom_positions, relion_stack, args):
-    atom_identities, b_factors, parameter_table, noise_variance = (
-        args
-    )
+    atom_identities, b_factors, parameter_table, noise_variance = args
 
     potential = cxs.PengAtomicPotential(
         atom_positions,

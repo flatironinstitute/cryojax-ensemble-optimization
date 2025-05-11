@@ -7,18 +7,19 @@ run_md_openmm
     Run MD simulations using OpenMM
 """
 
-from abc import abstractmethod
-from jaxtyping import Array, Float, Int, ArrayLike
-
 import pathlib
-import logging
+from abc import abstractmethod
 from typing import List, Optional
-import numpy as np
+
 import equinox as eqx
-import openmm
 import mdtraj
+import numpy as np
+import jax.numpy as jnp
+import openmm
 import openmm.app as openmm_app
 import openmm.unit as openmm_unit
+from jaxtyping import Array, Float, Int
+
 
 DEFAULT_MD_PARAMS = {
     "forcefield": "amber14-all.xml",
@@ -46,7 +47,6 @@ class SteeredMolecularDynamicsSimulator:
     bias_constant_in_units: Float
     restrain_atom_list: List[Int]
     forcefield: openmm_app.ForceField
-    integrator: openmm.Integrator
     platform: openmm.Platform
     platform_properties: dict
     path_to_checkpoint: str | pathlib.Path
@@ -61,7 +61,7 @@ class SteeredMolecularDynamicsSimulator:
         parameters_for_md: dict,
         path_to_sim_checkpoint: Optional[str | pathlib.Path] = None,
     ):
-        pdb = openmm_app.PDBFile(path_to_initial_pdb)
+        pdb = openmm_app.PDBFile(str(path_to_initial_pdb))
         self.modeller = openmm_app.Modeller(pdb.topology, pdb.positions)
         self.bias_constant_in_units = bias_constant_in_units
         self.restrain_atom_list = restrain_atom_list
@@ -70,8 +70,7 @@ class SteeredMolecularDynamicsSimulator:
         self.parameters_for_md = _validate_and_set_params_for_md(parameters_for_md)
 
         self.forcefield = _create_forcefield(self.parameters_for_md)
-        self.integrate = _create_integrator(self.parameters_for_md)
-        self.platorm = _create_platform(self.parameters_for_md)
+        self.platform = _create_platform(self.parameters_for_md)
         self.platform_properties = self.parameters_for_md["properties"]
 
         self.path_to_checkpoint = path_to_sim_checkpoint
@@ -79,7 +78,7 @@ class SteeredMolecularDynamicsSimulator:
             _generate_checkpoint(
                 path_to_sim_checkpoint,
                 self.modeller,
-                self.integrator,
+                self.forcefield,
                 self.parameters_for_md,
                 self.platform,
                 self.platform_properties,
@@ -87,6 +86,7 @@ class SteeredMolecularDynamicsSimulator:
             self.path_to_checkpoint = path_to_sim_checkpoint
 
     def __call__(self, positions_for_bias: Float[Array, "n_atoms 3"]):
+
         RMSD_value = openmm.RMSDForce(
             mdtraj.Trajectory(
                 positions_for_bias / 10.0, self.modeller.topology
@@ -103,13 +103,16 @@ class SteeredMolecularDynamicsSimulator:
         )
         system.addForce(force_RMSD)
 
+        integrator = _create_integrator(self.parameters_for_md)
         simulation = openmm_app.Simulation(
             self.modeller.topology,
             system,
-            self.integrator,
+            integrator,
             self.platform,
             self.parameters_for_md["properties"],
         )
+
+        simulation.loadCheckpoint(self.path_to_checkpoint)
 
         simulation.step(self.n_steps)
 
@@ -117,18 +120,19 @@ class SteeredMolecularDynamicsSimulator:
         positions = simulation.context.getState(getPositions=True).getPositions(
             asNumpy=True
         )
-        return np.array(positions) * 10.0  # Convert to angstroms
+        return jnp.array(positions) * 10.0  # Convert to angstroms
 
 
 def _generate_checkpoint(
     path_to_output_checkpoint: str | pathlib.Path,
     modeller: openmm_app.Modeller,
-    integrator: openmm.Integrator,
     forcefield: openmm_app.ForceField,
     parameters_for_md: dict,
     platform: openmm.Platform,
     platform_properties: dict,
 ) -> None:
+    
+    integrator = _create_integrator(parameters_for_md)
     system = _create_system(parameters_for_md, forcefield, modeller.topology)
     simulation = openmm_app.Simulation(
         modeller.topology,
@@ -182,10 +186,8 @@ def _validate_and_set_params_for_md(
     parameters_for_md: dict,
 ) -> dict:
     assert set(parameters_for_md.keys()).issubset(DEFAULT_MD_PARAMS)
-    for key, value in DEFAULT_MD_PARAMS:
+    for key, value in DEFAULT_MD_PARAMS.items():
         if key not in parameters_for_md:
             parameters_for_md[key] = value
 
     return parameters_for_md
-
-

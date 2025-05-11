@@ -1,12 +1,11 @@
 import logging
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
-import equinox as eqx
 import jax_dataloader as jdl
-
-from cryojax.data import RelionParticleParameterDataset, RelionParticleStackDataset
 from cryojax.constants import get_tabulated_scattering_factor_parameters
+from cryojax.data import RelionParticleParameterDataset, RelionParticleStackDataset
 
 from .deprc_loss_and_gradients import compute_loss_weights_and_grads
 
@@ -101,5 +100,3 @@ class EnsembleOptimizer:
         logging.info(f"Optimization done. Final loss: {self.loss}.")
 
         return positions, self.weights, self.loss
-
-

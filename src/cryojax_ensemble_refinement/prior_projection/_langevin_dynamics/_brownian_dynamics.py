@@ -10,6 +10,7 @@ from .._forcefields.base_forcefield import (
 )
 from .._forcefields.biasing_forces import compute_harmonic_bias_potential_energy
 
+
 EnergyFuncArgs = TypeVar("EnergyFuncArgs")
 
 

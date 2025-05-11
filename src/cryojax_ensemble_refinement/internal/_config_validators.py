@@ -1,28 +1,26 @@
-import warnings
-import numpy as np
-import os
-from natsort import natsorted
-from functools import partial
 import glob
-from typing import List, Union, Optional, Dict
-import mdtraj
-from typing_extensions import Annotated, Literal
-from pydantic import (
-    BaseModel,
-    model_validator,
-    field_serializer,
-    Field,
-    PositiveInt,
-    PositiveFloat,
-    DirectoryPath,
-    FilePath,
-    field_validator,
-    AfterValidator,
-)
-
+import os
+import warnings
+from functools import partial
 from pathlib import Path
+from typing import Dict, List, Optional, Union
+from typing_extensions import Annotated, Literal
 
 import jax.numpy as jnp
+import mdtraj
+from natsort import natsorted
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    DirectoryPath,
+    Field,
+    field_serializer,
+    field_validator,
+    FilePath,
+    model_validator,
+    PositiveFloat,
+    PositiveInt,
+)
 
 
 def _is_file_type(filename: str, file_type: str) -> str:
@@ -42,7 +40,7 @@ def _contains_file_type(
 
     failing_types = []
     for ftype in file_type:
-        files_in_directory = glob.glob(os.joint(directory_path, f"*.{ftype}"))
+        files_in_directory = glob.glob(os.path.join(directory_path, f"*.{ftype}"))
         if len(files_in_directory) == 0:
             failing_types.append(ftype)
 
@@ -295,7 +293,8 @@ class cryojaxERConfigOptimizationConfig(BaseModel, extra="forbid"):
         default=None,
         description="Initial weights for the models. If None, will be set to uniform distribution.",
     )
-    noise_variance: PositiveFloat = Field(
+    noise_variance: Optional[PositiveFloat] = Field(
+        default=None,
         description="Variance of the noise to be added to the gradients.",
     )
 
@@ -323,7 +322,7 @@ class cryojaxERConfigMDConfig(BaseModel, extra="forbid"):
         description="Platform to use for the MD sampler. "
         + "Must be 'CPU', 'CUDA', or 'OpenCL'.",
     )
-    platform_properties: Dict = Field(
+    platform_properties: Dict[str, str] = Field(
         default={"Threads": None}, description="Platform properties for OpenMM."
     )
 
@@ -332,7 +331,7 @@ class cryojaxERConfigMDConfig(BaseModel, extra="forbid"):
     def validate_platform_properties(cls, v):
         if "Threads" in v:
             if v["Threads"] is not None:
-                assert v["Threads"] > 0, "Number of threads must be greater than 0"
+                assert int(v["Threads"]) > 0, "Number of threads must be greater than 0"
         return v
 
 
@@ -341,18 +340,17 @@ class cryojaxERConfig(BaseModel, extra="forbid"):
         description="Name of the experiment. Used to create the output directory."
     )
     # I/O
-    path_to_models_and_chkpoints: Annotated[
-        DirectoryPath,
-        AfterValidator(partial(_contains_file_type, file_type=[".pdb", ".chk"])),
-    ] = Field(description="Path to the directory containing the models and checkpoints.")
+    path_to_models_and_chkpoints: DirectoryPath = Field(
+        description="Path to the directory containing the models and checkpoints."
+    )
 
-    models_fnames: Union[str, List[str]] = Field(
+    models_fnames: Union[str | Path, List[str | Path]] = Field(
         description="List of files containing the atomic models. "
         + "path_to_models_and_chkpoints. "
         + "If a string, it must contain a glob pattern. "
         + "Files must in .pdb format."
     )
-    checkpoints_fnames: Optional[Union[str, List[str]]] = Field(
+    checkpoints_fnames: Optional[Union[str | Path, List[str | Path]]] = Field(
         default=None,
         description="List of files containing the openmm checkpoints in "
         + "path_to_models_and_chkpoints. "
@@ -360,7 +358,7 @@ class cryojaxERConfig(BaseModel, extra="forbid"):
         + "Files must in .chk format.",
     )
     ref_model_fname: Annotated[
-        str, AfterValidator(partial(_is_file_type, file_type="pdb"))
+        str | Path, AfterValidator(partial(_is_file_type, file_type="pdb"))
     ] = Field(
         description="File containing the reference model in path_to_models_and_chkpoints."
     )
@@ -405,6 +403,7 @@ class cryojaxERConfig(BaseModel, extra="forbid"):
         assert ref_model_path.exists(), (
             f"Reference model {ref_model_path} does not exist."
         )
+        self.ref_model_fname = ref_model_path
 
         if self.atom_list_filter is not None:
             try:

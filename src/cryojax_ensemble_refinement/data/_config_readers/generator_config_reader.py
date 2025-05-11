@@ -1,10 +1,11 @@
-import numpy as np
-import os
-from natsort import natsorted
 import glob
-from typing import List, Union, Optional
-from pydantic import BaseModel, model_validator, field_serializer, Field
+import os
+from typing import List, Optional, Union
+
 import jax.numpy as jnp
+import numpy as np
+from natsort import natsorted
+from pydantic import BaseModel, Field, field_serializer, model_validator
 
 
 class GeneratorConfig(BaseModel, extra="forbid"):
@@ -53,9 +54,7 @@ class GeneratorConfig(BaseModel, extra="forbid"):
     phase_shift: Union[float, List[float]] = Field(
         0.0, description="Phase shift in radians."
     )
-    amplitude_contrast_ratio: float = Field(
-        1.0, description="Amplitude contrast ratio."
-    )
+    amplitude_contrast_ratio: float = Field(1.0, description="Amplitude contrast ratio.")
     spherical_aberration_in_mm: float = Field(
         2.7, description="Microscope spherical aberration in mm."
     )

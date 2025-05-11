@@ -1,7 +1,8 @@
 import logging
 import os
-import numpy as np
+
 import MDAnalysis as mda
+import numpy as np
 from MDAnalysis.analysis import align
 
 from ._pdb import pdb_parser
@@ -9,9 +10,7 @@ from ._pdb import pdb_parser
 
 def _load_models_for_data_generator(config: dict) -> tuple[np.ndarray, dict]:
     logging.info(
-        "Models will be loaded in the following order: {}".format(
-            config["models_fnames"]
-        )
+        "Models will be loaded in the following order: {}".format(config["models_fnames"])
     )
 
     n_models = len(config["models_fnames"])

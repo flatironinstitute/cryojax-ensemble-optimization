@@ -2,12 +2,11 @@ from typing_extensions import override
 
 import jax.numpy as jnp
 import jax.random as jr
-from equinox import field
-from jaxtyping import Float, Complex, Array, PRNGKeyArray
-
+from cryojax.image import rfftn
 from cryojax.inference.distributions import AbstractDistribution
 from cryojax.simulator import AbstractImageModel
-from cryojax.image import rfftn
+from equinox import field
+from jaxtyping import Array, Complex, Float, PRNGKeyArray
 
 from ..internal._errors import error_if_not_positive
 
@@ -80,9 +79,9 @@ class WhiteGaussianNoise(AbstractDistribution, strict=True):
     ]:
         """Sample from the gaussian noise model."""
 
-        noisy_image = self.compute_signal(outputs_real_space=outputs_real_space) + self.compute_noise(
-            rng_key, outputs_real_space=outputs_real_space
-        )
+        noisy_image = self.compute_signal(
+            outputs_real_space=outputs_real_space
+        ) + self.compute_noise(rng_key, outputs_real_space=outputs_real_space)
         return noisy_image
 
     @override
@@ -168,7 +167,7 @@ class VarianceMarginalizedWhiteGaussianNoise(AbstractDistribution, strict=True):
         c = jnp.mean(signal)
         o = jnp.mean(observed)
 
-        scale = (co - c * o) / (cc - c ** 2)
+        scale = (co - c * o) / (cc - c**2)
         bias = o - scale * c
 
         return (2 - N) * jnp.log(jnp.linalg.norm(scale * signal - observed + bias))

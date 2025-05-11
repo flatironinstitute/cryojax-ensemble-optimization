@@ -8,6 +8,7 @@ is used to create the commands during installation.
 import argparse
 import os
 from importlib import import_module
+
 from .cryojax_ensemble_refinement_version import __version__
 
 

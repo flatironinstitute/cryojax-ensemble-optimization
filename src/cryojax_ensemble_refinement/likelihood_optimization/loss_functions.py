@@ -1,12 +1,12 @@
 from functools import partial
 from typing import Optional, Tuple
 
+import cryojax.simulator as cxs
+import equinox as eqx
 import jax
 import jax.numpy as jnp
-import equinox as eqx
-from jaxtyping import Array, Float
-import cryojax.simulator as cxs
 from cryojax.data import ParticleStack
+from jaxtyping import Array, Float
 
 from ..simulator._distributions import (
     VarianceMarginalizedWhiteGaussianNoise,
@@ -45,7 +45,7 @@ def _compute_likelihood_image_and_walker(
     else:
         distribution = WhiteGaussianNoise(imaging_pipeline, noise_variance)
 
-    return distribution.log_likelihood(relion_stack.image_stack)
+    return distribution.log_likelihood(relion_stack.images)
 
 
 @eqx.filter_jit
@@ -65,7 +65,7 @@ def compute_likelihood_matrix(
     **Arguments:**
     - `ensemble_walkers`: The walkers of the ensemble. This is a 3D array
         with shape (n_walkers, n_atoms, 3).
-    - `relion_stack`: A cryojax `ParticleStack` object containing the images and parameters.
+    - `relion_stack`: A cryojax `ParticleStack` object containing the images and parameters. 
     - `gaussian_amplitudes`: The amplitudes for the GMM atom potential.
     - `gaussian_variances`: The variances for the GMM atom potential.
     - `noise_variance`: The noise variance for the imaging pipeline. If None, the

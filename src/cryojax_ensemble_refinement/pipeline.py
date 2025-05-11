@@ -1,18 +1,19 @@
 import logging
-from tqdm import tqdm
-import MDAnalysis as mda
-from MDAnalysis.analysis import align
-import numpy as np
-import jax.numpy as jnp
 import os
-import h5py
-import matplotlib.pyplot as plt
 
-from .molecular_dynamics.mdaa_simulator import MDSimulatorRMSDConstraint
+import h5py
+import jax.numpy as jnp
+import matplotlib.pyplot as plt
+import MDAnalysis as mda
+import numpy as np
+from MDAnalysis.analysis import align
+from tqdm import tqdm
+
+from .data._output_manager import OutputManager
 
 # from .molecular_dynamics.mdcg_simulator import MDCGSampler
 from .likelihood_optimization.deprc_optimizers import EnsembleOptimizer
-from .data._output_manager import OutputManager
+from .molecular_dynamics.mdaa_simulator import MDSimulatorRMSDConstraint
 
 
 def plot_loss(loss_values, output_path):
@@ -190,9 +191,7 @@ class Pipeline:
                 match_atoms=True,
             )
 
-            positions[i] = dummy_univ.select_atoms(
-                self.atom_list_filter
-            ).atoms.positions
+            positions[i] = dummy_univ.select_atoms(self.atom_list_filter).atoms.positions
 
         logging.debug(f"Optimized_positions: {positions}")
 
@@ -209,9 +208,7 @@ class Pipeline:
                 select=self.atom_list_filter,
                 match_atoms=True,
             )
-            dummy_univ.select_atoms(self.atom_list_filter).atoms.positions = positions[
-                i
-            ]
+            dummy_univ.select_atoms(self.atom_list_filter).atoms.positions = positions[i]
 
             align.alignto(
                 dummy_univ,

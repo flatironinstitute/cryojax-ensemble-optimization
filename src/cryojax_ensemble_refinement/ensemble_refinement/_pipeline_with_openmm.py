@@ -6,6 +6,8 @@ import mdtraj
 from jax_dataloader import DataLoader
 from jaxtyping import Array, Float, Int
 from pydantic import DirectoryPath
+from equinox import Module
+import jax.numpy as jnp
 
 from ..likelihood_optimization.optimizers import (
     IterativeEnsembleOptimizer,
@@ -17,7 +19,8 @@ from ..prior_projection._molecular_dynamics._openmm import (
 from .base_pipeline import AbstractEnsembleRefinementPipeline
 
 
-class EnsembleRefinementOpenMMPipeline(AbstractEnsembleRefinementPipeline):
+#class EnsembleRefinementOpenMMPipeline(AbstractEnsembleRefinementPipeline):
+class EnsembleRefinementOpenMMPipeline(Module):
     """
     Ensemble refinement pipeline using OpenMM for molecular dynamics simulation.
     """
@@ -42,7 +45,7 @@ class EnsembleRefinementOpenMMPipeline(AbstractEnsembleRefinementPipeline):
         self.prior_projectors = prior_projectors
         self.likelihood_optimizer = likelihood_optimizer
         self.n_steps = n_steps
-        self.ref_structure_for_opt = ref_structure_for_opt
+        self.reference_structure = ref_structure_for_opt
         self.atom_indices_for_opt = atom_indices_for_opt
         self.runs_postprocessing = runs_postprocessing
 
@@ -69,11 +72,10 @@ class EnsembleRefinementOpenMMPipeline(AbstractEnsembleRefinementPipeline):
         ]
 
         walkers = _align_walkers_to_reference(
-            walkers, self.ref_structure_for_opt, self.atom_indices_for_opt
+            walkers, self.reference_structure, self.atom_indices_for_opt
         )
 
         for i in range(self.n_steps):
-
             tmp_walkers, weights = self.likelihood_optimizer(
                 walkers[:, self.atom_indices_for_opt, :],
                 weights,
@@ -87,7 +89,7 @@ class EnsembleRefinementOpenMMPipeline(AbstractEnsembleRefinementPipeline):
                 walkers = walkers.at[i].set(self.prior_projectors[i](walkers[i]))
 
             walkers = _align_walkers_to_reference(
-                walkers, self.ref_structure_for_opt, self.atom_indices_for_opt
+                walkers, self.reference_structure, self.atom_indices_for_opt
             )
             for j in range(walkers.shape[0]):
                 writers[j].write(walkers[j])
@@ -113,7 +115,7 @@ class EnsembleRefinementOpenMMPipeline(AbstractEnsembleRefinementPipeline):
         """
         # Project the weights
         weights = ProjGradDescWeightOptimizer()(
-            walkers, weights, dataloader, args_for_likelihood_optimizer
+            walkers[:, self.atom_indices_for_opt], weights, dataloader, args_for_likelihood_optimizer
         )
 
         return walkers, weights
@@ -136,4 +138,4 @@ def _align_walkers_to_reference(
         frame=0,
         atom_indices=atom_indices,
     )
-    return walkers_mdtraj.xyz * 10.0  # Convert back to Angstroms
+    return jnp.array(walkers_mdtraj.xyz) * 10.0  # Convert back to Angstroms

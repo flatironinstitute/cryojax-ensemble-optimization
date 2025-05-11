@@ -1,15 +1,18 @@
-from jaxtyping import Float, Array
-from typing import overload
 from abc import abstractmethod
+from typing import overload
+
 import equinox as eqx
+from jaxtyping import Array, Float
+
 
 class AbstractPriorProjector(eqx.Module, strict=True):
     """
     Abstract class for prior projectors.
     """
+
     @overload
     @abstractmethod
-    def __call__(self) -> Float[Array, "n_walkers n_atoms 3"]:...
+    def __call__(self) -> Float[Array, "n_walkers n_atoms 3"]: ...
 
     @abstractmethod
     def __call__(self) -> Float[Array, "n_atoms 3"]:
