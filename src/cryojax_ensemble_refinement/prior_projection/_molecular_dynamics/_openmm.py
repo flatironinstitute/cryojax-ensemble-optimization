@@ -9,7 +9,7 @@ run_md_openmm
 
 import pathlib
 from abc import abstractmethod
-from typing import List, Optional
+from typing import List, Optional, Callable, Dict, Any
 
 import equinox as eqx
 import jax.numpy as jnp
@@ -42,14 +42,9 @@ class AbstractMolecularDynamicsSimulator(eqx.Module, strict=True):
 
 class SteeredMolecularDynamicsSimulator:
     n_steps: Int
-    modeller: openmm_app.Modeller
     bias_constant_in_units: Float
     restrain_atom_list: List[Int]
-    forcefield: openmm_app.ForceField
-    platform: openmm.Platform
-    platform_properties: dict
     path_to_checkpoint: str | pathlib.Path
-    parameters_for_md: dict
 
     def __init__(
         self,
@@ -57,59 +52,66 @@ class SteeredMolecularDynamicsSimulator:
         bias_constant_in_units: Float,
         n_steps: Int,
         restrain_atom_list: List[Int],
-        parameters_for_md: dict,
-        path_to_sim_checkpoint: Optional[str | pathlib.Path] = None,
+        parameters_for_md: Dict,
+        path_to_checkpoint: str | pathlib.Path,
+        *,
+        make_simulation_fn: Optional[Callable[[Dict, openmm_app.Topology], openmm_app.Simulation]] = None,
+        continue_from_checkpoint: bool = False,
     ):
+        
+        if continue_from_checkpoint:
+            assert pathlib.Path(path_to_checkpoint).exists(), (
+                "Checkpoint file does not exist. "
+                "Please set continue_from_checkpoint to False or provide a valid checkpoint file."
+            )
+
         pdb = openmm_app.PDBFile(str(path_to_initial_pdb))
-        self.modeller = openmm_app.Modeller(pdb.topology, pdb.positions)
         self.bias_constant_in_units = bias_constant_in_units
         self.restrain_atom_list = restrain_atom_list
 
         self.n_steps = n_steps
-        self.parameters_for_md = _validate_and_set_params_for_md(parameters_for_md)
-
-        self.forcefield = _create_forcefield(self.parameters_for_md)
-        self.platform = _create_platform(self.parameters_for_md)
-        self.platform_properties = self.parameters_for_md["properties"]
-
-        self.path_to_checkpoint = path_to_sim_checkpoint
-        if not pathlib.Path(path_to_sim_checkpoint).exists():
-            _generate_checkpoint(
-                path_to_sim_checkpoint,
-                self.modeller,
-                self.forcefield,
-                self.parameters_for_md,
-                self.platform,
-                self.platform_properties,
+        parameters_for_md = _validate_and_set_params_for_md(parameters_for_md)
+    
+        if make_simulation_fn is None:
+            self.simulation = _default_make_sim_fn(
+                parameters_for_md, pdb.topology
             )
-            self.path_to_checkpoint = path_to_sim_checkpoint
+        else:
+            self.simulation = make_simulation_fn(
+                parameters_for_md, pdb.topology
+            )
 
-    def __call__(self, positions_for_bias: Float[Array, "n_atoms 3"]):
-        RMSD_value = openmm.RMSDForce(
+        self.path_to_checkpoint = path_to_checkpoint
+
+
+
+        if continue_from_checkpoint:
+            self.simulation.loadCheckpoint(self.path_to_checkpoint)
+    
+        else:
+            self.simulation.context.setPositions(pdb.positions)
+            self.simulation.minimizeEnergy()
+            self.simulation.saveCheckpoint(self.path_to_checkpoint)
+
+        self.simulation = _add_restraint_force_to_simulation(
+            self.simulation, pdb.positions, self.restrain_atom_list, self.bias_constant_in_units
+        )
+
+
+
+    def __call__(self, positions_for_bias_in_angstroms: Float[Array, "n_atoms 3"]):
+
+        simulation = _remove_last_force_from_simulation(self.simulation)
+        simulation = _add_restraint_force_to_simulation(
+            simulation,
             mdtraj.Trajectory(
-                positions_for_bias / 10.0, self.modeller.topology
+                positions_for_bias_in_angstroms / 10.0, self.simulation.topology
             ).openmm_positions(0),
             self.restrain_atom_list,
+            self.bias_constant_in_units,
         )
 
-        force_RMSD = openmm.CustomCVForce("0.5 * k * RMSD^2")
-        force_RMSD.addGlobalParameter("k", self.bias_constant_in_units)
-        force_RMSD.addCollectiveVariable("RMSD", RMSD_value)
-
-        system = _create_system(
-            self.parameters_for_md, self.forcefield, self.modeller.topology
-        )
-        system.addForce(force_RMSD)
-
-        integrator = _create_integrator(self.parameters_for_md)
-        simulation = openmm_app.Simulation(
-            self.modeller.topology,
-            system,
-            integrator,
-            self.platform,
-            self.parameters_for_md["properties"],
-        )
-
+        simulation.context.reinitialize()
         simulation.loadCheckpoint(self.path_to_checkpoint)
 
         simulation.step(self.n_steps)
@@ -121,30 +123,51 @@ class SteeredMolecularDynamicsSimulator:
         return jnp.array(positions) * 10.0  # Convert to angstroms
 
 
-def _generate_checkpoint(
-    path_to_output_checkpoint: str | pathlib.Path,
-    modeller: openmm_app.Modeller,
-    forcefield: openmm_app.ForceField,
-    parameters_for_md: dict,
-    platform: openmm.Platform,
-    platform_properties: dict,
-) -> None:
+def _add_restraint_force_to_simulation(
+    simulation: openmm_app.Simulation,
+    positions: openmm_unit.Quantity,
+    restrain_atom_list: List[int],
+    bias_constant_in_units: float,
+) -> openmm_app.Simulation:
+    
+    RMSD_value = openmm.RMSDForce(
+        positions,
+        restrain_atom_list,
+    )
+
+    force_RMSD = openmm.CustomCVForce("0.5 * k * RMSD^2")
+    force_RMSD.addGlobalParameter("k", bias_constant_in_units)
+    force_RMSD.addCollectiveVariable("RMSD", RMSD_value)
+    simulation.system.addForce(force_RMSD)
+
+    return simulation
+
+def _remove_last_force_from_simulation(
+    simulation: openmm_app.Simulation,
+) -> openmm_app.Simulation:
+    n_forces = len(simulation.system.getForces())
+    simulation.system.removeForce(n_forces - 1)
+    return simulation
+
+
+def _default_make_sim_fn(parameters_for_md: dict, topology) -> openmm_app.Simulation:
+
+    forcefield = _create_forcefield(parameters_for_md)
     integrator = _create_integrator(parameters_for_md)
-    system = _create_system(parameters_for_md, forcefield, modeller.topology)
+    platform = _create_platform(parameters_for_md)
+    system = _create_system(
+        parameters_for_md, forcefield, topology
+    )    
+
     simulation = openmm_app.Simulation(
-        modeller.topology,
+        topology,
         system,
         integrator,
         platform,
-        platform_properties,
+        parameters_for_md["properties"],
     )
 
-    simulation.context.setPositions(modeller.positions)
-    simulation.minimizeEnergy()
-    simulation.step(1)
-    simulation.saveCheckpoint(path_to_output_checkpoint)
-    return
-
+    return simulation
 
 def _create_forcefield(parameters_for_md: dict) -> openmm_app.ForceField:
     return openmm_app.ForceField(

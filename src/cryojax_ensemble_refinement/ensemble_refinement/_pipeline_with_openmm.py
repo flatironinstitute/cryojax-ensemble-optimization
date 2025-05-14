@@ -1,6 +1,7 @@
 import os
 from typing import Any, List, Tuple
 from typing_extensions import override
+from tqdm import tqdm
 
 import jax.numpy as jnp
 import mdtraj
@@ -74,7 +75,7 @@ class EnsembleRefinementOpenMMPipeline(Module):
             walkers, self.reference_structure, self.atom_indices_for_opt
         )
 
-        for i in range(self.n_steps):
+        for i in tqdm(range(self.n_steps)):
             tmp_walkers, weights = self.likelihood_optimizer(
                 walkers[:, self.atom_indices_for_opt, :],
                 weights,
@@ -91,7 +92,7 @@ class EnsembleRefinementOpenMMPipeline(Module):
                 walkers, self.reference_structure, self.atom_indices_for_opt
             )
             for j in range(walkers.shape[0]):
-                writers[j].write(walkers[j])
+                writers[j].write(walkers[j] / 10.0)
 
         for writer in writers:
             writer.close()
