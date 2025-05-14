@@ -196,4 +196,4 @@ class MDCGSampler:
         logging.info(f"Simulation complete. Final Energy: {energy}")
 
         return np.array(positions) * 10.0
-"""
+"""  # noqa

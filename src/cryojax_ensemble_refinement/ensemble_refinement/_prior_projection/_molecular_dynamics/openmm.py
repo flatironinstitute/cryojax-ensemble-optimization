@@ -7,11 +7,10 @@ run_md_openmm
     Run MD simulations using OpenMM
 """
 
-import os
 import glob
-from natsort import natsorted
+import os
 import pathlib
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional
 from typing_extensions import override
 
 import jax.numpy as jnp
@@ -20,6 +19,7 @@ import openmm
 import openmm.app as openmm_app
 import openmm.unit as openmm_unit
 from jaxtyping import Array, Float, Int
+from natsort import natsorted
 
 from ..base_prior_projector import AbstractPriorProjector
 
@@ -62,7 +62,7 @@ class SteeredMolecularDynamicsSimulator(AbstractPriorProjector):
         pdb = openmm_app.PDBFile(str(path_to_initial_pdb))
         self._bias_constant_in_kj_per_mol_angs = bias_constant_in_kj_per_mol_angs
         self.restrain_atom_list = restrain_atom_list
-        
+
         self.base_state_file_path = _validate_base_state_file_path(base_state_file_path)
 
         self.n_steps = n_steps
@@ -73,18 +73,17 @@ class SteeredMolecularDynamicsSimulator(AbstractPriorProjector):
         else:
             self.simulation = make_simulation_fn(parameters_for_md, pdb.topology)
 
-
         if path_to_old_state_file is not None:
             assert pathlib.Path(path_to_old_state_file).exists(), (
                 "path_to_old_state_file does not exist. "
                 "Please set to None or provide valid state file."
             )
             self.simulation.loadState(str(path_to_old_state_file))
-        
+
         else:
             self.simulation.context.setPositions(pdb.positions)
             self.simulation.minimizeEnergy()
-        
+
         path_to_state_file = f"{self.base_state_file_path}0.xml"
         self.simulation.saveState(path_to_state_file)
 
@@ -120,24 +119,20 @@ class SteeredMolecularDynamicsSimulator(AbstractPriorProjector):
 
         simulation.context.reinitialize()
 
-        path_to_state_file = _get_curr_state_file_path(
-            self.base_state_file_path
-        )
+        path_to_state_file = _get_curr_state_file_path(self.base_state_file_path)
         simulation.loadState(path_to_state_file)
         simulation.step(self.n_steps)
 
-        path_to_state_file = _get_new_state_file_path(
-            self.base_state_file_path
-        )
+        path_to_state_file = _get_new_state_file_path(self.base_state_file_path)
         simulation.saveState(path_to_state_file)
 
         positions = simulation.context.getState(getPositions=True).getPositions(
             asNumpy=True
         )
-        return jnp.array(positions) * 10.0 # Convert to Angstroms
+        return jnp.array(positions) * 10.0  # Convert to Angstroms
+
 
 def _validate_base_state_file_path(base_state_file_path: str) -> str:
-    
     # check if the path exists
     base_dir = os.path.dirname(base_state_file_path)
     if not os.path.exists(base_dir):
@@ -148,17 +143,17 @@ def _validate_base_state_file_path(base_state_file_path: str) -> str:
     else:
         return f"{base_state_file_path}it"
 
+
 def _get_curr_state_file_path(
     base_state_file_path: str,
 ) -> str:
-    
     # load all files in the directory that match the base path
     return natsorted(glob.glob(f"{base_state_file_path}*.xml"))[-1]
+
 
 def _get_new_state_file_path(
     base_state_file_path: str,
 ) -> str:
-    
     # load all files in the directory that match the base path
     last_file = natsorted(glob.glob(f"{base_state_file_path}*.xml"))[-1]
     # get the run counter from the last file

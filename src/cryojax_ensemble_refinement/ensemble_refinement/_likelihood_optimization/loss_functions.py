@@ -65,7 +65,7 @@ def compute_likelihood_matrix(
     **Arguments:**
     - `ensemble_walkers`: The walkers of the ensemble. This is a 3D array
         with shape (n_walkers, n_atoms, 3).
-    - `relion_stack`: A cryojax `ParticleStack` object containing the images and parameters.
+    - `relion_stack`: A cryojax `ParticleStack` object.
     - `gaussian_amplitudes`: The amplitudes for the GMM atom potential.
     - `gaussian_variances`: The variances for the GMM atom potential.
     - `noise_variance`: The noise variance for the imaging pipeline. If None, the
@@ -86,13 +86,14 @@ def compute_likelihood_matrix(
 
 
 @eqx.filter_jit
-def neg_log_likelihood_from_weights(
+def compute_neg_log_likelihood_from_weights(
     weights: Float[Array, " n_walkers"],
     likelihood_matrix: Float[Array, "n_images n_walkers"],
 ) -> Float:
     """
-    Compute the negative log likelihood from the weights and a pre-computed likelihood matrix.
-    The likelihood is averaged to avoid numerical issues and dependence on the number of images.
+    Compute the negative log likelihood from the weights and a pre-computed likelihood
+    matrix. The likelihood is averaged to avoid numerical issues and dependence on the
+    number of images.
 
     This function is used for optimizing the weights of the ensemble with fixed walkers.
 
@@ -111,7 +112,7 @@ def neg_log_likelihood_from_weights(
 
 
 @eqx.filter_jit
-def neg_log_likelihood_from_walkers_and_weights(
+def compute_neg_log_likelihood(
     walkers: Float[Array, "n_walkers n_atoms 3"],
     weights: Float[Array, " n_walkers"],
     relion_stack: ParticleStack,
@@ -122,8 +123,8 @@ def neg_log_likelihood_from_walkers_and_weights(
     ],
 ) -> Float:
     """
-    Compute the negative log likelihood from the walkers and weights.
-    The likelihood is averaged to avoid numerical issues and dependence on the number of images.
+    Compute the negative log likelihood from the walkers and weights. The likelihood is
+    averaged to avoid numerical issues and dependence on the number of images.
 
     This function is used for optimizing the walkers of the ensemble with fixed weights.
 
@@ -131,17 +132,10 @@ def neg_log_likelihood_from_walkers_and_weights(
         walkers: The walkers of the ensemble. This is a 3D array
             with shape (n_walkers, n_atoms, 3).
         weights: The weights of the ensemble.
-        relion_stack: A cryojax `ParticleStack` object containing the images and parameters.
+        relion_stack: A cryojax `ParticleStack` object.
         args: The arguments for the likelihood function.
     Returns:
         The negative log likelihood of the ensemble.
     """
     lklhood_matrix = compute_likelihood_matrix(walkers, relion_stack, *args)
-    return neg_log_likelihood_from_weights(weights, lklhood_matrix)
-
-
-# @eqx.filter_jit
-# @partial(jax.value_and_grad, argnums=0, has_aux=True)
-# def compute_loss_weights_and_grads(atom_positions, weights, relion_stack_vmap, args):
-#     lklhood_matrix = compute_likelihood_matrix(atom_positions, relion_stack_vmap, args)
-#     return compute_loss(weights, lklhood_matrix), weights
+    return compute_neg_log_likelihood_from_weights(weights, lklhood_matrix)

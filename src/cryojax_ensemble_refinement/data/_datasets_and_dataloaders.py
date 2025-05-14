@@ -1,12 +1,12 @@
-import jax_dataloader as jdl
-import jax
-from jaxtyping import PRNGKeyArray
 from typing import Optional
+
+import jax_dataloader as jdl
 from cryojax.data import (
     ParticleStack,
     RelionParticleStackDataset,
-    RelionParticleParameterDataset,
 )
+from jaxtyping import PRNGKeyArray
+
 
 class CustomJaxDataset(jdl.Dataset):
     def __init__(self, cryojax_dataset: RelionParticleStackDataset):
@@ -20,12 +20,12 @@ class CustomJaxDataset(jdl.Dataset):
 
 
 def create_dataloader(
-        relion_stack_dataset: RelionParticleStackDataset,
-        batch_size: int,
-        shuffle: bool = False,
-        drop_last: bool = False,
-        *,
-        jax_prng_key: Optional[PRNGKeyArray] = None,
+    relion_stack_dataset: RelionParticleStackDataset,
+    batch_size: int,
+    shuffle: bool = False,
+    drop_last: bool = False,
+    *,
+    jax_prng_key: Optional[PRNGKeyArray] = None,
 ):
     """
     Create a Jax DataLoader for a RelionParticleStackDataset.
@@ -46,7 +46,7 @@ def create_dataloader(
             batch_size=batch_size,
             shuffle=shuffle,
             drop_last=drop_last,
-            generator=jax_prng_key
+            generator=jax_prng_key,
         )
     else:
         dataloader = jdl.DataLoader(
@@ -54,6 +54,6 @@ def create_dataloader(
             backend="jax",
             batch_size=batch_size,
             shuffle=shuffle,
-            drop_last=drop_last
+            drop_last=drop_last,
         )
     return dataloader

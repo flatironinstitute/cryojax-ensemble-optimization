@@ -3,8 +3,8 @@ from .base_optimizer import (
 )
 from .loss_functions import (
     compute_likelihood_matrix as compute_likelihood_matrix,
-    neg_log_likelihood_from_walkers_and_weights as neg_log_likelihood_from_walkers_and_weights,
-    neg_log_likelihood_from_weights as neg_log_likelihood_from_weights,
+    compute_neg_log_likelihood as compute_neg_log_likelihood,
+    compute_neg_log_likelihood_from_weights as compute_neg_log_likelihood_from_weights,
 )
 from .optimizers import (
     IterativeEnsembleOptimizer as IterativeEnsembleOptimizer,

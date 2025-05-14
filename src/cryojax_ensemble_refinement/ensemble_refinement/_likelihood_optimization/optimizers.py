@@ -18,8 +18,8 @@ from jaxtyping import Array, Float
 from .base_optimizer import AbstractEnsembleParameterOptimizer
 from .loss_functions import (
     compute_likelihood_matrix,
-    neg_log_likelihood_from_walkers_and_weights,
-    neg_log_likelihood_from_weights,
+    compute_neg_log_likelihood,
+    compute_neg_log_likelihood_from_weights,
 )
 
 
@@ -37,7 +37,8 @@ class ProjGradDescWeightOptimizer(AbstractEnsembleParameterOptimizer, strict=Tru
         ],
     ):
         """
-        Optimize the weights of the walkers using projected gradient descent using all images.
+        Optimize the weights of the walkers using projected gradient descent
+        using all images.
 
         **Arguments:**
             walkers: The current positions of the walkers.
@@ -112,7 +113,7 @@ def _optimize_weights(
     likelihood_matrix: Float[Array, "n_images n_walkers"],
 ) -> Float[Array, " n_walkers"]:
     pg = ProjectedGradient(
-        fun=neg_log_likelihood_from_weights, projection=projection_simplex
+        fun=compute_neg_log_likelihood_from_weights, projection=projection_simplex
     )
     return pg.run(weights, likelihood_matrix=likelihood_matrix).params
 
@@ -130,7 +131,7 @@ def _optimize_walkers_positions(
     ],
 ) -> Float[Array, "n_walkers n_atoms 3"]:
     gradients = jax.grad(
-        neg_log_likelihood_from_walkers_and_weights,
+        compute_neg_log_likelihood,
         argnums=0,
     )(walkers, weights, relion_stack, args)
 
@@ -178,7 +179,7 @@ def _optimize_ensemble(
         likelihood_matrix = compute_likelihood_matrix(walkers, relion_stack, *args)
         weights = _optimize_weights(weights, likelihood_matrix)
         weights = jax.nn.softmax(weights)
-        loss = neg_log_likelihood_from_weights(weights, likelihood_matrix)
+        loss = compute_neg_log_likelihood_from_weights(weights, likelihood_matrix)
         return loss, weights
 
     gradients, weights = _loss_fn(walkers, weights)
@@ -205,7 +206,7 @@ def _compute_full_likelihood_matrix(
     Compute the full likelihood matrix for the given walkers and dataloader.
     """
 
-    shuffle = dataloader.dataloader.shuffle # save the original shuffle state
+    shuffle = dataloader.dataloader.shuffle  # save the original shuffle state
     dataloader.dataloader.shuffle = False
     # Compute the likelihood matrix for each batch in the dataloader
     likelihood_matrix = []
@@ -215,6 +216,6 @@ def _compute_full_likelihood_matrix(
 
     # restore the original shuffle state
     dataloader.dataloader.shuffle = shuffle
-    
+
     # Concatenate the likelihood matrices from all batches
     return jnp.concatenate(likelihood_matrix, axis=0)

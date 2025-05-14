@@ -1,9 +1,9 @@
 from ._likelihood_optimization import (
     AbstractEnsembleParameterOptimizer as AbstractEnsembleParameterOptimizer,
     compute_likelihood_matrix as compute_likelihood_matrix,
+    compute_neg_log_likelihood as compute_neg_log_likelihood,
+    compute_neg_log_likelihood_from_weights as compute_neg_log_likelihood_from_weights,
     IterativeEnsembleOptimizer as IterativeEnsembleOptimizer,
-    neg_log_likelihood_from_walkers_and_weights as neg_log_likelihood_from_walkers_and_weights,  # noqa
-    neg_log_likelihood_from_weights as neg_log_likelihood_from_weights,
     ProjGradDescWeightOptimizer as ProjGradDescWeightOptimizer,
     SteepestDescWalkerPositionsOptimizer as SteepestDescWalkerPositionsOptimizer,
 )
