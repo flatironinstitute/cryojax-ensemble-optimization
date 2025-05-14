@@ -71,6 +71,7 @@ class SteepestDescWalkerPositionsOptimizer(
         self.step_size = step_size
         self.n_steps = n_steps
 
+    @override
     def __call__(self, walkers, weights, dataloader, args):
         for i in range(self.n_steps):
             batch = next(iter(dataloader))
@@ -89,6 +90,7 @@ class IterativeEnsembleOptimizer(AbstractEnsembleParameterOptimizer):
         self.step_size = step_size
         self.n_steps = n_steps
 
+    @override
     def __call__(
         self,
         walkers: Float[Array, "n_walkers n_atoms 3"],
@@ -202,11 +204,17 @@ def _compute_full_likelihood_matrix(
     """
     Compute the full likelihood matrix for the given walkers and dataloader.
     """
+
+    shuffle = dataloader.dataloader.shuffle # save the original shuffle state
+    dataloader.dataloader.shuffle = False
     # Compute the likelihood matrix for each batch in the dataloader
     likelihood_matrix = []
     for batch in dataloader:
         lklhood_matrix = compute_likelihood_matrix(walkers, batch, *args)
         likelihood_matrix.append(lklhood_matrix)
 
+    # restore the original shuffle state
+    dataloader.dataloader.shuffle = shuffle
+    
     # Concatenate the likelihood matrices from all batches
     return jnp.concatenate(likelihood_matrix, axis=0)

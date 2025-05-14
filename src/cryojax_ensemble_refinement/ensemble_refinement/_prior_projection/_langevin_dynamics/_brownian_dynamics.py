@@ -5,16 +5,14 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float, Int, PRNGKeyArray
 
-from .._forcefields.base_forcefield import (
-    AbstractForceField,
-)
+from .._forcefields.base_forcefield import AbstractForceField
 from .._forcefields.biasing_forces import compute_harmonic_bias_potential_energy
 
 
 EnergyFuncArgs = TypeVar("EnergyFuncArgs")
 
 
-class AbstractLangevinSampler(eqx.Module, strict=True):
+class AbstractSampler(eqx.Module, strict=True):
     """
     Abstract class for a sampler.
     """
@@ -24,9 +22,9 @@ class AbstractLangevinSampler(eqx.Module, strict=True):
     forcefield: AbstractForceField
 
 
-class SteeredLangevinSampler(AbstractLangevinSampler):
+class SteeredOverdampedLangevinSampler(AbstractSampler):
     """
-    Langevin sampler for Langevin dynamics.
+    Overdamped Langevin sampler for Overdamped Langevin dynamics.
     """
 
     n_steps: Int
@@ -43,9 +41,9 @@ class SteeredLangevinSampler(AbstractLangevinSampler):
     ):
         """
         **Arguments:**
-        - `n_steps`: Number of Langevin steps to take.
-        - `step_size`: Step size for Langevin dynamics.
-        - `forcefield`: Force field to use for Langevin dynamics.
+        - `n_steps`: Number of steps to take.
+        - `step_size`: Step size for Overdamped Langevin dynamics.
+        - `forcefield`: Force field to use for Overdamped Langevin dynamics.
         - `biasing_force_constant`: Force constant for the biasing potential.
         """
         self.n_steps = n_steps
@@ -68,9 +66,9 @@ class SteeredLangevinSampler(AbstractLangevinSampler):
         energy_fn_args: Arguments for the energy function.
 
         **Returns:**
-        trajectory: Langevin Dynamics Trajectory.
+        trajectory: Overdamped Langevin Dynamics Trajectory.
         """
-        return _run_steered_langevin(
+        return _run_steered_overdamped_langevin(
             key,
             initial_atom_positions,
             ref_atom_positions,
@@ -81,9 +79,9 @@ class SteeredLangevinSampler(AbstractLangevinSampler):
         )
 
 
-class ParallelSteeredLangevinSampler(AbstractLangevinSampler):
+class ParallelSteeredOverdampedLangevinSampler(AbstractSampler):
     """
-    Parallel Langevin sampler for Langevin dynamics.
+    Parallel Overdamped Langevin sampler for Overdamped Langevin dynamics.
     """
 
     n_steps: Int
@@ -100,9 +98,9 @@ class ParallelSteeredLangevinSampler(AbstractLangevinSampler):
     ):
         """
         **Arguments:**
-        - `n_steps`: Number of Langevin steps to take.
-        - `step_size`: Step size for Langevin dynamics.
-        - `forcefield`: Force field to use for Langevin dynamics.
+        - `n_steps`: Number of steps to take.
+        - `step_size`: Step size for Overdamped Langevin dynamics.
+        - `forcefield`: Force field to use for Overdamped Langevin dynamics.
         - `biasing_force_constant`: Force constant for the biasing potential.
         """
         self.n_steps = n_steps
@@ -125,9 +123,9 @@ class ParallelSteeredLangevinSampler(AbstractLangevinSampler):
         energy_fn_args: Arguments for the energy function.
 
         **Returns:**
-        trajectory: Langevin Dynamics Trajectory for multiple walkers.
+        trajectory: Overdamped Langevin Dynamics Trajectory for multiple walkers.
         """
-        return _run_steered_langevin_parallel(
+        return _run_steered_overdamped_langevin_parallel(
             key,
             initial_atom_positions,
             ref_atom_positions,
@@ -139,7 +137,7 @@ class ParallelSteeredLangevinSampler(AbstractLangevinSampler):
 
 
 @eqx.filter_jit
-def _take_steered_langevin_step(
+def _take_steered_overdamped_langevin_step(
     key: PRNGKeyArray,
     atom_positions: Float[Array, "n_atoms 3"],
     ref_atom_positions: Float[Array, "n_atoms 3"],
@@ -157,14 +155,14 @@ def _take_steered_langevin_step(
     # jax.debug.print("{gradient}", gradient=gradient)
     new_positions = (
         atom_positions
-        + step_size * gradient
+        - step_size * gradient
         + jnp.sqrt(2 * step_size) * jax.random.normal(key, shape=atom_positions.shape)
     )
     return new_positions
 
 
 @eqx.filter_jit
-def _run_steered_langevin(
+def _run_steered_overdamped_langevin(
     key: PRNGKeyArray,
     initial_walker: Float[Array, "n_atoms 3"],
     reference_walker: Float[Array, "n_atoms 3"],
@@ -173,10 +171,10 @@ def _run_steered_langevin(
     forcefield: AbstractForceField,
     biasing_force_constant: Float,
 ):
-    def _step_for_scan(carry, x):
-        key, old_positions = carry
+    def _step_func(i, val):
+        key, old_positions = val
         key, subkey = jax.random.split(key)
-        new_positions = _take_steered_langevin_step(
+        new_positions = _take_steered_overdamped_langevin_step(
             subkey,
             old_positions,
             reference_walker,
@@ -184,18 +182,18 @@ def _run_steered_langevin(
             biasing_force_constant,
             step_size,
         )
-        return (key, new_positions), new_positions
+        return (key, new_positions)
 
-    _, trajectory = jax.lax.scan(
-        f=_step_for_scan,
-        init=(key, initial_walker),
-        length=n_steps,
+    return jax.lax.fori_loop(
+        lower=0,
+        upper=n_steps,
+        body_fun=_step_func,
+        init_val=(key, initial_walker),
     )
-    return trajectory
 
 
 @eqx.filter_jit
-def _take_steered_langevin_step_parallel(
+def _take_steered_overdamped_langevin_step_parallel(
     key: PRNGKeyArray,
     atom_positions: Float[Array, "n_walkers n_atoms 3"],
     ref_atom_positions: Float[Array, "n_walkers n_atoms 3"],
@@ -213,7 +211,7 @@ def _take_steered_langevin_step_parallel(
 
     new_positions = (
         atom_positions
-        + step_size * gradient
+        - step_size * gradient
         + jnp.sqrt(2 * step_size) * jax.random.normal(key, shape=atom_positions.shape)
     )
 
@@ -221,7 +219,7 @@ def _take_steered_langevin_step_parallel(
 
 
 @eqx.filter_jit
-def _run_steered_langevin_parallel(
+def _run_steered_overdamped_langevin_parallel(
     key: PRNGKeyArray,
     initial_walkers: Float[Array, "n_walkers n_atoms 3"],
     reference_walkers: Float[Array, "n_walkers n_atoms 3"],
@@ -230,10 +228,10 @@ def _run_steered_langevin_parallel(
     forcefield: AbstractForceField,
     biasing_force_constant: Float,
 ):
-    def _step_for_scan(carry, x):
-        key, old_positions = carry
+    def _step_func(i, val):
+        key, old_positions = val
         key, subkey = jax.random.split(key)
-        new_positions = _take_steered_langevin_step_parallel(
+        new_positions = _take_steered_overdamped_langevin_step_parallel(
             subkey,
             old_positions,
             reference_walkers,
@@ -241,11 +239,11 @@ def _run_steered_langevin_parallel(
             biasing_force_constant,
             step_size,
         )
-        return (key, new_positions), new_positions
+        return (key, new_positions)
 
-    _, trajectory = jax.lax.scan(
-        f=_step_for_scan,
-        init=(key, initial_walkers),
-        length=n_steps,
+    return jax.lax.fori_loop(
+        lower=0,
+        upper=n_steps,
+        body_fun=_step_func,
+        init_val=(key, initial_walkers),
     )
-    return trajectory

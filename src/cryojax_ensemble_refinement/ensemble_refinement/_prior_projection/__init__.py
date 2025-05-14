@@ -3,8 +3,8 @@ from ._forcefields import (
     compute_harmonic_bias_potential_energy as compute_harmonic_bias_potential_energy,
 )
 from ._langevin_dynamics import (
-    ParallelSteeredLangevinSampler as ParallelSteeredLangevinSampler,
-    SteeredLangevinSampler as SteeredLangevinSampler,
+    ParallelSteeredOverdampedLangevinSampler as ParallelSteeredOverdampedLangevinSampler,
+    SteeredOverdampedLangevinSampler as SteeredOverdampedLangevinSampler,
 )
 from ._molecular_dynamics import (
     SteeredMolecularDynamicsSimulator as SteeredMolecularDynamicsSimulator,

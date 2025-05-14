@@ -5,8 +5,8 @@ from equinox import AbstractVar, Module
 from jax_dataloader import DataLoader
 from jaxtyping import Array, Float, Int, PRNGKeyArray
 
-from ..likelihood_optimization.base_optimizer import AbstractEnsembleParameterOptimizer
-from ..prior_projection.base_prior_projector import AbstractPriorProjector
+from .._likelihood_optimization.base_optimizer import AbstractEnsembleParameterOptimizer
+from .._prior_projection.base_prior_projector import AbstractPriorProjector
 
 
 class AbstractEnsembleRefinementPipeline(Module):

@@ -8,7 +8,7 @@ import jax.numpy as jnp
 from cryojax.data import ParticleStack
 from jaxtyping import Array, Float
 
-from ..simulator._distributions import (
+from ...simulator._distributions import (
     VarianceMarginalizedWhiteGaussianNoise,
     WhiteGaussianNoise,
 )

@@ -55,7 +55,7 @@ def _contains_file_type(
 
 def _validate_file_names_in_dir(
     file_names: Union[str, List[str]], base_directory: DirectoryPath
-) -> List[FilePath]:
+) -> List[Path]:
     if isinstance(file_names, str):
         if "*" in file_names:
             file_names = os.path.join(base_directory, file_names)
@@ -65,12 +65,15 @@ def _validate_file_names_in_dir(
     elif isinstance(file_names, list):
         file_names = [os.path.join(base_directory, fname) for fname in file_names]
 
-    file_names = [Path(fname) for fname in file_names]
-    assert all([fname.exists() for fname in file_names]), (
+    form_file_names = [Path(fname) for fname in file_names]
+    possible_missing_files = [
+        str(fname) for fname in form_file_names if not fname.exists()
+    ]
+    assert len(possible_missing_files) == 0, (
         f"Some files do not exist in the directory {base_directory}. "
-        + f"Files: {', '.join([str(fname) for fname in file_names if not fname.exists()])}"
+        + f"Files: {', '.join(possible_missing_files)}"
     )
-    return file_names
+    return form_file_names
 
 
 class GeneratorConfig(BaseModel, extra="forbid"):
@@ -291,7 +294,8 @@ class cryojaxERConfigOptimizationConfig(BaseModel, extra="forbid"):
     )
     init_weights: Optional[List[float]] = Field(
         default=None,
-        description="Initial weights for the models. If None, will be set to uniform distribution.",
+        description="Initial weights for the models. "
+        "If None, will be set to uniform distribution.",
     )
     noise_variance: Optional[PositiveFloat] = Field(
         default=None,

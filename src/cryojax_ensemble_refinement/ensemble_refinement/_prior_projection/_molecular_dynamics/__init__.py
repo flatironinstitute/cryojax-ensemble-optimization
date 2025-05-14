@@ -1,3 +1,3 @@
-from ._openmm import (
+from .openmm import (
     SteeredMolecularDynamicsSimulator as SteeredMolecularDynamicsSimulator,
 )

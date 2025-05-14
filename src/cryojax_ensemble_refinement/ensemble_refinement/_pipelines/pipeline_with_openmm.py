@@ -1,7 +1,5 @@
 import os
 from typing import Any, List, Tuple
-from typing_extensions import override
-from tqdm import tqdm
 
 import jax.numpy as jnp
 import mdtraj
@@ -9,12 +7,13 @@ from equinox import Module
 from jax_dataloader import DataLoader
 from jaxtyping import Array, Float, Int
 from pydantic import DirectoryPath
+from tqdm import tqdm
 
-from ..likelihood_optimization.optimizers import (
+from .._likelihood_optimization.optimizers import (
     IterativeEnsembleOptimizer,
     ProjGradDescWeightOptimizer,
 )
-from ..prior_projection._molecular_dynamics._openmm import (
+from .._prior_projection._molecular_dynamics.openmm import (
     SteeredMolecularDynamicsSimulator,
 )
 
@@ -49,7 +48,6 @@ class EnsembleRefinementOpenMMPipeline(Module):
         self.atom_indices_for_opt = atom_indices_for_opt
         self.runs_postprocessing = runs_postprocessing
 
-    @override
     def __call__(
         self,
         initial_walkers: Float[Array, "n_walkers n_atoms 3"],

@@ -7,17 +7,21 @@ run_md_openmm
     Run MD simulations using OpenMM
 """
 
+import os
+import glob
+from natsort import natsorted
 import pathlib
-from abc import abstractmethod
-from typing import List, Optional, Callable, Dict, Any
+from typing import Callable, Dict, List, Optional, Tuple
+from typing_extensions import override
 
-import equinox as eqx
 import jax.numpy as jnp
 import mdtraj
 import openmm
 import openmm.app as openmm_app
 import openmm.unit as openmm_unit
 from jaxtyping import Array, Float, Int
+
+from ..base_prior_projector import AbstractPriorProjector
 
 
 DEFAULT_MD_PARAMS = {
@@ -34,73 +38,76 @@ DEFAULT_MD_PARAMS = {
 }
 
 
-class AbstractMolecularDynamicsSimulator(eqx.Module, strict=True):
-    @abstractmethod
-    def __call__(self):
-        return NotImplementedError
-
-
-class SteeredMolecularDynamicsSimulator:
+class SteeredMolecularDynamicsSimulator(AbstractPriorProjector):
     n_steps: Int
-    bias_constant_in_units: Float
+    _bias_constant_in_kj_per_mol_angs: Float
+    simulation: openmm_app.Simulation
     restrain_atom_list: List[Int]
-    path_to_checkpoint: str | pathlib.Path
+    base_state_file_path: str
 
     def __init__(
         self,
         path_to_initial_pdb: str | pathlib.Path,
-        bias_constant_in_units: Float,
+        bias_constant_in_kj_per_mol_angs: Float,
         n_steps: Int,
         restrain_atom_list: List[Int],
         parameters_for_md: Dict,
-        path_to_checkpoint: str | pathlib.Path,
+        base_state_file_path: str,
         *,
-        make_simulation_fn: Optional[Callable[[Dict, openmm_app.Topology], openmm_app.Simulation]] = None,
-        continue_from_checkpoint: bool = False,
+        make_simulation_fn: Optional[
+            Callable[[Dict, openmm_app.Topology], openmm_app.Simulation]
+        ] = None,
+        path_to_old_state_file: Optional[str] = None,
     ):
-        
-        if continue_from_checkpoint:
-            assert pathlib.Path(path_to_checkpoint).exists(), (
-                "Checkpoint file does not exist. "
-                "Please set continue_from_checkpoint to False or provide a valid checkpoint file."
-            )
-
         pdb = openmm_app.PDBFile(str(path_to_initial_pdb))
-        self.bias_constant_in_units = bias_constant_in_units
+        self._bias_constant_in_kj_per_mol_angs = bias_constant_in_kj_per_mol_angs
         self.restrain_atom_list = restrain_atom_list
+        
+        self.base_state_file_path = _validate_base_state_file_path(base_state_file_path)
 
         self.n_steps = n_steps
         parameters_for_md = _validate_and_set_params_for_md(parameters_for_md)
-    
+
         if make_simulation_fn is None:
-            self.simulation = _default_make_sim_fn(
-                parameters_for_md, pdb.topology
-            )
+            self.simulation = _default_make_sim_fn(parameters_for_md, pdb.topology)
         else:
-            self.simulation = make_simulation_fn(
-                parameters_for_md, pdb.topology
+            self.simulation = make_simulation_fn(parameters_for_md, pdb.topology)
+
+
+        if path_to_old_state_file is not None:
+            assert pathlib.Path(path_to_old_state_file).exists(), (
+                "path_to_old_state_file does not exist. "
+                "Please set to None or provide valid state file."
             )
-
-        self.path_to_checkpoint = path_to_checkpoint
-
-
-
-        if continue_from_checkpoint:
-            self.simulation.loadCheckpoint(self.path_to_checkpoint)
-    
+            self.simulation.loadState(str(path_to_old_state_file))
+        
         else:
             self.simulation.context.setPositions(pdb.positions)
             self.simulation.minimizeEnergy()
-            self.simulation.saveCheckpoint(self.path_to_checkpoint)
+        
+        path_to_state_file = f"{self.base_state_file_path}0.xml"
+        self.simulation.saveState(path_to_state_file)
 
         self.simulation = _add_restraint_force_to_simulation(
-            self.simulation, pdb.positions, self.restrain_atom_list, self.bias_constant_in_units
+            self.simulation,
+            self.simulation.context.getState(getPositions=True).getPositions(),
+            self.restrain_atom_list,
+            self.bias_constant_in_kj_per_mol_angs,
         )
 
+    @property
+    def bias_constant_in_kj_per_mol_angs(self) -> bool:
+        return self._bias_constant_in_kj_per_mol_angs
 
+    @bias_constant_in_kj_per_mol_angs.setter
+    def bias_constant_in_kj_per_mol(self, value: Float):
+        self._bias_constant_in_kj_per_mol_angs = value
 
-    def __call__(self, positions_for_bias_in_angstroms: Float[Array, "n_atoms 3"]):
-
+    @override
+    def __call__(
+        self,
+        positions_for_bias_in_angstroms: Float[Array, "n_atoms 3"],
+    ):
         simulation = _remove_last_force_from_simulation(self.simulation)
         simulation = _add_restraint_force_to_simulation(
             simulation,
@@ -108,39 +115,75 @@ class SteeredMolecularDynamicsSimulator:
                 positions_for_bias_in_angstroms / 10.0, self.simulation.topology
             ).openmm_positions(0),
             self.restrain_atom_list,
-            self.bias_constant_in_units,
+            self.bias_constant_in_kj_per_mol_angs,
         )
 
         simulation.context.reinitialize()
-        simulation.loadCheckpoint(self.path_to_checkpoint)
 
+        path_to_state_file = _get_curr_state_file_path(
+            self.base_state_file_path
+        )
+        simulation.loadState(path_to_state_file)
         simulation.step(self.n_steps)
 
-        simulation.saveCheckpoint(self.path_to_checkpoint)
+        path_to_state_file = _get_new_state_file_path(
+            self.base_state_file_path
+        )
+        simulation.saveState(path_to_state_file)
+
         positions = simulation.context.getState(getPositions=True).getPositions(
             asNumpy=True
         )
-        return jnp.array(positions) * 10.0  # Convert to angstroms
+        return jnp.array(positions) * 10.0 # Convert to Angstroms
+
+def _validate_base_state_file_path(base_state_file_path: str) -> str:
+    
+    # check if the path exists
+    base_dir = os.path.dirname(base_state_file_path)
+    if not os.path.exists(base_dir):
+        os.makedirs(base_dir)
+
+    if not base_state_file_path.endswith("_"):
+        return f"{base_state_file_path}_it"
+    else:
+        return f"{base_state_file_path}it"
+
+def _get_curr_state_file_path(
+    base_state_file_path: str,
+) -> str:
+    
+    # load all files in the directory that match the base path
+    return natsorted(glob.glob(f"{base_state_file_path}*.xml"))[-1]
+
+def _get_new_state_file_path(
+    base_state_file_path: str,
+) -> str:
+    
+    # load all files in the directory that match the base path
+    last_file = natsorted(glob.glob(f"{base_state_file_path}*.xml"))[-1]
+    # get the run counter from the last file
+    last_counter = int(last_file.split(base_state_file_path)[-1].split(".xml")[0])
+    return f"{base_state_file_path}{last_counter+1}.xml"
 
 
 def _add_restraint_force_to_simulation(
     simulation: openmm_app.Simulation,
     positions: openmm_unit.Quantity,
     restrain_atom_list: List[int],
-    bias_constant_in_units: float,
+    bias_constant_in_kj_per_mol_angs: float,
 ) -> openmm_app.Simulation:
-    
     RMSD_value = openmm.RMSDForce(
         positions,
         restrain_atom_list,
     )
 
     force_RMSD = openmm.CustomCVForce("0.5 * k * RMSD^2")
-    force_RMSD.addGlobalParameter("k", bias_constant_in_units)
+    force_RMSD.addGlobalParameter("k", bias_constant_in_kj_per_mol_angs)
     force_RMSD.addCollectiveVariable("RMSD", RMSD_value)
     simulation.system.addForce(force_RMSD)
 
     return simulation
+
 
 def _remove_last_force_from_simulation(
     simulation: openmm_app.Simulation,
@@ -151,13 +194,10 @@ def _remove_last_force_from_simulation(
 
 
 def _default_make_sim_fn(parameters_for_md: dict, topology) -> openmm_app.Simulation:
-
     forcefield = _create_forcefield(parameters_for_md)
     integrator = _create_integrator(parameters_for_md)
     platform = _create_platform(parameters_for_md)
-    system = _create_system(
-        parameters_for_md, forcefield, topology
-    )    
+    system = _create_system(parameters_for_md, forcefield, topology)
 
     simulation = openmm_app.Simulation(
         topology,
@@ -168,6 +208,7 @@ def _default_make_sim_fn(parameters_for_md: dict, topology) -> openmm_app.Simula
     )
 
     return simulation
+
 
 def _create_forcefield(parameters_for_md: dict) -> openmm_app.ForceField:
     return openmm_app.ForceField(
