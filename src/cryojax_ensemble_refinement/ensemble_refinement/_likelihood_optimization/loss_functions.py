@@ -8,10 +8,41 @@ import jax.numpy as jnp
 from cryojax.data import ParticleStack
 from jaxtyping import Array, Float
 
-from ...simulator._distributions import (
-    VarianceMarginalizedWhiteGaussianNoise,
-    WhiteGaussianNoise,
-)
+
+def _likelihood_isotropic_gaussian(
+    computed_image: Float[Array, "n_pixels n_pixels"],
+    observed_image: Float[Array, "n_pixels n_pixels"],
+    noise_variance: Float,
+) -> Float:
+    cc = jnp.mean(computed_image**2)
+    co = jnp.mean(observed_image * computed_image)
+    c = jnp.mean(computed_image)
+    o = jnp.mean(observed_image)
+
+    scale = (co - c * o) / (cc - c**2)
+    bias = o - scale * c
+
+    return jnp.sum((scale * computed_image - observed_image + bias) ** 2) / (
+        2 * noise_variance
+    )
+
+
+def _likelihood_isotropic_gaussian_marginalized(
+    computed_image: Float[Array, "n_pixels n_pixels"],
+    observed_image: Float[Array, "n_pixels n_pixels"],
+) -> Float:
+    cc = jnp.mean(computed_image**2)
+    co = jnp.mean(observed_image * computed_image)
+    c = jnp.mean(computed_image)
+    o = jnp.mean(observed_image)
+
+    scale = (co - c * o) / (cc - c**2)
+    bias = o - scale * c
+    n_pixels = computed_image.size
+
+    return (2 - n_pixels) * jnp.log(
+        jnp.linalg.norm(scale * computed_image - observed_image + bias)
+    )
 
 
 def _compute_likelihood_image_and_walker(
@@ -40,19 +71,25 @@ def _compute_likelihood_image_and_walker(
         relion_stack.parameters.instrument_config, scattering_theory
     )
 
-    if noise_variance is None:
-        distribution = VarianceMarginalizedWhiteGaussianNoise(imaging_pipeline)
-    else:
-        distribution = WhiteGaussianNoise(imaging_pipeline, noise_variance)
+    computed_image = imaging_pipeline.render(outputs_real_space=True)
 
-    return distribution.log_likelihood(relion_stack.images)
+    if noise_variance is None:
+        loss = _likelihood_isotropic_gaussian_marginalized(
+            computed_image, relion_stack.images
+        )
+    else:
+        loss = _likelihood_isotropic_gaussian(
+            computed_image, relion_stack.images, noise_variance
+        )
+
+    return loss
 
 
 @eqx.filter_jit
 @partial(eqx.filter_vmap, in_axes=(None, eqx.if_array(0), None, None, None), out_axes=0)
-@partial(eqx.filter_vmap, in_axes=(0, None, None, None, None), out_axes=0)
+@partial(eqx.filter_vmap, in_axes=(0, None, None, None, eqx.if_array(0)), out_axes=0)
 def compute_likelihood_matrix(
-    ensemble_walkers: Float[Array, "n_walkers n_atoms 3"],
+    ensemble_walkers: Float[Array, " n_atoms 3"],
     relion_stack: ParticleStack,
     gaussian_amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
     gaussian_variances: Float[Array, "n_atoms n_gaussians_per_atom"],

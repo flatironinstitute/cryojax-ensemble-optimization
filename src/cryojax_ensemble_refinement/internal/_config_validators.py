@@ -3,7 +3,7 @@ import os
 import warnings
 from functools import partial
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Self, Union
 from typing_extensions import Annotated, Literal
 
 import jax.numpy as jnp
@@ -32,6 +32,8 @@ def _is_file_type(filename: str, file_type: str) -> str:
     return filename
 
 
+# Might be useful, and I don't want to figure it out again
+# TODO: remove if not needed
 def _contains_file_type(
     directory_path: DirectoryPath, file_type: str | List[str]
 ) -> DirectoryPath:
@@ -55,7 +57,7 @@ def _contains_file_type(
 
 def _validate_file_names_in_dir(
     file_names: Union[str, List[str]], base_directory: DirectoryPath
-) -> List[Path]:
+) -> List[str]:
     if isinstance(file_names, str):
         if "*" in file_names:
             file_names = os.path.join(base_directory, file_names)
@@ -65,36 +67,78 @@ def _validate_file_names_in_dir(
     elif isinstance(file_names, list):
         file_names = [os.path.join(base_directory, fname) for fname in file_names]
 
-    form_file_names = [Path(fname) for fname in file_names]
+    formatted_file_names = [fname for fname in file_names]
     possible_missing_files = [
-        str(fname) for fname in form_file_names if not fname.exists()
+        fname for fname in formatted_file_names if not os.path.exists(fname)
     ]
     assert len(possible_missing_files) == 0, (
         f"Some files do not exist in the directory {base_directory}. "
         + f"Files: {', '.join(possible_missing_files)}"
     )
-    return form_file_names
+    return formatted_file_names
 
 
-class GeneratorConfig(BaseModel, extra="forbid"):
+class DatasetGeneratorConfigAtomicModels(BaseModel, extra="forbid"):
+    """
+    Parameter for loading the atomic models parameters used
+    in the data generation pipeline.
+    """
+
+    # TODO: add support for format used for RNA models
+    path_to_atomic_models: DirectoryPath = Field(
+        description="Path to the directory containing the atomic models for image generation."  # noqa
+    )
+    atomic_models_filenames: Union[str, List[str]] = Field(
+        description="Filename of the atomic model(s) to use for image generation, "
+        + "relative to path_to_models. "
+        + "If a pattern is provided, all files matching the pattern will be used."
+        + " The atomic models should be in path_to_models."
+    )
+
+    atomic_models_probabilities: Union[PositiveFloat, List[PositiveFloat]] = Field(
+        description="Probabilstic weights for each model. Will be normalized to sum to 1."
+    )
+
+    loads_b_factors: bool = Field(
+        default=False,
+        description="Whether to load the B-factors from the PDB file. "
+        + "Only used if the atomic model is in PDB format. "
+        + "Otherwise it will be ignored.",
+    )
+
+    @field_serializer("atomic_models_probabilities")
+    def serialize_atomic_model_probabilities(self, v):
+        if isinstance(v, int):
+            v = [v]
+        v = jnp.array(v)
+        return v / jnp.sum(v)
+
+    @model_validator(mode="after")
+    def validate_path_to_atomic_models(self) -> Self:
+        self.atomic_models_filenames = _validate_file_names_in_dir(
+            self.atomic_models_filenames, self.path_to_atomic_models
+        )
+
+        valid_extensions = [".pdb"]
+        for i in range(len(self.atomic_models_filenames)):
+            assert Path(self.atomic_models_filenames[i]).suffix in valid_extensions, (
+                f"File {self.atomic_models_filenames[i]} is not a valid file type. "
+                + f"Valid file types are: {', '.join(valid_extensions)}"
+            )
+
+        return self
+
+
+class DatasetGeneratorConfig(BaseModel, extra="forbid"):
     """
     Parameters for the data generation pipeline.
-
-    The experiment name is simply for naming purposes.
 
     If an item can be either a list or a single value, the list will be used as the range for random data generation. For example, if `offset_x_in_angstroms` is defined as `[0, 10]`, the offset in the x direction will be randomly generated between 0 and 10 for each image. If a single value is provided, the same value will be used for all images.
 
     """  # noqa
 
     # Experiment setup
-    experiment_name: str = Field(
-        description="Name of the experiment. Used to name the output files."
-    )
     number_of_images: PositiveInt = Field(description="Number of images to generate.")
-
-    weights_models: Union[PositiveFloat, List[PositiveFloat]] = Field(
-        description="Probabilstic weights for each model. Will be normalized to sum to 1."
-    )
 
     # Instrument
     pixel_size: PositiveFloat = Field(description="Pixel size in Angstroms.")
@@ -121,44 +165,47 @@ class GeneratorConfig(BaseModel, extra="forbid"):
     astigmatism_in_angstroms: Union[float, List[float]] = Field(
         0.0, description="Astigmatism in Angstroms."
     )
-    astigmatism_angle: Union[float, List[float]] = Field(
+    astigmatism_angle_in_degrees: Union[float, List[float]] = Field(
         0.0, description="Astigmatism angle in degrees."
     )
     phase_shift: Union[float, List[float]] = Field(
         0.0, description="Phase shift in radians."
     )
     amplitude_contrast_ratio: PositiveFloat = Field(
-        1.0, description="Amplitude contrast ratio."
+        0.1, description="Amplitude contrast ratio."
     )
     spherical_aberration_in_mm: PositiveFloat = Field(
         2.7, description="Microscope spherical aberration in mm."
     )
     ctf_scale_factor: PositiveFloat = Field(1.0, description="CTF scale factor.")
-    envelope_bfactor: Union[float, List[float]] = Field(
+    envelope_b_factor: Union[float, List[float]] = Field(
         0.0, description="Envelope B-factor in Angstroms^2."
     )
 
-    # Random stuff
+    # Noise and randomness
     noise_snr: Union[PositiveFloat, List[PositiveFloat]] = Field(
         description="Signal to noise ratio."
     )
-    noise_radius_mask: Optional[PositiveFloat] = Field(
-        None,
-        description="Radius of the mask for noise generation."
+    mask_radius: Optional[PositiveFloat] = Field(
+        default=None,
+        description="Radius for a circular cryojax Mask."
         + " This is used to compute the variance of the signal, "
-        + "and then define the noise variance through the SNR",
+        + "and then define the noise variance through the SNR. "
+        + "If None, will be set to box_size // 3.",
     )
+    mask_rolloff_width: PositiveFloat = Field(
+        default=0.0, description="Width of the rolloff for the mask. "
+    )
+
     rng_seed: int = Field(0, description="Seed for random number generation.")
 
+    # Atomic modelss
+    atomic_models_params: dict = Field(
+        description="Parameters for the atomic models. This is a dictionary "
+        + "formatted by the `DatasetGeneratorConfigAtomicModels` class."
+    )
+
     # I/O
-    path_to_models: DirectoryPath = Field(
-        description="Path to the directory containing the atomic models for image generation."  # noqa
-    )
-    models_fnames: Union[str, List[str]] = Field(
-        description="Filename of the atomic model(s) to use for image generation."
-        + "If a pattern is provided, all files matching the pattern will be used."
-        + " The atomic models should be in path_to_models."
-    )
     path_to_relion_project: Path = Field(
         description="Path to the RELION project directory."
     )
@@ -166,50 +213,10 @@ class GeneratorConfig(BaseModel, extra="forbid"):
     batch_size: PositiveInt = Field(description="Batch size for data generation.")
     overwrite: bool = Field(False, description="Overwrite existing files if True.")
 
-    @model_validator(mode="after")
-    def validate_config_generator_req_values(self):
-        # Noise
-        if self.noise_radius_mask is not None:
-            if self.noise_radius_mask > self.box_size:
-                warnings.warn(
-                    "Noise radius mask is greater than box size. Setting to box size."
-                )
-                self.noise_radius_mask = self.box_size
-
-        if isinstance(self.models_fnames, str):
-            if "*" in self.models_fnames:
-                models_fnames = os.path.join(self.path_to_models, self.models_fnames)
-                models_fnames = natsorted(glob.glob(models_fnames))
-                if len(models_fnames) == 0:
-                    raise FileNotFoundError(
-                        f"No files found with pattern {self.models_fnames}"
-                    )
-            else:
-                models_fnames = [self.models_fnames]
-
-        elif isinstance(self.models_fnames, list):
-            models_fnames = self.models_fnames
-
-        else:
-            raise ValueError("models_fnames must be a string or a list of strings.")
-
-        for i in range(len(models_fnames)):
-            models_fnames[i] = os.path.join(self.path_to_models, models_fnames[i])
-            if not os.path.exists(models_fnames[i]):
-                raise FileNotFoundError(f"Model {models_fnames[i]} does not exist.")
-
-        return self
-
-    @field_serializer("weights_models")
-    def serialize_weights_models(self, v):
-        if isinstance(v, int):
-            v = [v]
-        v = jnp.array(v)
-        return v / jnp.sum(v)
-
-    @field_serializer("models_fnames")
-    def serialize_models_fname(self, v):
-        return _validate_file_names_in_dir(v, self.path_to_models)
+    @field_validator("atomic_models_params")
+    @classmethod
+    def validate_atomic_models_params(cls, v):
+        return dict(DatasetGeneratorConfigAtomicModels(**v).model_dump())
 
     @field_serializer("offset_x_in_angstroms")
     def serialize_offset_x_in_angstroms(self, v):
@@ -243,7 +250,7 @@ class GeneratorConfig(BaseModel, extra="forbid"):
             v = jnp.array(v)
         return v
 
-    @field_serializer("astigmatism_angle")
+    @field_serializer("astigmatism_angle_in_degrees")
     def serialize_astigmatism_angle(self, v):
         if isinstance(v, float):
             v = jnp.array([v, v])
@@ -259,8 +266,8 @@ class GeneratorConfig(BaseModel, extra="forbid"):
             v = jnp.array(v)
         return v
 
-    @field_serializer("envelope_bfactor")
-    def serialize_envelope_bfactor(self, v):
+    @field_serializer("envelope_b_factor")
+    def serialize_envelope_b_factor(self, v):
         if isinstance(v, float):
             v = jnp.array([v, v])
         else:
@@ -275,10 +282,17 @@ class GeneratorConfig(BaseModel, extra="forbid"):
             v = jnp.array(v)
         return v
 
-    @field_serializer("noise_radius_mask")
+    @field_serializer("mask_radius")
     def serialize_noise_radius_mask(self, v):
         if v is None:
             v = self.box_size // 3
+
+        elif v > self.box_size:
+            warnings.warn(
+                "Noise radius mask is greater than box size. Setting to box size."
+            )
+            v = self.box_size
+
         return v
 
 
@@ -340,21 +354,18 @@ class cryojaxERConfigMDConfig(BaseModel, extra="forbid"):
 
 
 class cryojaxERConfig(BaseModel, extra="forbid"):
-    experiment_name: str = Field(
-        description="Name of the experiment. Used to create the output directory."
-    )
     # I/O
     path_to_models_and_chkpoints: DirectoryPath = Field(
         description="Path to the directory containing the models and checkpoints."
     )
 
-    models_fnames: Union[str | Path, List[str | Path]] = Field(
+    atomic_models_filenames: Union[str, List[str]] = Field(
         description="List of files containing the atomic models. "
         + "path_to_models_and_chkpoints. "
         + "If a string, it must contain a glob pattern. "
         + "Files must in .pdb format."
     )
-    checkpoints_fnames: Optional[Union[str | Path, List[str | Path]]] = Field(
+    checkpoints_fnames: Optional[Union[str, List[str]]] = Field(
         default=None,
         description="List of files containing the openmm checkpoints in "
         + "path_to_models_and_chkpoints. "
@@ -362,7 +373,7 @@ class cryojaxERConfig(BaseModel, extra="forbid"):
         + "Files must in .chk format.",
     )
     ref_model_fname: Annotated[
-        str | Path, AfterValidator(partial(_is_file_type, file_type="pdb"))
+        str, AfterValidator(partial(_is_file_type, file_type="pdb"))
     ] = Field(
         description="File containing the reference model in path_to_models_and_chkpoints."
     )
@@ -372,7 +383,7 @@ class cryojaxERConfig(BaseModel, extra="forbid"):
     path_to_relion_project: DirectoryPath = Field(
         description="Path to the relion project directory."
     )
-    output_path: Path = Field(
+    path_to_output: Path = Field(
         description="Path to the output directory. "
         + "If it does not exist, it will be created.",
     )
@@ -392,8 +403,8 @@ class cryojaxERConfig(BaseModel, extra="forbid"):
 
     @model_validator(mode="after")
     def validate_config(self):
-        self.models_fnames = _validate_file_names_in_dir(
-            self.models_fnames, self.path_to_models_and_chkpoints
+        self.atomic_models_filenames = _validate_file_names_in_dir(
+            self.atomic_models_filenames, self.path_to_models_and_chkpoints
         )
 
         if self.checkpoints_fnames is not None:
@@ -401,11 +412,11 @@ class cryojaxERConfig(BaseModel, extra="forbid"):
                 self.checkpoints_fnames, self.path_to_models_and_chkpoints
             )
 
-        ref_model_path = Path(
-            os.path.join(self.path_to_models_and_chkpoints, self.ref_model_fname)
+        ref_model_path = os.path.join(
+            self.path_to_models_and_chkpoints, self.ref_model_fname
         )
-        assert (
-            ref_model_path.exists()
+        assert os.path.exists(
+            ref_model_path
         ), f"Reference model {ref_model_path} does not exist."
         self.ref_model_fname = ref_model_path
 
@@ -427,7 +438,7 @@ class cryojaxERConfig(BaseModel, extra="forbid"):
     def validate_md_sampler_config(cls, values):
         return dict(cryojaxERConfigMDConfig(**values).model_dump())
 
-    @field_validator("output_path")
+    @field_validator("path_to_output")
     @classmethod
     def serialize_output_path(cls, v):
         if not os.path.exists(v):
