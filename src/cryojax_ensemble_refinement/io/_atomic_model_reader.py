@@ -1,11 +1,12 @@
-from typing import List, Dict
-from jaxtyping import Float, Array
 from pathlib import Path
+from typing import Dict, List
+
 from cryojax.constants import (
     convert_b_factor_to_variance,
     get_tabulated_scattering_factor_parameters,
 )
 from cryojax.io import read_atoms_from_pdb
+from jaxtyping import Array, Float
 
 
 def read_atomic_models(
@@ -39,9 +40,9 @@ def read_atomic_models(
         [Path(file).suffix == file_extension for file in atomic_models_filenames]
     ), "All files must have the same extension."
 
-    assert all([Path(file).exists() for file in atomic_models_filenames]), (
-        "Some files do not exist."
-    )
+    assert all(
+        [Path(file).exists() for file in atomic_models_filenames]
+    ), "Some files do not exist."
 
     if file_extension == ".pdb":
         atomic_models_scattering_params = _read_atomic_models_from_pdb(
@@ -49,7 +50,7 @@ def read_atomic_models(
         )
     else:
         raise NotImplementedError(f"File extension {file_extension} not supported.")
-    
+
     return atomic_models_scattering_params
 
 

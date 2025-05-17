@@ -14,7 +14,8 @@ def render_image_with_white_gaussian_noise(
     relion_particle_parameters: RelionParticleParameters,
     constant_args: Tuple[
         Tuple[cxs.AbstractPotentialRepresentation],
-        cxs.AbstractPotentialIntegrator, AbstractMask
+        cxs.AbstractPotentialIntegrator,
+        AbstractMask,
     ],
     per_particle_args: Tuple[PRNGKeyArray, Int, Float],
 ) -> Float[

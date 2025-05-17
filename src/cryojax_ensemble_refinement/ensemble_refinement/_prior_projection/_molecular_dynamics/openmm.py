@@ -158,7 +158,7 @@ def _get_new_state_file_path(
     last_file = natsorted(glob.glob(f"{base_state_file_path}*.xml"))[-1]
     # get the run counter from the last file
     last_counter = int(last_file.split(base_state_file_path)[-1].split(".xml")[0])
-    return f"{base_state_file_path}{last_counter+1}.xml"
+    return f"{base_state_file_path}{last_counter + 1}.xml"
 
 
 def _add_restraint_force_to_simulation(

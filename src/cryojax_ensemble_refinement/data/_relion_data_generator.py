@@ -36,7 +36,7 @@ def generate_relion_parameter_dataset(
         key: JAX random key for generating random numbers.
         config: Configuration object containing the parameters for generating the dataset.
     **Returns:**
-        parameter_dataset: A RelionParticleParameterDataset object containing 
+        parameter_dataset: A RelionParticleParameterDataset object containing
         the generated particle parameters.
     """
 
