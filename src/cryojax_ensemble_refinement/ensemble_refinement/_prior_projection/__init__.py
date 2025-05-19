@@ -7,6 +7,7 @@ from ._langevin_dynamics import (
     SteeredOverdampedLangevinSampler as SteeredOverdampedLangevinSampler,
 )
 from ._molecular_dynamics import (
-    SteeredMolecularDynamicsSimulator as SteeredMolecularDynamicsSimulator,
+    EnsembleSteeredMDSimulator as EnsembleSteeredMDSimulator,
+    SteeredMDSimulator as SteeredMDSimulator,
 )
 from .base_prior_projector import AbstractPriorProjector as AbstractPriorProjector

@@ -13,7 +13,7 @@ from cryojax.data import (
     write_simulated_image_stack_from_starfile,
     write_starfile_with_particle_parameters,
 )
-from cryojax.image.operators import AbstractMask, Constant, FourierGaussian
+from cryojax.image.operators import AbstractMask, FourierGaussian
 from cryojax.rotations import SO3
 from jaxtyping import Array, Float, PRNGKeyArray
 
@@ -206,8 +206,8 @@ def _make_particle_parameters(
     astigmatism_angle = jax.random.uniform(
         subkey,
         (),
-        minval=config["astigmatism_angle"][0],
-        maxval=config["astigmatism_angle"][1],
+        minval=config["astigmatism_angle_in_degrees"][0],
+        maxval=config["astigmatism_angle_in_degrees"][1],
     )
     key, subkey = jax.random.split(key)
 
@@ -219,8 +219,8 @@ def _make_particle_parameters(
     b_factor = jax.random.uniform(
         subkey,
         (),
-        minval=config["envelope_bfactor"][0],
-        maxval=config["envelope_bfactor"][1],
+        minval=config["envelope_b_factor"][0],
+        maxval=config["envelope_b_factor"][1],
     )
     # no more random numbers needed
 
@@ -229,11 +229,8 @@ def _make_particle_parameters(
     amplitude_contrast_ratio = config["amplitude_contrast_ratio"]
     ctf_scale_factor = config["ctf_scale_factor"]
 
-    if jnp.isclose(b_factor, 0.0):
-        envelope = Constant(value=ctf_scale_factor)
-
-    else:
-        envelope = FourierGaussian(b_factor=b_factor, amplitude=ctf_scale_factor)
+    b_factor = jnp.clip(b_factor, 1e-16, None)
+    envelope = FourierGaussian(b_factor=b_factor, amplitude=ctf_scale_factor)
 
     # ... build the CTF
     transfer_theory = cxs.ContrastTransferTheory(

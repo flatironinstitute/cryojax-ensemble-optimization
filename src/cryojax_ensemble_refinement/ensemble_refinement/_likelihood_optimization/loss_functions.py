@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Optional, Tuple
+from typing import Optional
 
 import cryojax.simulator as cxs
 import equinox as eqx
@@ -85,9 +85,13 @@ def _compute_likelihood_image_and_walker(
     return loss
 
 
-@eqx.filter_jit
-@partial(eqx.filter_vmap, in_axes=(None, eqx.if_array(0), None, None, None), out_axes=0)
-@partial(eqx.filter_vmap, in_axes=(0, None, None, None, eqx.if_array(0)), out_axes=0)
+# @eqx.filter_jit
+@partial(
+    eqx.filter_vmap,
+    in_axes=(None, eqx.if_array(0), None, None, eqx.if_array(0)),
+    out_axes=0,
+)
+@partial(eqx.filter_vmap, in_axes=(0, None, 0, 0, None), out_axes=0)
 def compute_likelihood_matrix(
     ensemble_walkers: Float[Array, " n_atoms 3"],
     relion_stack: ParticleStack,
@@ -122,7 +126,7 @@ def compute_likelihood_matrix(
     )
 
 
-@eqx.filter_jit
+# @eqx.filter_jit
 def compute_neg_log_likelihood_from_weights(
     weights: Float[Array, " n_walkers"],
     likelihood_matrix: Float[Array, "n_images n_walkers"],
@@ -148,16 +152,14 @@ def compute_neg_log_likelihood_from_weights(
     return -jnp.mean(log_lklhood)
 
 
-@eqx.filter_jit
+# @eqx.filter_jit
 def compute_neg_log_likelihood(
     walkers: Float[Array, "n_walkers n_atoms 3"],
     weights: Float[Array, " n_walkers"],
     relion_stack: ParticleStack,
-    args: Tuple[
-        Float[Array, "n_atoms n_gaussians_per_atom"],
-        Float[Array, "n_atoms n_gaussians_per_atom"],
-        Float | None,
-    ],
+    gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
+    gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
+    noise_variance: Optional[Float] = None,
 ) -> Float:
     """
     Compute the negative log likelihood from the walkers and weights. The likelihood is
@@ -170,9 +172,14 @@ def compute_neg_log_likelihood(
             with shape (n_walkers, n_atoms, 3).
         weights: The weights of the ensemble.
         relion_stack: A cryojax `ParticleStack` object.
-        args: The arguments for the likelihood function.
+        gaussian_amplitudes: The amplitudes for the GMM atom potential.
+        gaussian_variances: The variances for the GMM atom potential.
+        noise_variance: The noise variance for the imaging pipeline. If None, the
+            variance is marginalized over the noise. This is a scalar.
     Returns:
         The negative log likelihood of the ensemble.
     """
-    lklhood_matrix = compute_likelihood_matrix(walkers, relion_stack, *args)
+    lklhood_matrix = compute_likelihood_matrix(
+        walkers, relion_stack, gaussian_amplitudes, gaussian_variances, noise_variance
+    )
     return compute_neg_log_likelihood_from_weights(weights, lklhood_matrix)

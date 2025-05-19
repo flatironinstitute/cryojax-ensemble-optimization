@@ -1,3 +1,4 @@
 from .openmm import (
-    SteeredMolecularDynamicsSimulator as SteeredMolecularDynamicsSimulator,
+    EnsembleSteeredMDSimulator as EnsembleSteeredMDSimulator,
+    SteeredMDSimulator as SteeredMDSimulator,
 )

@@ -22,7 +22,9 @@ def _get_commands(cmd_dir: str, doc_str: str = "") -> None:
 
     """  # noqa: E501
     parser = argparse.ArgumentParser(description=doc_str)
-    parser.add_argument("--version", action="version", version="Cryo-MD " + __version__)
+    parser.add_argument(
+        "--version", action="version", version="cryojax-ER " + __version__
+    )
 
     subparsers = parser.add_subparsers(title="Choose a command")
     subparsers.required = True
@@ -33,7 +35,9 @@ def _get_commands(cmd_dir: str, doc_str: str = "") -> None:
     # use to mark a module in these directories as added to the command namespace
     for module_file in module_files:
         if module_file != "__init__.py" and module_file[-3:] == ".py":
-            module_name = ".".join(["cryo_md", dir_lbl, module_file[:-3]])
+            module_name = ".".join(
+                ["cryojax_ensemble_refinement", dir_lbl, module_file[:-3]]
+            )
             module = import_module(module_name)
 
             if hasattr(module, "add_args"):

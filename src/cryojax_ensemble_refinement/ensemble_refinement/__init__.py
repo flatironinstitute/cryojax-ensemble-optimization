@@ -15,7 +15,8 @@ from ._prior_projection import (
     AbstractForceField as AbstractForceField,
     AbstractPriorProjector as AbstractPriorProjector,
     compute_harmonic_bias_potential_energy as compute_harmonic_bias_potential_energy,
+    EnsembleSteeredMDSimulator as EnsembleSteeredMDSimulator,
     ParallelSteeredOverdampedLangevinSampler as ParallelSteeredOverdampedLangevinSampler,
-    SteeredMolecularDynamicsSimulator as SteeredMolecularDynamicsSimulator,
+    SteeredMDSimulator as SteeredMDSimulator,
     SteeredOverdampedLangevinSampler as SteeredOverdampedLangevinSampler,
 )

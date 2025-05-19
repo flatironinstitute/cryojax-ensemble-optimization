@@ -84,4 +84,4 @@ reportIncompatibleVariableOverride = false  # Incompatible with eqx.AbstractVar
 include = ["cryojax_ensemble_refinement", "tests"]
 
 [project.scripts]
-cryojax_ensemble_refinement = "cryojax_ensemble_refinement.command_line:main_commands"
+cryojax_er = "cryojax_ensemble_refinement.command_line:main_commands"

@@ -14,7 +14,8 @@ from .._likelihood_optimization.optimizers import (
     ProjGradDescWeightOptimizer,
 )
 from .._prior_projection._molecular_dynamics.openmm import (
-    SteeredMolecularDynamicsSimulator,
+    EnsembleSteeredMDSimulator,
+    SteeredMDSimulator,
 )
 
 
@@ -24,7 +25,7 @@ class EnsembleRefinementOpenMMPipeline(Module):
     Ensemble refinement pipeline using OpenMM for molecular dynamics simulation.
     """
 
-    prior_projectors: List[SteeredMolecularDynamicsSimulator]
+    prior_projector: EnsembleSteeredMDSimulator | SteeredMDSimulator
     likelihood_optimizer: IterativeEnsembleOptimizer
     n_steps: int
     reference_structure: mdtraj.Trajectory
@@ -33,7 +34,7 @@ class EnsembleRefinementOpenMMPipeline(Module):
 
     def __init__(
         self,
-        prior_projectors: List[SteeredMolecularDynamicsSimulator],
+        prior_projector: EnsembleSteeredMDSimulator | SteeredMDSimulator,
         likelihood_optimizer: IterativeEnsembleOptimizer,
         n_steps: int,
         ref_structure_for_opt: mdtraj.Trajectory,
@@ -41,7 +42,7 @@ class EnsembleRefinementOpenMMPipeline(Module):
         *,
         runs_postprocessing: bool = True,
     ):
-        self.prior_projectors = prior_projectors
+        self.prior_projector = prior_projector
         self.likelihood_optimizer = likelihood_optimizer
         self.n_steps = n_steps
         self.reference_structure = ref_structure_for_opt
@@ -60,8 +61,16 @@ class EnsembleRefinementOpenMMPipeline(Module):
         Float[Array, "n_steps n_walkers n_atoms 3"],
         Float[Array, "n_steps n_walkers"],
     ]:
+        md_states = self.prior_projector.initialize()
         walkers = initial_walkers.copy()
         weights = initial_weights.copy()
+
+        if walkers.ndim == 2:
+            walkers = jnp.expand_dims(walkers, axis=0)
+
+        if weights.ndim == 0:
+            weights = jnp.expand_dims(weights, axis=0)
+
         writers = [
             mdtraj.formats.XTCTrajectoryFile(
                 os.path.join(output_directory, f"traj_walker_{i}.xtc"), "w"
@@ -83,8 +92,7 @@ class EnsembleRefinementOpenMMPipeline(Module):
 
             walkers = walkers.at[:, self.atom_indices_for_opt, :].set(tmp_walkers)
 
-            for i in range(len(self.prior_projectors)):
-                walkers = walkers.at[i].set(self.prior_projectors[i](walkers[i]))
+            walkers, md_states = self.prior_projector(walkers, md_states)
 
             walkers = _align_walkers_to_reference(
                 walkers, self.reference_structure, self.atom_indices_for_opt

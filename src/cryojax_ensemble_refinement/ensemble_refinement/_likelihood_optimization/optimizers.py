@@ -6,7 +6,6 @@ from functools import partial
 from typing import Tuple
 from typing_extensions import override
 
-import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax_dataloader as jdl
@@ -107,7 +106,7 @@ class IterativeEnsembleOptimizer(AbstractEnsembleParameterOptimizer):
         return walkers, weights
 
 
-@eqx.filter_jit
+# @eqx.filter_jit
 def _optimize_weights(
     weights: Float[Array, " n_walkers"],
     likelihood_matrix: Float[Array, "n_images n_walkers"],
@@ -118,22 +117,30 @@ def _optimize_weights(
     return pg.run(weights, likelihood_matrix=likelihood_matrix).params
 
 
-@eqx.filter_jit
+# @eqx.filter_jit
 def _optimize_walkers_positions(
     walkers: Float[Array, "n_walkers n_atoms 3"],
     weights: Float[Array, " n_walkers"],
     relion_stack: ParticleStack,
     step_size: Float,
     args: Tuple[
-        Float[Array, "n_atoms n_gaussians_per_atom"],
-        Float[Array, "n_atoms n_gaussians_per_atom"],
+        Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
+        Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
         Float | None,
     ],
 ) -> Float[Array, "n_walkers n_atoms 3"]:
+    gaussian_amplitudes, gaussian_variances, noise_variance = args
     gradients = jax.grad(
         compute_neg_log_likelihood,
         argnums=0,
-    )(walkers, weights, relion_stack, args)
+    )(
+        walkers,
+        weights,
+        relion_stack,
+        gaussian_amplitudes,
+        gaussian_variances,
+        noise_variance,
+    )
 
     norms = jnp.linalg.norm(gradients, axis=(2), keepdims=True)
     # set small norms to 1 (avoid making small gradients large!)
@@ -143,7 +150,7 @@ def _optimize_walkers_positions(
     return walkers - step_size * gradients
 
 
-@eqx.filter_jit
+# @eqx.filter_jit
 def _optimize_ensemble(
     walkers: Float[Array, "n_walkers n_atoms 3"],
     weights: Float[Array, " n_walkers"],

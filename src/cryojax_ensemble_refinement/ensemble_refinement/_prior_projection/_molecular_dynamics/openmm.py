@@ -7,21 +7,21 @@ run_md_openmm
     Run MD simulations using OpenMM
 """
 
-import glob
 import os
 import pathlib
-from typing import Callable, Dict, List, Optional
+from pathlib import Path
+from typing import Callable, Dict, List, Optional, Tuple
 from typing_extensions import override
 
 import jax.numpy as jnp
 import mdtraj
+import numpy as np
 import openmm
 import openmm.app as openmm_app
 import openmm.unit as openmm_unit
 from jaxtyping import Array, Float, Int
-from natsort import natsorted
 
-from ..base_prior_projector import AbstractPriorProjector
+from ..base_prior_projector import AbstractEnsemblePriorProjector, AbstractPriorProjector
 
 
 DEFAULT_MD_PARAMS = {
@@ -38,7 +38,7 @@ DEFAULT_MD_PARAMS = {
 }
 
 
-class SteeredMolecularDynamicsSimulator(AbstractPriorProjector):
+class SteeredMDSimulator(AbstractPriorProjector, strict=True):
     n_steps: Int
     _bias_constant_in_kj_per_mol_angs: Float
     simulation: openmm_app.Simulation
@@ -57,7 +57,6 @@ class SteeredMolecularDynamicsSimulator(AbstractPriorProjector):
         make_simulation_fn: Optional[
             Callable[[Dict, openmm_app.Topology], openmm_app.Simulation]
         ] = None,
-        path_to_old_state_file: Optional[str] = None,
     ):
         pdb = openmm_app.PDBFile(str(path_to_initial_pdb))
         self._bias_constant_in_kj_per_mol_angs = bias_constant_in_kj_per_mol_angs
@@ -73,29 +72,42 @@ class SteeredMolecularDynamicsSimulator(AbstractPriorProjector):
         else:
             self.simulation = make_simulation_fn(parameters_for_md, pdb.topology)
 
-        if path_to_old_state_file is not None:
-            assert pathlib.Path(path_to_old_state_file).exists(), (
-                "path_to_old_state_file does not exist. "
+        self.simulation.context.setPositions(pdb.positions)
+
+        # self.simulation = _add_restraint_force_to_simulation(
+        #     self.simulation,
+        #     self.simulation.context.getState(getPositions=True).getPositions(),
+        #     self.restrain_atom_list,
+        #     0.0,
+        # )
+
+    @override
+    def initialize(self, init_state: Optional[str] = None) -> str:
+        if init_state is not None:
+            assert pathlib.Path(init_state).exists(), (
+                "init_state does not exist. "
                 "Please set to None or provide valid state file."
             )
-            self.simulation.loadState(str(path_to_old_state_file))
+            self.simulation.loadState(str(init_state))
+            path_to_state_file = f"{self.base_state_file_path}0.xml"
+            if Path(init_state).samefile(path_to_state_file):
+                Warning(
+                    "The provided init_state has the same base name as the "
+                    + "base_state_file_path. "
+                    + "This may cause overwriting of the state file."
+                )
+                path_to_state_file = f"{self.base_state_file_path}1.xml"
 
         else:
-            self.simulation.context.setPositions(pdb.positions)
-            self.simulation.minimizeEnergy()
+            path_to_state_file = f"{self.base_state_file_path}0.xml"
 
-        path_to_state_file = f"{self.base_state_file_path}0.xml"
+        self.simulation.minimizeEnergy()
         self.simulation.saveState(path_to_state_file)
 
-        self.simulation = _add_restraint_force_to_simulation(
-            self.simulation,
-            self.simulation.context.getState(getPositions=True).getPositions(),
-            self.restrain_atom_list,
-            self.bias_constant_in_kj_per_mol_angs,
-        )
+        return path_to_state_file
 
     @property
-    def bias_constant_in_kj_per_mol_angs(self) -> bool:
+    def bias_constant_in_kj_per_mol_angs(self) -> float:
         return self._bias_constant_in_kj_per_mol_angs
 
     @bias_constant_in_kj_per_mol_angs.setter
@@ -105,13 +117,14 @@ class SteeredMolecularDynamicsSimulator(AbstractPriorProjector):
     @override
     def __call__(
         self,
-        positions_for_bias_in_angstroms: Float[Array, "n_atoms 3"],
-    ):
-        simulation = _remove_last_force_from_simulation(self.simulation)
+        ref_walkers: Float[Array, "n_atoms 3"],
+        state: str,
+    ) -> Tuple[Float[Array, "n_atoms 3"], str]:
+        _assert_is_valid_state_file(state, self.base_state_file_path)
         simulation = _add_restraint_force_to_simulation(
-            simulation,
+            self.simulation,
             mdtraj.Trajectory(
-                positions_for_bias_in_angstroms / 10.0, self.simulation.topology
+                ref_walkers / 10.0, self.simulation.topology
             ).openmm_positions(0),
             self.restrain_atom_list,
             self.bias_constant_in_kj_per_mol_angs,
@@ -119,17 +132,36 @@ class SteeredMolecularDynamicsSimulator(AbstractPriorProjector):
 
         simulation.context.reinitialize()
 
-        path_to_state_file = _get_curr_state_file_path(self.base_state_file_path)
-        simulation.loadState(path_to_state_file)
+        simulation.loadState(state)
         simulation.step(self.n_steps)
+        simulation = _remove_last_force_from_simulation(simulation)
+        simulation.context.reinitialize(preserveState=True)
 
-        path_to_state_file = _get_new_state_file_path(self.base_state_file_path)
-        simulation.saveState(path_to_state_file)
+        state = _get_next_state_file_path(self.base_state_file_path, state)
+        simulation.saveState(state)
 
         positions = simulation.context.getState(getPositions=True).getPositions(
             asNumpy=True
         )
-        return jnp.array(positions) * 10.0  # Convert to Angstroms
+        return jnp.array(positions) * 10.0, state
+
+
+class EnsembleSteeredMDSimulator(AbstractEnsemblePriorProjector, strict=True):
+    projectors: List[SteeredMDSimulator]
+
+    def __init__(self, md_simulators: List[SteeredMDSimulator]):
+        self.projectors = md_simulators
+
+    @override
+    def __call__(
+        self,
+        ref_positions: Float[Array, "n_walkers n_atoms 3"],
+        states: List[str],
+    ) -> Tuple[Float[Array, "n_walkers n_atoms 3"], List[str]]:
+        projected_walkers = np.zeros_like(ref_positions)
+        for i, projector in enumerate(self.projectors):
+            projected_walkers[i], states[i] = projector(ref_positions[i], states[i])
+        return jnp.array(projected_walkers), states
 
 
 def _validate_base_state_file_path(base_state_file_path: str) -> str:
@@ -144,21 +176,33 @@ def _validate_base_state_file_path(base_state_file_path: str) -> str:
         return f"{base_state_file_path}it"
 
 
-def _get_curr_state_file_path(
+def _get_next_state_file_path(
     base_state_file_path: str,
+    curr_state_file: str,
 ) -> str:
-    # load all files in the directory that match the base path
-    return natsorted(glob.glob(f"{base_state_file_path}*.xml"))[-1]
-
-
-def _get_new_state_file_path(
-    base_state_file_path: str,
-) -> str:
-    # load all files in the directory that match the base path
-    last_file = natsorted(glob.glob(f"{base_state_file_path}*.xml"))[-1]
     # get the run counter from the last file
-    last_counter = int(last_file.split(base_state_file_path)[-1].split(".xml")[0])
+    last_counter = int(curr_state_file.split(base_state_file_path)[-1].split(".xml")[0])
     return f"{base_state_file_path}{last_counter + 1}.xml"
+
+
+def _assert_is_valid_state_file(
+    state_file: str,
+    base_state_file_path: str,
+) -> None:
+    assert base_state_file_path in state_file, (
+        "State file does not match base state file path. "
+        "Please provide a valid state file."
+    )
+
+    counter = state_file.split(base_state_file_path)[-1].split(".xml")[0]
+    try:
+        int(counter)
+    except ValueError:
+        raise ValueError(
+            f"State file should be formatted as base_state_file_path + <int>.xml. "
+            f"Got {state_file} instead."
+        )
+    return
 
 
 def _add_restraint_force_to_simulation(

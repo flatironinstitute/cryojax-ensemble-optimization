@@ -106,6 +106,13 @@ class DatasetGeneratorConfigAtomicModels(BaseModel, extra="forbid"):
         + "Otherwise it will be ignored.",
     )
 
+    atom_select: str = Field(
+        default="all",
+        description="Selection string for the atoms to use. "
+        + "Only used if the atomic model is in PDB format. "
+        + "Otherwise it will be ignored.",
+    )
+
     @field_serializer("atomic_models_probabilities")
     def serialize_atomic_model_probabilities(self, v):
         if isinstance(v, int):
@@ -415,9 +422,9 @@ class cryojaxERConfig(BaseModel, extra="forbid"):
         ref_model_path = os.path.join(
             self.path_to_models_and_chkpoints, self.ref_model_fname
         )
-        assert os.path.exists(
-            ref_model_path
-        ), f"Reference model {ref_model_path} does not exist."
+        assert os.path.exists(ref_model_path), (
+            f"Reference model {ref_model_path} does not exist."
+        )
         self.ref_model_fname = ref_model_path
 
         if self.atom_list_filter is not None:

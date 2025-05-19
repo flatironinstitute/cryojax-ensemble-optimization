@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import argparse
 import datetime
 import logging
@@ -13,7 +14,7 @@ from ..data import create_dataloader
 from ..ensemble_refinement import (
     EnsembleRefinementOpenMMPipeline,
     IterativeEnsembleOptimizer,
-    SteeredMolecularDynamicsSimulator,
+    SteeredMDSimulator,
 )
 from ..internal import cryojaxERConfig
 from ..io import read_atomic_models
@@ -53,7 +54,7 @@ def construct_projector_list(config, restrain_atom_list):
     for i in range(len(config["atomic_models_filenames"])):
         mkbasedir(os.path.join(config["path_to_output"], f"states_proj_{i}/"))
         projector_list.append(
-            SteeredMolecularDynamicsSimulator(
+            SteeredMDSimulator(
                 path_to_initial_pdb=config["atomic_models_filenames"][i],
                 bias_constant_in_kj_per_mol_angs=config["md_sampler_config"][
                     "bias_constant_in_units"

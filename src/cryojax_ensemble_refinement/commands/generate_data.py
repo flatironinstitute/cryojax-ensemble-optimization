@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import argparse
 import datetime
 import logging
@@ -12,7 +13,7 @@ from cryojax.image.operators import CircularCosineMask
 
 from ..data import generate_relion_parameter_dataset, simulate_relion_dataset
 from ..internal import DatasetGeneratorConfig
-from ..simulator import load_atomic_models_as_potentials
+from ..io import load_atomic_models_as_potentials
 
 
 warnings.filterwarnings("ignore", module="MDAnalysis")
@@ -48,6 +49,7 @@ def simulate_particle_stack_from_config(config: DatasetGeneratorConfig):
 
     potentials = load_atomic_models_as_potentials(
         config.atomic_models_params["atomic_models_filenames"],
+        select=config.atomic_models_params["atomic_models_select"],
         loads_b_factors=config.atomic_models_params["loads_b_factors"],
     )
 
@@ -74,7 +76,7 @@ def main(args):
         config_dict = yaml.safe_load(f)
         config = DatasetGeneratorConfig(**config_dict)
 
-    project_path = os.path.dirname(config.path_to_relion_project)
+    project_path = config.path_to_relion_project
     warnexists(project_path)
     mkbasedir(project_path)
     print(
