@@ -14,12 +14,13 @@ from typing import Callable, Dict, List, Optional, Tuple
 from typing_extensions import override
 
 import jax.numpy as jnp
+import jax
 import mdtraj
 import numpy as np
 import openmm
 import openmm.app as openmm_app
 import openmm.unit as openmm_unit
-from jaxtyping import Array, Float, Int
+from jaxtyping import Array, Float, Int, PRNGKeyArray
 
 from ..base_prior_projector import AbstractEnsemblePriorProjector, AbstractPriorProjector
 
@@ -78,7 +79,7 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
         #     self.simulation,
         #     self.simulation.context.getState(getPositions=True).getPositions(),
         #     self.restrain_atom_list,
-        #     0.0,
+        #     1.0,
         # )
 
     @override
@@ -90,13 +91,14 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
             )
             self.simulation.loadState(str(init_state))
             path_to_state_file = f"{self.base_state_file_path}0.xml"
-            if Path(init_state).samefile(path_to_state_file):
-                Warning(
-                    "The provided init_state has the same base name as the "
-                    + "base_state_file_path. "
-                    + "This may cause overwriting of the state file."
-                )
-                path_to_state_file = f"{self.base_state_file_path}1.xml"
+            if os.path.exists(path_to_state_file):
+                if Path(init_state).samefile(path_to_state_file):
+                    Warning(
+                        "The provided init_state has the same base name as the "
+                        + "base_state_file_path. "
+                        + "This may cause overwriting of the state file."
+                    )
+                    path_to_state_file = f"{self.base_state_file_path}1.xml"
 
         else:
             path_to_state_file = f"{self.base_state_file_path}0.xml"
@@ -117,6 +119,7 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
     @override
     def __call__(
         self,
+        key: PRNGKeyArray,
         ref_walkers: Float[Array, "n_atoms 3"],
         state: str,
     ) -> Tuple[Float[Array, "n_atoms 3"], str]:
@@ -134,8 +137,14 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
 
         simulation.loadState(state)
         simulation.step(self.n_steps)
+        positions = simulation.context.getState(getPositions=True).getPositions()
+        velocities = simulation.context.getState(getVelocities=True).getVelocities()
         simulation = _remove_last_force_from_simulation(simulation)
-        simulation.context.reinitialize(preserveState=True)
+        simulation.context.reinitialize()#preserveState=True)
+
+        simulation.context.setPositions(positions)
+        simulation.context.setVelocities(velocities)
+
 
         state = _get_next_state_file_path(self.base_state_file_path, state)
         simulation.saveState(state)
@@ -155,12 +164,15 @@ class EnsembleSteeredMDSimulator(AbstractEnsemblePriorProjector, strict=True):
     @override
     def __call__(
         self,
+        key: PRNGKeyArray,
         ref_positions: Float[Array, "n_walkers n_atoms 3"],
         states: List[str],
     ) -> Tuple[Float[Array, "n_walkers n_atoms 3"], List[str]]:
+        
+        keys = jax.random.split(key, len(self.projectors))
         projected_walkers = np.zeros_like(ref_positions)
         for i, projector in enumerate(self.projectors):
-            projected_walkers[i], states[i] = projector(ref_positions[i], states[i])
+            projected_walkers[i], states[i] = projector(keys[i], ref_positions[i], states[i])
         return jnp.array(projected_walkers), states
 
 

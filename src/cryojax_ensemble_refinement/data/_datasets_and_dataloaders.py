@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Dict, Optional
 
 import jax_dataloader as jdl
 from cryojax.data import (
@@ -7,13 +7,27 @@ from cryojax.data import (
 )
 from jaxtyping import PRNGKeyArray
 
+from .._custom_types import PerParticleArgs
+
 
 class CustomJaxDataset(jdl.Dataset):
-    def __init__(self, cryojax_dataset: RelionParticleStackDataset):
-        self.cryojax_dataset = cryojax_dataset
+    cryojax_dataset: RelionParticleStackDataset
+    per_particle_args: Optional[PerParticleArgs]
 
-    def __getitem__(self, index) -> ParticleStack:
-        return self.cryojax_dataset[index]
+    def __init__(
+        self,
+        cryojax_dataset: RelionParticleStackDataset,
+        per_particle_args: Optional[PerParticleArgs] = None,
+    ):
+        self.cryojax_dataset = cryojax_dataset
+        self.per_particle_args = per_particle_args
+
+    def __getitem__(self, index) -> Dict[str, ParticleStack | PerParticleArgs]:
+        data = {
+            "particle_stack": self.cryojax_dataset[index],
+            "per_particle_args": self.per_particle_args,
+        }
+        return data
 
     def __len__(self) -> int:
         return len(self.cryojax_dataset)
@@ -25,6 +39,7 @@ def create_dataloader(
     shuffle: bool = False,
     drop_last: bool = False,
     *,
+    per_particle_args: Optional[PerParticleArgs] = None,
     jax_prng_key: Optional[PRNGKeyArray] = None,
 ):
     """
@@ -34,6 +49,7 @@ def create_dataloader(
         batch_size: The size of each batch.
         shuffle: Whether to shuffle the dataset.
         drop_last: Whether to drop the last batch if it is smaller than batch_size.
+        per_particle_args: Optional per-particle arguments to be passed to the dataset.
         jax_prng_key: JAX PRNG key for shuffling. Required if shuffle is True.
     """
 
@@ -41,7 +57,7 @@ def create_dataloader(
         if jax_prng_key is None:
             raise ValueError("jax_prng_key must be provided when shuffle is True.")
         dataloader = jdl.DataLoader(
-            CustomJaxDataset(relion_stack_dataset),
+            CustomJaxDataset(relion_stack_dataset, per_particle_args),
             backend="jax",
             batch_size=batch_size,
             shuffle=shuffle,
@@ -50,7 +66,7 @@ def create_dataloader(
         )
     else:
         dataloader = jdl.DataLoader(
-            CustomJaxDataset(relion_stack_dataset),
+            CustomJaxDataset(relion_stack_dataset, per_particle_args),
             backend="jax",
             batch_size=batch_size,
             shuffle=shuffle,

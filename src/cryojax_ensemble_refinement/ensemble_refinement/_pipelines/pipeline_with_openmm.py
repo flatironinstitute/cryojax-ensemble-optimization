@@ -1,67 +1,68 @@
 import os
-from typing import Any, List, Tuple
+import pathlib
+from typing import Any, Tuple
+from typing_extensions import override
 
 import jax.numpy as jnp
+import jax
 import mdtraj
-from equinox import Module
 from jax_dataloader import DataLoader
-from jaxtyping import Array, Float, Int
-from pydantic import DirectoryPath
+from jaxtyping import Array, Float, Int, PRNGKeyArray
 from tqdm import tqdm
 
 from .._likelihood_optimization.optimizers import (
     IterativeEnsembleOptimizer,
     ProjGradDescWeightOptimizer,
 )
-from .._prior_projection._molecular_dynamics.openmm import (
-    EnsembleSteeredMDSimulator,
-    SteeredMDSimulator,
-)
+from .._prior_projection.base_prior_projector import AbstractEnsemblePriorProjector
+from .base_pipeline import AbstractEnsembleRefinementPipeline
 
 
-# class EnsembleRefinementOpenMMPipeline(AbstractEnsembleRefinementPipeline):
-class EnsembleRefinementOpenMMPipeline(Module):
+class EnsembleRefinementPipeline(AbstractEnsembleRefinementPipeline, strict=True):
     """
     Ensemble refinement pipeline using OpenMM for molecular dynamics simulation.
     """
 
-    prior_projector: EnsembleSteeredMDSimulator | SteeredMDSimulator
+    prior_projector: AbstractEnsemblePriorProjector
     likelihood_optimizer: IterativeEnsembleOptimizer
     n_steps: int
     reference_structure: mdtraj.Trajectory
-    atom_indices_for_opt: List[Int]
+    atom_indices_for_opt: Int[Array, " n_atoms_for_opt"]
     runs_postprocessing: bool
 
     def __init__(
         self,
-        prior_projector: EnsembleSteeredMDSimulator | SteeredMDSimulator,
+        prior_projector: AbstractEnsemblePriorProjector,
         likelihood_optimizer: IterativeEnsembleOptimizer,
         n_steps: int,
-        ref_structure_for_opt: mdtraj.Trajectory,
-        atom_indices_for_opt: List[Int],
+        ref_structure_for_alignment: mdtraj.Trajectory,
+        atom_indices_for_opt: Int[Array, " n_atoms_for_opt"],
         *,
         runs_postprocessing: bool = True,
     ):
         self.prior_projector = prior_projector
         self.likelihood_optimizer = likelihood_optimizer
         self.n_steps = n_steps
-        self.reference_structure = ref_structure_for_opt
+        self.reference_structure = ref_structure_for_alignment
         self.atom_indices_for_opt = atom_indices_for_opt
         self.runs_postprocessing = runs_postprocessing
 
-    def __call__(
+    @override
+    def run(
         self,
+        key: PRNGKeyArray,
         initial_walkers: Float[Array, "n_walkers n_atoms 3"],
         initial_weights: Float[Array, " n_walkers"],
         dataloader: DataLoader,
-        args_for_likelihood_optimizer: Any,
         *,
-        output_directory: DirectoryPath,
+        output_directory: str | pathlib.Path,
+        initial_state_for_projector: Any = None,
     ) -> Tuple[
         Float[Array, "n_steps n_walkers n_atoms 3"],
         Float[Array, "n_steps n_walkers"],
     ]:
-        md_states = self.prior_projector.initialize()
+        
+        md_states = self.prior_projector.initialize(initial_state_for_projector)
         walkers = initial_walkers.copy()
         weights = initial_weights.copy()
 
@@ -83,16 +84,16 @@ class EnsembleRefinementOpenMMPipeline(Module):
         )
 
         for i in tqdm(range(self.n_steps)):
+            key, subkey = jax.random.split(key)
             tmp_walkers, weights = self.likelihood_optimizer(
                 walkers[:, self.atom_indices_for_opt, :],
                 weights,
                 dataloader,
-                args_for_likelihood_optimizer,
             )
 
             walkers = walkers.at[:, self.atom_indices_for_opt, :].set(tmp_walkers)
 
-            walkers, md_states = self.prior_projector(walkers, md_states)
+            walkers, md_states = self.prior_projector(subkey, walkers, md_states)
 
             walkers = _align_walkers_to_reference(
                 walkers, self.reference_structure, self.atom_indices_for_opt
@@ -104,8 +105,13 @@ class EnsembleRefinementOpenMMPipeline(Module):
             writer.close()
 
         if self.runs_postprocessing:
+            weight_optimizer = ProjGradDescWeightOptimizer(
+                self.likelihood_optimizer.gaussian_amplitudes,
+                self.likelihood_optimizer.gaussian_variances,
+                self.likelihood_optimizer.image_to_walker_log_likelihood_fn,
+            )
             walkers, weights = self.postprocess(
-                walkers, weights, dataloader, args_for_likelihood_optimizer
+                walkers, weights, dataloader, weight_optimizer
             )
         return walkers, weights
 
@@ -114,17 +120,16 @@ class EnsembleRefinementOpenMMPipeline(Module):
         walkers: Float[Array, "n_walkers n_atoms 3"],
         weights: Float[Array, " n_walkers"],
         dataloader: DataLoader,
-        args_for_likelihood_optimizer: Any,
+        weight_optimizer: ProjGradDescWeightOptimizer,
     ):
         """
         Postprocess the walkers and weights.
         """
         # Project the weights
-        weights = ProjGradDescWeightOptimizer()(
+        weights = weight_optimizer(
             walkers[:, self.atom_indices_for_opt],
             weights,
             dataloader,
-            args_for_likelihood_optimizer,
         )
 
         return walkers, weights
@@ -133,7 +138,7 @@ class EnsembleRefinementOpenMMPipeline(Module):
 def _align_walkers_to_reference(
     walkers: Float[Array, "n_walkers n_atoms 3"],
     reference_structure: mdtraj.Trajectory,
-    atom_indices: List[Int],
+    atom_indices: Int[Array, " n_atoms_for_opt"],
 ) -> Float[Array, "n_walkers n_atoms 3"]:
     """
     Align the walkers to the reference structure.

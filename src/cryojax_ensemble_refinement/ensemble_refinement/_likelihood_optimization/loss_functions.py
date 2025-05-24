@@ -1,5 +1,4 @@
 from functools import partial
-from typing import Optional
 
 import cryojax.simulator as cxs
 import equinox as eqx
@@ -8,10 +7,12 @@ import jax.numpy as jnp
 from cryojax.data import ParticleStack
 from jaxtyping import Array, Float
 
+from ..._custom_types import Image, LossFn, PerParticleArgs
+
 
 def _likelihood_isotropic_gaussian(
-    computed_image: Float[Array, "n_pixels n_pixels"],
-    observed_image: Float[Array, "n_pixels n_pixels"],
+    computed_image: Image,
+    observed_image: Image,
     noise_variance: Float,
 ) -> Float:
     cc = jnp.mean(computed_image**2)
@@ -30,6 +31,7 @@ def _likelihood_isotropic_gaussian(
 def _likelihood_isotropic_gaussian_marginalized(
     computed_image: Float[Array, "n_pixels n_pixels"],
     observed_image: Float[Array, "n_pixels n_pixels"],
+    _=None,
 ) -> Float:
     cc = jnp.mean(computed_image**2)
     co = jnp.mean(observed_image * computed_image)
@@ -50,7 +52,8 @@ def _compute_likelihood_image_and_walker(
     relion_stack: ParticleStack,
     gaussian_amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
     gaussian_variances: Float[Array, "n_atoms n_gaussians_per_atom"],
-    noise_variance: Optional[Float] = None,
+    image_to_walker_log_likelihood_fn: LossFn,
+    per_particle_args: PerParticleArgs,
 ) -> Float:
     potential = cxs.GaussianMixtureAtomicPotential(
         walker,
@@ -73,31 +76,27 @@ def _compute_likelihood_image_and_walker(
 
     computed_image = imaging_pipeline.render(outputs_real_space=True)
 
-    if noise_variance is None:
-        loss = _likelihood_isotropic_gaussian_marginalized(
-            computed_image, relion_stack.images
-        )
-    else:
-        loss = _likelihood_isotropic_gaussian(
-            computed_image, relion_stack.images, noise_variance
-        )
-
-    return loss
+    return image_to_walker_log_likelihood_fn(
+        computed_image,
+        relion_stack.images,
+        per_particle_args,
+    )
 
 
-# @eqx.filter_jit
+@eqx.filter_jit
 @partial(
     eqx.filter_vmap,
-    in_axes=(None, eqx.if_array(0), None, None, eqx.if_array(0)),
+    in_axes=(None, eqx.if_array(0), None, None, None, eqx.if_array(0)),
     out_axes=0,
 )
-@partial(eqx.filter_vmap, in_axes=(0, None, 0, 0, None), out_axes=0)
+@partial(eqx.filter_vmap, in_axes=(0, None, 0, 0, None, None), out_axes=0)
 def compute_likelihood_matrix(
     ensemble_walkers: Float[Array, " n_atoms 3"],
     relion_stack: ParticleStack,
-    gaussian_amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
-    gaussian_variances: Float[Array, "n_atoms n_gaussians_per_atom"],
-    noise_variance: Optional[Float] = None,
+    gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
+    gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
+    image_to_walker_log_likelihood_fn: LossFn,
+    per_particle_args: PerParticleArgs,
 ) -> Float[Array, "n_images n_walkers"]:
     """
     Compute the likelihood matrix for a set of walkers and a Relion stack.
@@ -109,8 +108,9 @@ def compute_likelihood_matrix(
     - `relion_stack`: A cryojax `ParticleStack` object.
     - `gaussian_amplitudes`: The amplitudes for the GMM atom potential.
     - `gaussian_variances`: The variances for the GMM atom potential.
-    - `noise_variance`: The noise variance for the imaging pipeline. If None, the
-        variance is marginalized over the noise. This is a scalar.
+    - `image_to_walker_log_likelihood_fn`: The function to compute the likelihood
+        between the computed image and the observed image.
+    - `per_particle_args`: The arguments to pass to the likelihood function.
     **Returns:**
     - The likelihood matrix of the ensemble. This is a 2D array
         such that the n, m element is p(y_n | x_m), where y_n is the n-th image
@@ -122,11 +122,12 @@ def compute_likelihood_matrix(
         relion_stack,
         gaussian_amplitudes,
         gaussian_variances,
-        noise_variance,
+        image_to_walker_log_likelihood_fn,
+        per_particle_args,
     )
 
 
-# @eqx.filter_jit
+@eqx.filter_jit
 def compute_neg_log_likelihood_from_weights(
     weights: Float[Array, " n_walkers"],
     likelihood_matrix: Float[Array, "n_images n_walkers"],
@@ -152,14 +153,15 @@ def compute_neg_log_likelihood_from_weights(
     return -jnp.mean(log_lklhood)
 
 
-# @eqx.filter_jit
+@eqx.filter_jit
 def compute_neg_log_likelihood(
     walkers: Float[Array, "n_walkers n_atoms 3"],
     weights: Float[Array, " n_walkers"],
     relion_stack: ParticleStack,
     gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
-    noise_variance: Optional[Float] = None,
+    image_to_walker_log_likelihood_fn: LossFn,
+    per_particle_args: PerParticleArgs,
 ) -> Float:
     """
     Compute the negative log likelihood from the walkers and weights. The likelihood is
@@ -174,12 +176,18 @@ def compute_neg_log_likelihood(
         relion_stack: A cryojax `ParticleStack` object.
         gaussian_amplitudes: The amplitudes for the GMM atom potential.
         gaussian_variances: The variances for the GMM atom potential.
-        noise_variance: The noise variance for the imaging pipeline. If None, the
-            variance is marginalized over the noise. This is a scalar.
+        image_to_walker_log_likelihood_fn: The function to compute the likelihood
+            between the computed image and the observed image.
+        per_particle_args: The arguments to pass to the likelihood function.
     Returns:
         The negative log likelihood of the ensemble.
     """
     lklhood_matrix = compute_likelihood_matrix(
-        walkers, relion_stack, gaussian_amplitudes, gaussian_variances, noise_variance
+        walkers,
+        relion_stack,
+        gaussian_amplitudes,
+        gaussian_variances,
+        image_to_walker_log_likelihood_fn,
+        per_particle_args,
     )
     return compute_neg_log_likelihood_from_weights(weights, lklhood_matrix)

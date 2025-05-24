@@ -2,7 +2,7 @@ from abc import abstractmethod
 from typing import Any, List, Optional, Tuple
 
 import equinox as eqx
-from jaxtyping import Array, Float
+from jaxtyping import Array, Float, PRNGKeyArray
 
 
 class AbstractPriorProjector(eqx.Module, strict=True):
@@ -23,6 +23,7 @@ class AbstractPriorProjector(eqx.Module, strict=True):
     @abstractmethod
     def __call__(
         self,
+        key: PRNGKeyArray,
         ref_positions: Float[Array, "n_atoms 3"] | Float[Array, "n_walkers n_atoms 3"],
         state: Any,
     ) -> Tuple[Float[Array, "n_atoms 3"] | Float[Array, "n_walkers n_atoms 3"], Any]:
@@ -50,6 +51,7 @@ class AbstractEnsemblePriorProjector(eqx.Module, strict=True):
     @abstractmethod
     def __call__(
         self,
+        key: PRNGKeyArray,
         ref_positions: Float[Array, "n_walkers n_atoms 3"],
         states: List[Any],
     ) -> Tuple[Float[Array, "n_walkers n_atoms 3"], List[Any]]:

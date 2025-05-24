@@ -3,7 +3,7 @@ import os
 import warnings
 from functools import partial
 from pathlib import Path
-from typing import Dict, List, Optional, Self, Union
+from typing import Dict, List, Optional, Union
 from typing_extensions import Annotated, Literal
 
 import jax.numpy as jnp
@@ -23,11 +23,14 @@ from pydantic import (
 )
 
 
-def _is_file_type(filename: str, file_type: str) -> str:
+def _validate_file_with_type(filename: str, file_type: str) -> str:
     """
     Check if the file is a PDB file.
     """
-    if not filename.endswith(f".{file_type}"):
+    assert Path(filename).exists(), f"File {filename} does not exist."
+    assert Path(filename).is_file(), f"Path {filename} is not a file."
+
+    if not Path(filename).suffix == f".{file_type}":
         raise ValueError(f"File {filename} is not a {file_type} file.")
     return filename
 
@@ -55,27 +58,29 @@ def _contains_file_type(
     return directory_path
 
 
-def _validate_file_names_in_dir(
-    file_names: Union[str, List[str]], base_directory: DirectoryPath
+def _validate_files_with_type(
+    path_to_files: Union[str, List[FilePath]], file_type: str
 ) -> List[str]:
-    if isinstance(file_names, str):
-        if "*" in file_names:
-            file_names = os.path.join(base_directory, file_names)
-            file_names = natsorted(glob.glob(file_names))
+    if isinstance(path_to_files, str):
+        if "*" in path_to_files:
+            output = [Path(f) for f in natsorted(glob.glob(path_to_files))]
+        elif Path(path_to_files).is_file():
+            output = [Path(path_to_files)]
         else:
-            file_names = [os.path.join(base_directory, file_names)]
-    elif isinstance(file_names, list):
-        file_names = [os.path.join(base_directory, fname) for fname in file_names]
+            raise ValueError(
+                f"Path {path_to_files} is not a file or does not use * wild card."
+            )
+    elif isinstance(path_to_files, list):
+        output = [Path(f) for f in path_to_files]
 
-    formatted_file_names = [fname for fname in file_names]
-    possible_missing_files = [
-        fname for fname in formatted_file_names if not os.path.exists(fname)
-    ]
-    assert len(possible_missing_files) == 0, (
-        f"Some files do not exist in the directory {base_directory}. "
-        + f"Files: {', '.join(possible_missing_files)}"
-    )
-    return formatted_file_names
+    for f in output:
+        assert f.exists(), f"{f} does not exist."
+        assert f.is_file(), f"{f} is not a file."
+        assert f.suffix == f".{file_type}", (
+            f"{f} is not a {file_type} file. "
+            + f"Valid file types are: {', '.join([f'.{file_type}'])}"
+        )
+    return [str(f) for f in output]
 
 
 class DatasetGeneratorConfigAtomicModels(BaseModel, extra="forbid"):
@@ -84,15 +89,9 @@ class DatasetGeneratorConfigAtomicModels(BaseModel, extra="forbid"):
     in the data generation pipeline.
     """
 
-    # TODO: add support for format used for RNA models
-    path_to_atomic_models: DirectoryPath = Field(
-        description="Path to the directory containing the atomic models for image generation."  # noqa
-    )
-    atomic_models_filenames: Union[str, List[str]] = Field(
-        description="Filename of the atomic model(s) to use for image generation, "
-        + "relative to path_to_models. "
+    path_to_atomic_models: Union[str, List[FilePath]] = Field(
+        description="Path to the atomic models directory. "
         + "If a pattern is provided, all files matching the pattern will be used."
-        + " The atomic models should be in path_to_models."
     )
 
     atomic_models_probabilities: Union[PositiveFloat, List[PositiveFloat]] = Field(
@@ -120,20 +119,9 @@ class DatasetGeneratorConfigAtomicModels(BaseModel, extra="forbid"):
         v = jnp.array(v)
         return v / jnp.sum(v)
 
-    @model_validator(mode="after")
-    def validate_path_to_atomic_models(self) -> Self:
-        self.atomic_models_filenames = _validate_file_names_in_dir(
-            self.atomic_models_filenames, self.path_to_atomic_models
-        )
-
-        valid_extensions = [".pdb"]
-        for i in range(len(self.atomic_models_filenames)):
-            assert Path(self.atomic_models_filenames[i]).suffix in valid_extensions, (
-                f"File {self.atomic_models_filenames[i]} is not a valid file type. "
-                + f"Valid file types are: {', '.join(valid_extensions)}"
-            )
-
-        return self
+    @field_serializer("path_to_atomic_models")
+    def serialize_path_to_atomic_models(self, v):
+        return _validate_files_with_type(v, file_type="pdb")
 
 
 class DatasetGeneratorConfig(BaseModel, extra="forbid"):
@@ -323,6 +311,14 @@ class cryojaxERConfigOptimizationConfig(BaseModel, extra="forbid"):
         description="Variance of the noise to be added to the gradients.",
     )
 
+    image_to_walker_log_likelihood_fn: Literal[
+        "iso_gaussian", "iso_gaussian_var_marg"
+    ] = Field(
+        default="iso_gaussian_var_marg",
+        description="Type of likelihood function to use. "
+        + "Must be 'iso_gaussian' or 'iso_gaussian_var_marg'.",
+    )
+
     @field_serializer("init_weights")
     def serialize_init_weights(self, v):
         if v is not None:
@@ -333,8 +329,8 @@ class cryojaxERConfigOptimizationConfig(BaseModel, extra="forbid"):
 
 
 class cryojaxERConfigMDConfig(BaseModel, extra="forbid"):
-    mode: Literal["all-atom"] = Field(
-        default="all-atom", description="Mode of the MD sampler."
+    projector_mode: Literal["openmm"] = Field(
+        default="openmm", description="Type of projection method. Default is openmm."
     )
     n_steps: PositiveInt = Field(
         description="Number of steps for the MD sampler. Must be greater than 0."
@@ -351,6 +347,12 @@ class cryojaxERConfigMDConfig(BaseModel, extra="forbid"):
         default={"Threads": None}, description="Platform properties for OpenMM."
     )
 
+    path_to_initial_states: Optional[str | List[FilePath]] = Field(
+        default=None,
+        description="Path to the initial states. "
+        + "If None, will be set to the path to the atomic models.",
+    )
+
     @field_validator("platform_properties")
     @classmethod
     def validate_platform_properties(cls, v):
@@ -359,30 +361,28 @@ class cryojaxERConfigMDConfig(BaseModel, extra="forbid"):
                 assert int(v["Threads"]) > 0, "Number of threads must be greater than 0"
         return v
 
+    @field_validator("path_to_initial_states")
+    @classmethod
+    def validate_path_to_initial_states(cls, v):
+        if v is None:
+            return v
+        else:
+            return _validate_files_with_type(v, file_type="xml")
+
 
 class cryojaxERConfig(BaseModel, extra="forbid"):
     # I/O
-    path_to_models_and_chkpoints: DirectoryPath = Field(
-        description="Path to the directory containing the models and checkpoints."
-    )
 
-    atomic_models_filenames: Union[str, List[str]] = Field(
-        description="List of files containing the atomic models. "
-        + "path_to_models_and_chkpoints. "
-        + "If a string, it must contain a glob pattern. "
-        + "Files must in .pdb format."
+    path_to_atomic_models: Union[str, List[FilePath]] = Field(
+        description="Path to the atomic models directory. "
+        + "If a pattern is provided, all files matching the pattern will be used."
     )
-    checkpoints_fnames: Optional[Union[str, List[str]]] = Field(
-        default=None,
-        description="List of files containing the openmm checkpoints in "
-        + "path_to_models_and_chkpoints. "
-        + "If a string, it must contain a glob pattern. "
-        + "Files must in .chk format.",
-    )
-    ref_model_fname: Annotated[
-        str, AfterValidator(partial(_is_file_type, file_type="pdb"))
+    path_to_reference_model: Annotated[
+        str, AfterValidator(partial(_validate_file_with_type, file_type="pdb"))
     ] = Field(
-        description="File containing the reference model in path_to_models_and_chkpoints."
+        description="Path to the reference model. "
+        + "This model should be aligned to the cryo-EM particles, "
+        + " and will be used for alignment."
     )
     path_to_starfile: FilePath = Field(
         description="Path to the starfile containing the particle information."
@@ -390,57 +390,91 @@ class cryojaxERConfig(BaseModel, extra="forbid"):
     path_to_relion_project: DirectoryPath = Field(
         description="Path to the relion project directory."
     )
+    loads_envelope: bool = Field(
+        description="Whether to load the envelope from the starfile. "
+    )
+
+
     path_to_output: Path = Field(
         description="Path to the output directory. "
         + "If it does not exist, it will be created.",
     )
 
     # Pipeline
-    md_sampler_config: dict
-    ensemble_optimizer_config: dict
+    projector_params: Dict = Field(
+        description="Parameters for the physics-based ensemble projector. "
+        + "This is a dictionary formatted by the `cryojaxERConfigMDConfig` class."
+    )
+    likelihood_optimizer_params: Dict = Field(
+        description="Parameters for the ensemble optimizer. "
+        + "This is a dictionary formatted by "
+        + "the `cryojaxERConfigOptimizationConfig` class."
+    )
 
     # Optimization
     n_steps: PositiveInt = Field(
         description="Number of steps of cryoJAX ensemble refinement to run."
     )
 
-    # Image and MD stuff
-    atom_list_filter: Optional[str] = None
+    # Miscellaneous
+    atom_select: str = Field(
+        default="all",
+        description="Selection string for the atoms to use. "
+        + "Only used if the atomic model is in PDB format. "
+        + "Otherwise it will be ignored.",
+    )
+
+    loads_b_factors: bool = Field(
+        default=False,
+        description="Whether to load the thermal b-factors from the PDB file. "
+        + "Only used if the atomic model is in PDB format. "
+        + "Otherwise it will be ignored."
+        + "Also known as Debye-Waller factors.",
+    )
     rng_seed: int = Field(default=0, description="Random seed.")
 
     @model_validator(mode="after")
     def validate_config(self):
-        self.atomic_models_filenames = _validate_file_names_in_dir(
-            self.atomic_models_filenames, self.path_to_models_and_chkpoints
-        )
-
-        if self.checkpoints_fnames is not None:
-            self.checkpoints_fnames = _validate_file_names_in_dir(
-                self.checkpoints_fnames, self.path_to_models_and_chkpoints
-            )
-
-        ref_model_path = os.path.join(
-            self.path_to_models_and_chkpoints, self.ref_model_fname
-        )
-        assert os.path.exists(ref_model_path), (
-            f"Reference model {ref_model_path} does not exist."
-        )
-        self.ref_model_fname = ref_model_path
-
-        if self.atom_list_filter is not None:
+        if self.atom_select is not None:
             try:
-                mdtraj.load(self.ref_model_fname).topology.select(self.atom_list_filter)
-            except ValueError:
-                raise ValueError(f"Invalid atom list filter {self.atom_list_filter}")
+                mdtraj.load(self.path_to_reference_model).topology.select(
+                    self.atom_select
+                )
+            except Exception as e:
+                raise ValueError(
+                    f"Invalid atom list filter {self.atom_select}. Error: {e}"
+                )
 
+        if self.projector_params["path_to_initial_states"] is not None:
+            n_initial_states = len(self.projector_params["path_to_initial_states"])
+            n_atomic_models = len(self.path_to_atomic_models)
+            assert n_atomic_models == n_initial_states, (
+                f"Number of initial states {n_initial_states} "
+                + f"does not match number of atomic models {n_atomic_models}."
+            )
         return self
 
-    @field_validator("ensemble_optimizer_config")
+    @field_validator("path_to_atomic_models")
+    @classmethod
+    def validate_path_to_atomic_models(cls, v):
+        return _validate_files_with_type(v, file_type="pdb")
+
+    @field_validator("path_to_reference_model")
+    @classmethod
+    def validate_path_to_reference_model(cls, v):
+        return _validate_file_with_type(v, file_type="pdb")
+
+    @field_validator("path_to_starfile")
+    @classmethod
+    def validate_path_to_starfile(cls, v):
+        return _validate_file_with_type(v, file_type="star")
+
+    @field_validator("likelihood_optimizer_params")
     @classmethod
     def validate_ensemble_opt_config(cls, values):
         return dict(cryojaxERConfigOptimizationConfig(**values).model_dump())
 
-    @field_validator("md_sampler_config")
+    @field_validator("projector_params")
     @classmethod
     def validate_md_sampler_config(cls, values):
         return dict(cryojaxERConfigMDConfig(**values).model_dump())

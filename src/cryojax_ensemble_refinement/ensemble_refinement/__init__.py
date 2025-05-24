@@ -9,7 +9,7 @@ from ._likelihood_optimization import (
 )
 from ._pipelines import (
     AbstractEnsembleRefinementPipeline as AbstractEnsembleRefinementPipeline,
-    EnsembleRefinementOpenMMPipeline as EnsembleRefinementOpenMMPipeline,
+    EnsembleRefinementPipeline as EnsembleRefinementPipeline,
 )
 from ._prior_projection import (
     AbstractForceField as AbstractForceField,

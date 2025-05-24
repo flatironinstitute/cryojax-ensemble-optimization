@@ -48,7 +48,7 @@ def read_atomic_models(
 
     if file_extension == ".pdb":
         atomic_models_scattering_params = _read_atomic_models_from_pdb(
-            atomic_models_filenames, loads_b_factors=loads_b_factors
+            atomic_models_filenames, select=select, loads_b_factors=loads_b_factors
         )
     else:
         raise NotImplementedError(f"File extension {file_extension} not supported.")
