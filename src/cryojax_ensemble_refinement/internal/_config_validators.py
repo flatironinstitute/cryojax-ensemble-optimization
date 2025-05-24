@@ -394,7 +394,6 @@ class cryojaxERConfig(BaseModel, extra="forbid"):
         description="Whether to load the envelope from the starfile. "
     )
 
-
     path_to_output: Path = Field(
         description="Path to the output directory. "
         + "If it does not exist, it will be created.",

@@ -1,6 +1,6 @@
-from abc import abstractmethod
-from typing import Any, Tuple, Optional
 import pathlib
+from abc import abstractmethod
+from typing import Any, Tuple
 
 from equinox import AbstractVar, Module
 from jax_dataloader import DataLoader
@@ -8,6 +8,7 @@ from jaxtyping import Array, Float, Int, PRNGKeyArray
 
 from .._likelihood_optimization.base_optimizer import AbstractEnsembleParameterOptimizer
 from .._prior_projection.base_prior_projector import AbstractEnsemblePriorProjector
+
 
 class AbstractEnsembleRefinementPipeline(Module, strict=True):
     """
@@ -28,7 +29,6 @@ class AbstractEnsembleRefinementPipeline(Module, strict=True):
         *,
         output_directory: str | pathlib.Path,
         initial_state_for_projector: Any = None,
-        
     ) -> Tuple[
         Float[Array, "n_steps n_walkers n_atoms 3"],
         Float[Array, "n_steps n_walkers"],

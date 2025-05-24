@@ -3,8 +3,8 @@ import pathlib
 from typing import Any, Tuple
 from typing_extensions import override
 
-import jax.numpy as jnp
 import jax
+import jax.numpy as jnp
 import mdtraj
 from jax_dataloader import DataLoader
 from jaxtyping import Array, Float, Int, PRNGKeyArray
@@ -61,7 +61,6 @@ class EnsembleRefinementPipeline(AbstractEnsembleRefinementPipeline, strict=True
         Float[Array, "n_steps n_walkers n_atoms 3"],
         Float[Array, "n_steps n_walkers"],
     ]:
-        
         md_states = self.prior_projector.initialize(initial_state_for_projector)
         walkers = initial_walkers.copy()
         weights = initial_weights.copy()

@@ -169,9 +169,7 @@ def run_ensemble_refinement(config):
         initial_weights=config["likelihood_optimizer_params"]["init_weights"],
         dataloader=dataloader,
         output_directory=config["path_to_output"],
-        initial_state_for_projector=config["projector_params"][
-            "path_to_initial_states"
-        ],
+        initial_state_for_projector=config["projector_params"]["path_to_initial_states"],
     )
 
     jnp.savez(

@@ -13,8 +13,8 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 from typing_extensions import override
 
-import jax.numpy as jnp
 import jax
+import jax.numpy as jnp
 import mdtraj
 import numpy as np
 import openmm
@@ -140,11 +140,10 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
         positions = simulation.context.getState(getPositions=True).getPositions()
         velocities = simulation.context.getState(getVelocities=True).getVelocities()
         simulation = _remove_last_force_from_simulation(simulation)
-        simulation.context.reinitialize()#preserveState=True)
+        simulation.context.reinitialize()  # preserveState=True)
 
         simulation.context.setPositions(positions)
         simulation.context.setVelocities(velocities)
-
 
         state = _get_next_state_file_path(self.base_state_file_path, state)
         simulation.saveState(state)
@@ -168,11 +167,12 @@ class EnsembleSteeredMDSimulator(AbstractEnsemblePriorProjector, strict=True):
         ref_positions: Float[Array, "n_walkers n_atoms 3"],
         states: List[str],
     ) -> Tuple[Float[Array, "n_walkers n_atoms 3"], List[str]]:
-        
         keys = jax.random.split(key, len(self.projectors))
         projected_walkers = np.zeros_like(ref_positions)
         for i, projector in enumerate(self.projectors):
-            projected_walkers[i], states[i] = projector(keys[i], ref_positions[i], states[i])
+            projected_walkers[i], states[i] = projector(
+                keys[i], ref_positions[i], states[i]
+            )
         return jnp.array(projected_walkers), states
 
 

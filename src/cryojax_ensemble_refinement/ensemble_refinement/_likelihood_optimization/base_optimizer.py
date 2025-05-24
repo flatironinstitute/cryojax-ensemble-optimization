@@ -3,13 +3,12 @@ Base optimizer object for ensemble refinement.
 """
 
 from abc import abstractmethod
-from typing_extensions import Literal
 
 from equinox import AbstractVar, Module
 from jax_dataloader import DataLoader
 from jaxtyping import Array, Float, Int
 
-from ..._custom_types import LossFn, PerParticleArgs
+from ..._custom_types import LossFn
 
 
 class AbstractEnsembleParameterOptimizer(Module, strict=True):

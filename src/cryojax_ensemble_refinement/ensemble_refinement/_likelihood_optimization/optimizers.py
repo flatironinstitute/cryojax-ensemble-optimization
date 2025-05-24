@@ -169,7 +169,9 @@ class IterativeEnsembleOptimizer(AbstractEnsembleParameterOptimizer):
         n_steps: Int,
         gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
         gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
-        image_to_walker_log_likelihood_fn: Literal["iso_gaussian", "iso_gaussian_var_marg"]
+        image_to_walker_log_likelihood_fn: Literal[
+            "iso_gaussian", "iso_gaussian_var_marg"
+        ]
         | LossFn,
     ):
         self.step_size = step_size

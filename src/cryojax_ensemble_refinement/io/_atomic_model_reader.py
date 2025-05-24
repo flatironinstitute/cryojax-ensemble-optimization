@@ -42,9 +42,9 @@ def read_atomic_models(
         [Path(file).suffix == file_extension for file in atomic_models_filenames]
     ), "All files must have the same extension."
 
-    assert all([Path(file).exists() for file in atomic_models_filenames]), (
-        "Some files do not exist."
-    )
+    assert all(
+        [Path(file).exists() for file in atomic_models_filenames]
+    ), "Some files do not exist."
 
     if file_extension == ".pdb":
         atomic_models_scattering_params = _read_atomic_models_from_pdb(
