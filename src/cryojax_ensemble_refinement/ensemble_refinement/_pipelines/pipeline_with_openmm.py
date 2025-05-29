@@ -2,7 +2,7 @@ import os
 import pathlib
 from typing import Any, Tuple
 from typing_extensions import override
-
+import time
 import jax
 import jax.numpy as jnp
 import mdtraj
@@ -16,6 +16,9 @@ from .._likelihood_optimization.optimizers import (
 )
 from .._prior_projection.base_prior_projector import AbstractEnsemblePriorProjector
 from .base_pipeline import AbstractEnsembleRefinementPipeline
+
+
+# os.environ["XLA_FLAGS"] = '--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1 inter_op_parallelism_threads=1'
 
 
 class EnsembleRefinementPipeline(AbstractEnsembleRefinementPipeline, strict=True):
@@ -60,8 +63,12 @@ class EnsembleRefinementPipeline(AbstractEnsembleRefinementPipeline, strict=True
     ) -> Tuple[
         Float[Array, "n_steps n_walkers n_atoms 3"],
         Float[Array, "n_steps n_walkers"],
-    ]:
+    ]:  
+        print("Initializing projetor...")
         md_states = self.prior_projector.initialize(initial_state_for_projector)
+        print("Projector initialized.")
+
+
         walkers = initial_walkers.copy()
         weights = initial_weights.copy()
 
@@ -71,19 +78,25 @@ class EnsembleRefinementPipeline(AbstractEnsembleRefinementPipeline, strict=True
         if weights.ndim == 0:
             weights = jnp.expand_dims(weights, axis=0)
 
+        print("Preparing writers for output...")
         writers = [
             mdtraj.formats.XTCTrajectoryFile(
                 os.path.join(output_directory, f"traj_walker_{i}.xtc"), "w"
             )
             for i in range(walkers.shape[0])
         ]
+        print("Writers prepared.")
 
+        print("Aligning walkers to reference structure...")
         walkers = _align_walkers_to_reference(
             walkers, self.reference_structure, self.atom_indices_for_opt
         )
+        print("Walkers aligned.")
 
         for i in tqdm(range(self.n_steps)):
             key, subkey = jax.random.split(key)
+
+            print("Likelihood Optimization: ")
             tmp_walkers, weights = self.likelihood_optimizer(
                 walkers[:, self.atom_indices_for_opt, :],
                 weights,
@@ -91,12 +104,21 @@ class EnsembleRefinementPipeline(AbstractEnsembleRefinementPipeline, strict=True
             )
 
             walkers = walkers.at[:, self.atom_indices_for_opt, :].set(tmp_walkers)
+            walkers.block_until_ready()
+            walkers = jax.device_get(walkers)
+            print("Likelihood Optimization done.")
 
+            # give some time for the cores to be freed up
+            time.sleep(10.0)
+
+            print("Prior Projection: ")
             walkers, md_states = self.prior_projector(subkey, walkers, md_states)
 
             walkers = _align_walkers_to_reference(
                 walkers, self.reference_structure, self.atom_indices_for_opt
             )
+
+            print("Write trajectory to files...")
             for j in range(walkers.shape[0]):
                 writers[j].write(walkers[j] / 10.0)
 
@@ -104,6 +126,8 @@ class EnsembleRefinementPipeline(AbstractEnsembleRefinementPipeline, strict=True
             writer.close()
 
         if self.runs_postprocessing:
+
+            print("Running postprocessing...")
             weight_optimizer = ProjGradDescWeightOptimizer(
                 self.likelihood_optimizer.gaussian_amplitudes,
                 self.likelihood_optimizer.gaussian_variances,

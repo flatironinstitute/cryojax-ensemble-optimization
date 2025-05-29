@@ -6,10 +6,11 @@ Functions
 run_md_openmm
     Run MD simulations using OpenMM
 """
-
 import os
 import pathlib
+from functools import partial
 from pathlib import Path
+import shutil
 from typing import Callable, Dict, List, Optional, Tuple
 from typing_extensions import override
 
@@ -21,6 +22,7 @@ import openmm
 import openmm.app as openmm_app
 import openmm.unit as openmm_unit
 from jaxtyping import Array, Float, Int, PRNGKeyArray
+
 
 from ..base_prior_projector import AbstractEnsemblePriorProjector, AbstractPriorProjector
 
@@ -66,10 +68,10 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
         self.base_state_file_path = _validate_base_state_file_path(base_state_file_path)
 
         self.n_steps = n_steps
-        parameters_for_md = _validate_and_set_params_for_md(parameters_for_md)
-
         if make_simulation_fn is None:
+            parameters_for_md = _validate_and_set_params_for_md(parameters_for_md)
             self.simulation = _default_make_sim_fn(parameters_for_md, pdb.topology)
+
         else:
             self.simulation = make_simulation_fn(parameters_for_md, pdb.topology)
 
@@ -102,8 +104,8 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
 
         else:
             path_to_state_file = f"{self.base_state_file_path}0.xml"
+            self.simulation.minimizeEnergy()
 
-        self.simulation.minimizeEnergy()
         self.simulation.saveState(path_to_state_file)
 
         return path_to_state_file
@@ -124,6 +126,7 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
         state: str,
     ) -> Tuple[Float[Array, "n_atoms 3"], str]:
         _assert_is_valid_state_file(state, self.base_state_file_path)
+
         simulation = _add_restraint_force_to_simulation(
             self.simulation,
             mdtraj.Trajectory(
@@ -133,12 +136,20 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
             self.bias_constant_in_kj_per_mol_angs,
         )
 
+        print("Reinitialize")
         simulation.context.reinitialize()
 
+        print("Loading state")
         simulation.loadState(state)
+
+        platform = simulation.context.getPlatform()
+        print(platform.getPropertyValue(simulation.context, "Threads"))
+
+        print("Running Simulation")
         simulation.step(self.n_steps)
         positions = simulation.context.getState(getPositions=True).getPositions()
         velocities = simulation.context.getState(getVelocities=True).getVelocities()
+        print("Cleaning up")
         simulation = _remove_last_force_from_simulation(simulation)
         simulation.context.reinitialize()  # preserveState=True)
 
@@ -148,10 +159,14 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
         state = _get_next_state_file_path(self.base_state_file_path, state)
         simulation.saveState(state)
 
-        positions = simulation.context.getState(getPositions=True).getPositions(
-            asNumpy=True
+        print("Saved states... Finishing.")
+
+        positions = (
+            simulation.context.getState(getPositions=True)
+            .getPositions(asNumpy=True)
+            .value_in_unit(openmm_unit.angstrom)
         )
-        return jnp.array(positions) * 10.0, state
+        return jnp.array(positions), state
 
 
 class EnsembleSteeredMDSimulator(AbstractEnsemblePriorProjector, strict=True):
@@ -174,6 +189,124 @@ class EnsembleSteeredMDSimulator(AbstractEnsemblePriorProjector, strict=True):
                 keys[i], ref_positions[i], states[i]
             )
         return jnp.array(projected_walkers), states
+
+
+def compute_biasing_constant(
+    target_percentage: Float,
+    path_to_initial_pdb: str,
+    positions_for_bias,
+    n_steps: Int,
+    stride: Int = 1,
+    atom_selection: str = "not element H",
+    *,
+    make_simulation_fn: Optional[
+        Callable[[Dict, openmm_app.Topology], openmm_app.Simulation]
+    ] = None,
+    parameters_for_md: Dict = {},
+):  
+    if make_simulation_fn is None:
+        parameters_for_md = _validate_and_set_params_for_md(parameters_for_md)
+        make_simulation_fn = _default_make_sim_fn
+
+    restrain_atom_list = mdtraj.load(str(path_to_initial_pdb)).topology.select(atom_selection)
+
+    pdb = openmm_app.PDBFile(str(path_to_initial_pdb))
+    simulation = make_simulation_fn(
+        parameters_for_md, pdb.topology
+    )
+    simulation.context.setPositions(pdb.positions)
+    simulation.minimizeEnergy()
+
+    # initial_positions = simulation.context.getState(
+    #     getPositions=True
+    # ).getPositions()
+
+    #initial_positions = mdtraj.load(str(path_to_initial_pdb)).openmm_positions(0)
+
+    dir_exists = pathlib.Path("./tmp_biasing_comp").exists()
+    os.makedirs("./tmp_biasing_comp", exist_ok=True)
+    path_to_traj = "./tmp_biasing_comp/traj_for_force.xtc"
+    simulation.reporters.append(
+        openmm_app.XTCReporter(path_to_traj, reportInterval=stride)
+    )
+    simulation.step(n_steps)
+
+    traj = mdtraj.load(path_to_traj, top=path_to_initial_pdb)
+
+    simulation = make_simulation_fn(parameters_for_md, pdb.topology)
+    md_forces = _compute_regular_force(traj, simulation)
+
+    simulation = make_simulation_fn(parameters_for_md, pdb.topology)
+    bias_forces = _compute_biasing_force(
+        traj, simulation, restrain_atom_list, positions_for_bias
+    )
+
+    k_value = _compute_k_value(
+        jnp.array(md_forces),
+        jnp.array(bias_forces),
+        target_percentage,
+        restrain_atom_list
+    ).mean()
+
+    os.remove(path_to_traj)
+    if not dir_exists:
+        shutil.rmtree("./tmp_biasing_comp")
+
+    return k_value
+
+@partial(jax.vmap, in_axes=(0, 0, None, None))
+def _compute_k_value(base_force, bias_force, target_percentage, restrain_atom_list):
+    force1 = base_force[restrain_atom_list, :].flatten()
+    force2 = bias_force[restrain_atom_list, :].flatten()
+
+    rho = jnp.dot(force1, force2) / jnp.sum(force2 ** 2)
+    R = jnp.sum(force1 ** 2) / jnp.sum(force2 ** 2)
+
+    a = (1.0 - target_percentage ** 2)
+    b = - 2.0 * target_percentage ** 2 * rho
+    c = - R * target_percentage ** 2
+
+    return -b + jnp.sqrt(b ** 2 - 4.0 * a * c) / (2.0 * a)
+
+
+def _compute_regular_force(trajectory: mdtraj.Trajectory, simulation):
+    forces = np.zeros((trajectory.n_frames, trajectory.n_atoms, 3))
+    for i in range(trajectory.n_frames):
+        simulation.context.setPositions(trajectory.openmm_positions(i))
+        forces[i] = np.array(
+            simulation.context.getState(getForces=True).getForces(asNumpy=True)
+        )
+    return forces
+
+
+def _compute_biasing_force(
+    trajectory: mdtraj.Trajectory,
+    simulation,
+    restrain_atom_list,
+    bias_positions,
+):
+    RMSD_value = openmm.RMSDForce(
+        bias_positions,
+        restrain_atom_list,
+    )
+
+    force_RMSD = openmm.CustomCVForce("0.5 * k * RMSD^2")
+    force_RMSD.addGlobalParameter("k", 1.0)
+    force_RMSD.addCollectiveVariable("RMSD", RMSD_value)
+    simulation.system.addForce(force_RMSD)
+
+    n_forces = len(simulation.system.getForces())
+    for i in range(n_forces - 1):
+        simulation.system.removeForce(0)
+
+    simulation.context.reinitialize()
+    forces = np.zeros((trajectory.n_frames, trajectory.n_atoms, 3))
+    for i in range(trajectory.n_frames):
+        simulation.context.setPositions(trajectory.openmm_positions(i))
+        forces[i] = np.array(
+            simulation.context.getState(getForces=True).getForces(asNumpy=True)
+        )
+    return forces
 
 
 def _validate_base_state_file_path(base_state_file_path: str) -> str:

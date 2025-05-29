@@ -9,7 +9,7 @@ authors = [
 
 description = "My package description"
 readme = "README.rst"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 keywords = ["CryoEM", "Molecular Dynamics", "single particle"]
 license = "MIT"
 classifiers = [
@@ -33,7 +33,9 @@ dependencies = [
     "bottleneck",
     "numexpr",
     "h5py",
-    "pydantic"
+    "pydantic",
+    "jaxopt",
+    "jax_dataloader",
 ]
 dynamic = ["version"]
 
