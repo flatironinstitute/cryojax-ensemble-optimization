@@ -91,6 +91,11 @@ class EnsembleRefinementPipeline(AbstractEnsembleRefinementPipeline, strict=True
 
         for i in tqdm(range(self.n_steps)):
             key, subkey = jax.random.split(key)
+            """
+            if stride_for_pose is True:
+                new_dataset = pose_estimation(walkers)
+                dataloader = create_dataloader...
+            """
 
             # print("Likelihood Optimization: ")
             tmp_walkers, weights = self.likelihood_optimizer(

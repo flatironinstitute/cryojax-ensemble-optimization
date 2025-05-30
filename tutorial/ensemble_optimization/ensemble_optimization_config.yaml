@@ -8,7 +8,7 @@ likelihood_optimizer_params:
   step_size: 0.25
 loads_b_factors: true
 loads_envelope: false
-n_steps: 100
+n_steps: 200
 path_to_atomic_models:
 - ./atomic_models/initial_model_0.pdb
 - ./atomic_models/initial_model_1.pdb
@@ -17,7 +17,7 @@ path_to_output: ./outputs
 path_to_relion_project: ../data_generation/tutorial_data/
 path_to_starfile: ../data_generation/tutorial_data/tutorial_alanine.star
 projector_params:
-  bias_constant_in_units: 30000.0
+  bias_constant_in_units: 50000.0
   n_steps: 200
   platform: CPU
   platform_properties:

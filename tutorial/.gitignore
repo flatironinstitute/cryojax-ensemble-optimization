@@ -7,4 +7,4 @@ ref_positions.pdb
 traj_*
 
 data_generation/tutorial_data/
-ensemble_refinement/outputs/
+ensemble_optimization/outputs/
