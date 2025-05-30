@@ -6,11 +6,12 @@ Functions
 run_md_openmm
     Run MD simulations using OpenMM
 """
+
 import os
 import pathlib
+import shutil
 from functools import partial
 from pathlib import Path
-import shutil
 from typing import Callable, Dict, List, Optional, Tuple
 from typing_extensions import override
 
@@ -22,7 +23,6 @@ import openmm
 import openmm.app as openmm_app
 import openmm.unit as openmm_unit
 from jaxtyping import Array, Float, Int, PRNGKeyArray
-
 
 from ..base_prior_projector import AbstractEnsemblePriorProjector, AbstractPriorProjector
 
@@ -136,20 +136,17 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
             self.bias_constant_in_kj_per_mol_angs,
         )
 
-        print("Reinitialize")
+        # print("Reinitialize")
         simulation.context.reinitialize()
 
-        print("Loading state")
+        # print("Loading state")
         simulation.loadState(state)
 
-        platform = simulation.context.getPlatform()
-        print(platform.getPropertyValue(simulation.context, "Threads"))
-
-        print("Running Simulation")
+        # print("Running Simulation")
         simulation.step(self.n_steps)
         positions = simulation.context.getState(getPositions=True).getPositions()
         velocities = simulation.context.getState(getVelocities=True).getVelocities()
-        print("Cleaning up")
+        # print("Cleaning up")
         simulation = _remove_last_force_from_simulation(simulation)
         simulation.context.reinitialize()  # preserveState=True)
 
@@ -159,7 +156,7 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
         state = _get_next_state_file_path(self.base_state_file_path, state)
         simulation.saveState(state)
 
-        print("Saved states... Finishing.")
+        # print("Saved states... Finishing.")
 
         positions = (
             simulation.context.getState(getPositions=True)
@@ -203,17 +200,17 @@ def compute_biasing_constant(
         Callable[[Dict, openmm_app.Topology], openmm_app.Simulation]
     ] = None,
     parameters_for_md: Dict = {},
-):  
+):
     if make_simulation_fn is None:
         parameters_for_md = _validate_and_set_params_for_md(parameters_for_md)
         make_simulation_fn = _default_make_sim_fn
 
-    restrain_atom_list = mdtraj.load(str(path_to_initial_pdb)).topology.select(atom_selection)
+    restrain_atom_list = mdtraj.load(str(path_to_initial_pdb)).topology.select(
+        atom_selection
+    )
 
     pdb = openmm_app.PDBFile(str(path_to_initial_pdb))
-    simulation = make_simulation_fn(
-        parameters_for_md, pdb.topology
-    )
+    simulation = make_simulation_fn(parameters_for_md, pdb.topology)
     simulation.context.setPositions(pdb.positions)
     simulation.minimizeEnergy()
 
@@ -221,7 +218,7 @@ def compute_biasing_constant(
     #     getPositions=True
     # ).getPositions()
 
-    #initial_positions = mdtraj.load(str(path_to_initial_pdb)).openmm_positions(0)
+    # initial_positions = mdtraj.load(str(path_to_initial_pdb)).openmm_positions(0)
 
     dir_exists = pathlib.Path("./tmp_biasing_comp").exists()
     os.makedirs("./tmp_biasing_comp", exist_ok=True)
@@ -245,7 +242,7 @@ def compute_biasing_constant(
         jnp.array(md_forces),
         jnp.array(bias_forces),
         target_percentage,
-        restrain_atom_list
+        restrain_atom_list,
     ).mean()
 
     os.remove(path_to_traj)
@@ -254,19 +251,20 @@ def compute_biasing_constant(
 
     return k_value
 
+
 @partial(jax.vmap, in_axes=(0, 0, None, None))
 def _compute_k_value(base_force, bias_force, target_percentage, restrain_atom_list):
     force1 = base_force[restrain_atom_list, :].flatten()
     force2 = bias_force[restrain_atom_list, :].flatten()
 
-    rho = jnp.dot(force1, force2) / jnp.sum(force2 ** 2)
-    R = jnp.sum(force1 ** 2) / jnp.sum(force2 ** 2)
+    rho = jnp.dot(force1, force2) / jnp.sum(force2**2)
+    R = jnp.sum(force1**2) / jnp.sum(force2**2)
 
-    a = (1.0 - target_percentage ** 2)
-    b = - 2.0 * target_percentage ** 2 * rho
-    c = - R * target_percentage ** 2
+    a = 1.0 - target_percentage**2
+    b = -2.0 * target_percentage**2 * rho
+    c = -R * target_percentage**2
 
-    return -b + jnp.sqrt(b ** 2 - 4.0 * a * c) / (2.0 * a)
+    return -b + jnp.sqrt(b**2 - 4.0 * a * c) / (2.0 * a)
 
 
 def _compute_regular_force(trajectory: mdtraj.Trajectory, simulation):

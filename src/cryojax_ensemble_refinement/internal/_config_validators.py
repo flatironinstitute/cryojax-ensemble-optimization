@@ -105,7 +105,7 @@ class DatasetGeneratorConfigAtomicModels(BaseModel, extra="forbid"):
         + "Otherwise it will be ignored.",
     )
 
-    atom_select: str = Field(
+    atom_selection: str = Field(
         default="all",
         description="Selection string for the atoms to use. "
         + "Only used if the atomic model is in PDB format. "
@@ -343,7 +343,7 @@ class cryojaxERConfigMDConfig(BaseModel, extra="forbid"):
         description="Platform to use for the MD sampler. "
         + "Must be 'CPU', 'CUDA', or 'OpenCL'.",
     )
-    platform_properties: Dict[str, str] = Field(
+    platform_properties: Dict[str, str | None] = Field(
         default={"Threads": None}, description="Platform properties for OpenMM."
     )
 
@@ -416,7 +416,7 @@ class cryojaxERConfig(BaseModel, extra="forbid"):
     )
 
     # Miscellaneous
-    atom_select: str = Field(
+    atom_selection: str = Field(
         default="all",
         description="Selection string for the atoms to use. "
         + "Only used if the atomic model is in PDB format. "
@@ -434,14 +434,14 @@ class cryojaxERConfig(BaseModel, extra="forbid"):
 
     @model_validator(mode="after")
     def validate_config(self):
-        if self.atom_select is not None:
+        if self.atom_selection is not None:
             try:
                 mdtraj.load(self.path_to_reference_model).topology.select(
-                    self.atom_select
+                    self.atom_selection
                 )
             except Exception as e:
                 raise ValueError(
-                    f"Invalid atom list filter {self.atom_select}. Error: {e}"
+                    f"Invalid atom list filter {self.atom_selection}. Error: {e}"
                 )
 
         if self.projector_params["path_to_initial_states"] is not None:
@@ -478,25 +478,25 @@ class cryojaxERConfig(BaseModel, extra="forbid"):
     def validate_md_sampler_config(cls, values):
         return dict(cryojaxERConfigMDConfig(**values).model_dump())
 
-    @field_validator("path_to_output")
-    @classmethod
-    def serialize_output_path(cls, v):
-        if not os.path.exists(v):
-            new_path = os.path.join(v, "Job001")
+    # @field_validator("path_to_output")
+    # @classmethod
+    # def serialize_output_path(cls, v):
+    #     if not os.path.exists(v):
+    #         new_path = os.path.join(v, "Job001")
 
-        else:
-            # list all subdirectories
-            subdirs = [f for f in os.listdir(v) if os.path.isdir(os.path.join(v, f))]
+    #     else:
+    #         # list all subdirectories
+    #         subdirs = [f for f in os.listdir(v) if os.path.isdir(os.path.join(v, f))]
 
-            # get the last job number
-            job_numbers = []
-            for subdir in subdirs:
-                if subdir.startswith("Job"):
-                    job_numbers.append(int(subdir[3:]))
-            job_numbers = sorted(job_numbers)
-            if len(job_numbers) == 0:
-                new_path = os.path.join(v, "Job001")
-            else:
-                new_path = os.path.join(v, f"Job{job_numbers[-1] + 1:03d}")
+    #         # get the last job number
+    #         job_numbers = []
+    #         for subdir in subdirs:
+    #             if subdir.startswith("Job"):
+    #                 job_numbers.append(int(subdir[3:]))
+    #         job_numbers = sorted(job_numbers)
+    #         if len(job_numbers) == 0:
+    #             new_path = os.path.join(v, "Job001")
+    #         else:
+    #             new_path = os.path.join(v, f"Job{job_numbers[-1] + 1:03d}")
 
-        return new_path
+    #     return new_path

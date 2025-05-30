@@ -43,26 +43,32 @@ def simulate_particle_stack_from_config(config: DatasetGeneratorConfig):
     key_param, key_stack = jax.random.split(key)
     parameter_dataset = generate_relion_parameter_dataset(key_param, config)
 
+    # dumping so serialization happens
+    config_dict = dict(config.model_dump())
+
     potentials = load_atomic_models_as_potentials(
-        config.atomic_models_params["path_to_atomic_models"],
-        select=config.atomic_models_params["atomic_models_select"],
-        loads_b_factors=config.atomic_models_params["loads_b_factors"],
+        config_dict["atomic_models_params"]["path_to_atomic_models"],
+        select=config_dict["atomic_models_params"]["atom_selection"],
+        loads_b_factors=config_dict["atomic_models_params"]["loads_b_factors"],
     )
 
     mask = CircularCosineMask(
         coordinate_grid=parameter_dataset[0].instrument_config.coordinate_grid_in_pixels,
-        radius=config.mask_radius,
-        rolloff_width=config.mask_rolloff_width,
+        radius=config_dict["mask_radius"],
+        rolloff_width=config_dict["mask_rolloff_width"],
     )
+
     simulate_relion_dataset(
         key=key_stack,
         parameter_dataset=parameter_dataset,
         potentials=potentials,
         potential_integrator=cxs.GaussianMixtureProjection(),
-        ensemble_probabilities=config.atomic_models_params["atomic_models_probabilities"],
+        ensemble_probabilities=config_dict["atomic_models_params"][
+            "atomic_models_probabilities"
+        ],
         mask=mask,
-        noise_snr_range=config.noise_snr,
-        overwrite=config.overwrite,
+        noise_snr_range=config_dict["noise_snr"],
+        overwrite=config_dict["overwrite"],
     )
     return
 

@@ -1,0 +1,45 @@
+number_of_images: 5000
+
+#Instrument config
+pixel_size: 0.2
+box_size: 128
+pad_scale: 1.0
+voltage_in_kilovolts: 10.0
+
+# Transfer Theory
+offset_x_in_angstroms: 0.0
+offset_y_in_angstroms: 0.0
+
+# Transfer Function
+# lists represent a range
+# for uniform random sampling
+defocus_in_angstroms: 150
+astigmatism_in_angstroms: 0.0
+astigmatism_angle_in_degrees: 0.0
+phase_shift: 0.0
+amplitude_contrast_ratio: 0.1
+spherical_aberration_in_mm: 0.27
+ctf_scale_factor: 1.0
+envelope_b_factor: 0.0
+
+# Noise and randomness
+noise_snr: 0.1 # high SNR so we can actually see something...
+mask_radius: 60
+mask_rolloff_width: 1.0
+rng_seed: 0
+
+# Output parameters
+path_to_relion_project: ./tutorial_data/
+path_to_starfile: ./tutorial_data/tutorial_alanine.star
+batch_size: 1000
+overwrite: True
+
+atomic_models_params:
+  path_to_atomic_models:
+    - ./atomic_models/ala_model_0.pdb
+    - ./atomic_models/ala_model_1.pdb
+  atomic_models_probabilities:
+    - 0.7
+    - 0.3
+  loads_b_factors: True
+  atom_selection: not element H

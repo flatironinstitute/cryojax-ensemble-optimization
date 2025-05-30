@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Dict, List
 
+import mdtraj
 from cryojax.constants import (
     convert_b_factor_to_variance,
     get_tabulated_scattering_factor_parameters,
@@ -62,9 +63,13 @@ def _read_atomic_models_from_pdb(
     loads_b_factors: bool = False,
 ) -> Dict[int, Dict[str, Float[Array, ""]]]:
     atomic_models_scattering_params = {}
+
+    atoms_for_alignment = mdtraj.load(atomic_models_filenames[0])
+    atom_indices = atoms_for_alignment.topology.select("protein and not element H")
+
     for i in range(len(atomic_models_filenames)):
         if loads_b_factors:
-            atom_positions, atom_identities, b_factors = read_atoms_from_pdb(
+            _, atom_identities, b_factors = read_atoms_from_pdb(
                 atomic_models_filenames[i],
                 center=True,
                 loads_b_factors=True,
@@ -80,7 +85,7 @@ def _read_atomic_models_from_pdb(
             )
 
         else:
-            atom_positions, atom_identities = read_atoms_from_pdb(
+            _, atom_identities = read_atoms_from_pdb(
                 atomic_models_filenames[i],
                 center=True,
                 loads_b_factors=False,
@@ -93,8 +98,16 @@ def _read_atomic_models_from_pdb(
             gaussian_amplitudes = scattering_factors["a"]
             gaussian_variances = convert_b_factor_to_variance(scattering_factors["b"])
 
+        atom_positions = mdtraj.load(
+            atomic_models_filenames[i],
+        )
+
+        atom_positions = atom_positions.superpose(
+            atoms_for_alignment, frame=0, atom_indices=atom_indices
+        )
+
         atomic_models_scattering_params[i] = {
-            "atom_positions": atom_positions,
+            "atom_positions": atom_positions.xyz[0],
             "gaussian_amplitudes": gaussian_amplitudes,
             "gaussian_variances": gaussian_variances,
         }

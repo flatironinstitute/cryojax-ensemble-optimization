@@ -5,3 +5,6 @@ ref_positions.pdb
 *.bak
 *.log
 traj_*
+
+data_generation/tutorial_data/
+ensemble_refinement/outputs/

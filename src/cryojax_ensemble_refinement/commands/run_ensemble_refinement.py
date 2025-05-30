@@ -97,7 +97,7 @@ def construct_ensemble_refinement_pipeline(
     """
 
     restrain_atom_list = get_atom_indices_from_pdb(
-        select=config["atom_select"],
+        select=config["atom_selection"],
         pdb_file=config["path_to_reference_model"],
     )
 
@@ -125,7 +125,7 @@ def load_initial_walkers_and_scattering_params(config):
     )
 
     restrain_atom_list = get_atom_indices_from_pdb(
-        select=config["atom_select"],
+        select=config["atom_selection"],
         pdb_file=config["path_to_reference_model"],
     )
 
