@@ -9,7 +9,7 @@ import argparse
 import os
 from importlib import import_module
 
-from .cryojax_ensemble_refinement_version import __version__
+from .cryojax_ensemble_opt_version import __version__
 
 
 def _get_commands(cmd_dir: str, doc_str: str = "") -> None:
@@ -23,7 +23,9 @@ def _get_commands(cmd_dir: str, doc_str: str = "") -> None:
     """  # noqa: E501
     parser = argparse.ArgumentParser(description=doc_str)
     parser.add_argument(
-        "--version", action="version", version="cryojax-ER " + __version__
+        "--version",
+        action="version",
+        version="cryojax-ensemble-optimization " + __version__,
     )
 
     subparsers = parser.add_subparsers(title="Choose a command")
@@ -35,9 +37,7 @@ def _get_commands(cmd_dir: str, doc_str: str = "") -> None:
     # use to mark a module in these directories as added to the command namespace
     for module_file in module_files:
         if module_file != "__init__.py" and module_file[-3:] == ".py":
-            module_name = ".".join(
-                ["cryojax_ensemble_refinement", dir_lbl, module_file[:-3]]
-            )
+            module_name = ".".join(["cryojax_ensemble_opt", dir_lbl, module_file[:-3]])
             module = import_module(module_name)
 
             if hasattr(module, "add_args"):
@@ -60,8 +60,7 @@ def _get_commands(cmd_dir: str, doc_str: str = "") -> None:
 
 
 def main_commands():
-    """Commands installed with package of the CryoEm Challenge."""
     _get_commands(
         cmd_dir=os.path.join(os.path.dirname(__file__), "commands"),
-        doc_str="Commands installed with cryo_md",
+        doc_str="Commands installed with cryojax-ensemble-opt package.\n\n",
     )

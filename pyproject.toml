@@ -1,5 +1,5 @@
 [project]
-name = "cryoJAX-Ensemble-Optimization"
+name = "cryojax_ensemble_opt"
 authors = [
     {name = "David Silva Sanchez", email = "david.silva@yale.edu"},
     {name = "Erik Henning Thiede"},
@@ -30,7 +30,6 @@ dependencies = [
     "natsort",
     "pydantic",
     "mdtraj",
-    "cryojax",
     "tqdm",
 ]
 dynamic = ["version"]
@@ -82,4 +81,4 @@ reportIncompatibleVariableOverride = false  # Incompatible with eqx.AbstractVar
 include = ["cryojax_ensemble_opt", "tests"]
 
 [project.scripts]
-cryojax_er = "cryojax_ensemble_opt.command_line:main_commands"
+cryojax_ensemble_opt = "cryojax_ensemble_opt.command_line:main_commands"

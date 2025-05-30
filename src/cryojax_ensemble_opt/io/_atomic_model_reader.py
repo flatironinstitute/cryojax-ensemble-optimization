@@ -101,13 +101,14 @@ def _read_atomic_models_from_pdb(
         atom_positions = mdtraj.load(
             atomic_models_filenames[i],
         )
+        atom_indices = atom_positions.topology.select(select)
 
         atom_positions = atom_positions.superpose(
             atoms_for_alignment, frame=0, atom_indices=atom_indices
         )
 
         atomic_models_scattering_params[i] = {
-            "atom_positions": atom_positions.xyz[0],
+            "atom_positions": atom_positions.xyz[0][atom_indices],
             "gaussian_amplitudes": gaussian_amplitudes,
             "gaussian_variances": gaussian_variances,
         }
