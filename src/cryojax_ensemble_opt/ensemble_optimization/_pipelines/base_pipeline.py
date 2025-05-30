@@ -10,7 +10,7 @@ from .._likelihood_optimization.base_optimizer import AbstractEnsembleParameterO
 from .._prior_projection.base_prior_projector import AbstractEnsemblePriorProjector
 
 
-class AbstractEnsembleRefinementPipeline(Module, strict=True):
+class AbstractEnsembleOptimizationPipeline(Module, strict=True):
     """
     Abstract class for ensemble refinement pipelines.
     """

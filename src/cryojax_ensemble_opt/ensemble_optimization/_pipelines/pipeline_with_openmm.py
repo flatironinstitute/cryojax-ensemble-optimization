@@ -11,20 +11,20 @@ from jaxtyping import Array, Float, Int, PRNGKeyArray
 from tqdm import tqdm
 
 from .._likelihood_optimization.optimizers import (
-    IterativeEnsembleOptimizer,
+    IterativeEnsembleLikelihoodOptimizer,
     ProjGradDescWeightOptimizer,
 )
 from .._prior_projection.base_prior_projector import AbstractEnsemblePriorProjector
-from .base_pipeline import AbstractEnsembleRefinementPipeline
+from .base_pipeline import AbstractEnsembleOptimizationPipeline
 
 
-class EnsembleRefinementPipeline(AbstractEnsembleRefinementPipeline, strict=True):
+class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=True):
     """
     Ensemble refinement pipeline using OpenMM for molecular dynamics simulation.
     """
 
     prior_projector: AbstractEnsemblePriorProjector
-    likelihood_optimizer: IterativeEnsembleOptimizer
+    likelihood_optimizer: IterativeEnsembleLikelihoodOptimizer
     n_steps: int
     reference_structure: mdtraj.Trajectory
     atom_indices_for_opt: Int[Array, " n_atoms_for_opt"]
@@ -33,7 +33,7 @@ class EnsembleRefinementPipeline(AbstractEnsembleRefinementPipeline, strict=True
     def __init__(
         self,
         prior_projector: AbstractEnsemblePriorProjector,
-        likelihood_optimizer: IterativeEnsembleOptimizer,
+        likelihood_optimizer: IterativeEnsembleLikelihoodOptimizer,
         n_steps: int,
         ref_structure_for_alignment: mdtraj.Trajectory,
         atom_indices_for_opt: Int[Array, " n_atoms_for_opt"],

@@ -156,7 +156,7 @@ class SteepestDescWalkerPositionsOptimizer(
         return walkers
 
 
-class IterativeEnsembleOptimizer(AbstractEnsembleParameterOptimizer):
+class IterativeEnsembleLikelihoodOptimizer(AbstractEnsembleParameterOptimizer):
     step_size: Float
     n_steps: Int
     gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]

@@ -1,5 +1,5 @@
 [project]
-name = "cryoJAX-Ensemble-Refinement"
+name = "cryoJAX-Ensemble-Optimization"
 authors = [
     {name = "David Silva Sanchez", email = "david.silva@yale.edu"},
     {name = "Erik Henning Thiede"},
@@ -22,20 +22,16 @@ classifiers = [
 dependencies = [
     "numpy",
     "jax",
+    "jaxlib",
     "jaxtyping",
-    "matplotlib",
-    "starfile",
-    "mrcfile",
-    "scipy",
-    "natsort",
-    "gemmi",
-    "MDAnalysis",
-    "bottleneck",
-    "numexpr",
-    "h5py",
-    "pydantic",
     "jaxopt",
     "jax_dataloader",
+    "equinox",
+    "natsort",
+    "pydantic",
+    "mdtraj",
+    "cryojax",
+    "tqdm",
 ]
 dynamic = ["version"]
 
@@ -48,9 +44,9 @@ dev = [
 ]
 
 [project.urls]
-Documentation = "https://github.com/DSilva27/cryojax-ensemble-refinement/blob/main/README.rst"
-Issues = "https://github.com/DSilva27/cryojax-ensemble-refinement/issues"
-Source = "https://github.com/DSilva27/cryojax-ensemble-refinement"
+Documentation = "https://github.com/DSilva27/cryojax-ensemble-optimization/blob/main/README.rst"
+Issues = "https://github.com/DSilva27/cryojax-ensemble-optimization/issues"
+Source = "https://github.com/DSilva27/cryojax-ensemble-optimization"
 
 
 [build-system]
@@ -61,7 +57,7 @@ build-backend = "hatchling.build"
 source = "vcs"
 
 [tool.hatch.build.hooks.vcs]
-version-file = "src/cryojax_ensemble_refinement/cryojax_ensemble_refinement_version.py"
+version-file = "src/cryojax_ensemble_opt/cryojax_ensemble_opt_version.py"
 
 [tool.ruff]
 extend-include = ["*.ipynb"]
@@ -83,7 +79,7 @@ line-length = 90
 [tool.pyright]
 reportIncompatibleMethodOverride = true
 reportIncompatibleVariableOverride = false  # Incompatible with eqx.AbstractVar
-include = ["cryojax_ensemble_refinement", "tests"]
+include = ["cryojax_ensemble_opt", "tests"]
 
 [project.scripts]
-cryojax_er = "cryojax_ensemble_refinement.command_line:main_commands"
+cryojax_er = "cryojax_ensemble_opt.command_line:main_commands"

@@ -7,7 +7,7 @@ from .loss_functions import (
     compute_neg_log_likelihood_from_weights as compute_neg_log_likelihood_from_weights,
 )
 from .optimizers import (
-    IterativeEnsembleOptimizer as IterativeEnsembleOptimizer,
+    IterativeEnsembleLikelihoodOptimizer as IterativeEnsembleLikelihoodOptimizer,
     ProjGradDescWeightOptimizer as ProjGradDescWeightOptimizer,
     SteepestDescWalkerPositionsOptimizer as SteepestDescWalkerPositionsOptimizer,
 )

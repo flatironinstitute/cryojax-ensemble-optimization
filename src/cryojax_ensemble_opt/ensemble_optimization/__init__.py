@@ -3,13 +3,13 @@ from ._likelihood_optimization import (
     compute_likelihood_matrix as compute_likelihood_matrix,
     compute_neg_log_likelihood as compute_neg_log_likelihood,
     compute_neg_log_likelihood_from_weights as compute_neg_log_likelihood_from_weights,
-    IterativeEnsembleOptimizer as IterativeEnsembleOptimizer,
+    IterativeEnsembleLikelihoodOptimizer as IterativeEnsembleLikelihoodOptimizer,
     ProjGradDescWeightOptimizer as ProjGradDescWeightOptimizer,
     SteepestDescWalkerPositionsOptimizer as SteepestDescWalkerPositionsOptimizer,
 )
 from ._pipelines import (
-    AbstractEnsembleRefinementPipeline as AbstractEnsembleRefinementPipeline,
-    EnsembleRefinementPipeline as EnsembleRefinementPipeline,
+    AbstractEnsembleOptimizationPipeline as AbstractEnsembleOptimizationPipeline,
+    EnsembleOptimizationPipeline as EnsembleOptimizationPipeline,
 )
 from ._prior_projection import (
     AbstractForceField as AbstractForceField,

@@ -11,10 +11,10 @@ import yaml
 from cryojax.data import RelionParticleParameterDataset, RelionParticleStackDataset
 
 from ..data import create_dataloader
-from ..ensemble_refinement import (
-    EnsembleRefinementPipeline,
+from ..ensemble_optimization import (
+    EnsembleOptimizationPipeline,
     EnsembleSteeredMDSimulator,
-    IterativeEnsembleOptimizer,
+    IterativeEnsembleLikelihoodOptimizer,
     SteeredMDSimulator,
 )
 from ..internal import cryojaxERConfig
@@ -78,7 +78,7 @@ def construct_md_projector(config, restrain_atom_list):
 
 
 def construct_likelihood_optimizer(config, gaussian_amplitudes, gaussian_variances):
-    return IterativeEnsembleOptimizer(
+    return IterativeEnsembleLikelihoodOptimizer(
         step_size=config["likelihood_optimizer_params"]["step_size"],
         n_steps=config["likelihood_optimizer_params"]["n_steps"],
         gaussian_amplitudes=gaussian_amplitudes,
@@ -89,7 +89,7 @@ def construct_likelihood_optimizer(config, gaussian_amplitudes, gaussian_varianc
     )
 
 
-def construct_ensemble_refinement_pipeline(
+def construct_ensemble_optimization_pipeline(
     config, gaussian_amplitudes, gaussian_variances
 ):
     """
@@ -107,7 +107,7 @@ def construct_ensemble_refinement_pipeline(
     )
     ref_structure = mdtraj.load(config["path_to_reference_model"])
 
-    ensemble_refinement_pipeline = EnsembleRefinementPipeline(
+    ensemble_optimization_pipeline = EnsembleOptimizationPipeline(
         prior_projector=projector_list,
         likelihood_optimizer=likelihood_optimizer,
         n_steps=config["n_steps"],
@@ -115,7 +115,7 @@ def construct_ensemble_refinement_pipeline(
         atom_indices_for_opt=restrain_atom_list,
         runs_postprocessing=True,
     )
-    return ensemble_refinement_pipeline
+    return ensemble_optimization_pipeline
 
 
 def load_initial_walkers_and_scattering_params(config):
@@ -140,7 +140,7 @@ def load_initial_walkers_and_scattering_params(config):
     return walkers, gaussian_amplitudes, gaussian_variances
 
 
-def run_ensemble_refinement(config):
+def run_ensemble_optimization(config):
     key = jax.random.key(config["rng_seed"])
     key_dataloader, key_pipeline = jax.random.split(key)
     relion_stack_dataset = RelionParticleStackDataset(
@@ -159,11 +159,11 @@ def run_ensemble_refinement(config):
     init_walkers, gaussian_amplitudes, gaussian_variances = (
         load_initial_walkers_and_scattering_params(config)
     )
-    ensemble_refinement_pipeline = construct_ensemble_refinement_pipeline(
+    ensemble_optimization_pipeline = construct_ensemble_optimization_pipeline(
         config, gaussian_amplitudes, gaussian_variances
     )
 
-    walkers, weights = ensemble_refinement_pipeline.run(
+    walkers, weights = ensemble_optimization_pipeline.run(
         key=key_pipeline,
         initial_walkers=init_walkers,
         initial_weights=config["likelihood_optimizer_params"]["init_weights"],
@@ -216,9 +216,9 @@ def main(args):
         )
     )
 
-    logging.info("Running ensemble refinement...")
-    run_ensemble_refinement(config)
-    logging.info("Ensemble refinement complete.")
+    logging.info("Running ensemble optimization...")
+    run_ensemble_optimization(config)
+    logging.info("Ensemble optimization complete.")
 
     return
 
