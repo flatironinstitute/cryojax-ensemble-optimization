@@ -1,0 +1,26 @@
+atom_selection: not element H
+likelihood_optimizer_params:
+  batch_size: 100
+  init_weights:
+  - 0.5
+  - 0.5
+  n_steps: 5
+  step_size: 0.25
+loads_b_factors: true
+loads_envelope: false
+n_steps: 200
+path_to_atomic_models:
+- ./atomic_models/initial_model_0.pdb
+- ./atomic_models/initial_model_1.pdb
+path_to_reference_model: ./atomic_models/ref_model.pdb
+path_to_output: ./outputs
+path_to_relion_project: ../data_generation/tutorial_data/
+path_to_starfile: ../data_generation/tutorial_data/tutorial_alanine.star
+projector_params:
+  bias_constant_in_units: 50000.0
+  n_steps: 200
+  platform: CPU
+  platform_properties:
+    Threads: '64' # Number of threads to use!!!
+  projector_mode: openmm # only method supported for now
+rng_seed: 0

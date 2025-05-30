@@ -1,1 +1,0 @@
-from .mdaa_simulator import MDSimulatorRMSDConstraint as MDSimulatorRMSDConstraint
