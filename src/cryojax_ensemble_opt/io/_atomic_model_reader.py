@@ -65,6 +65,7 @@ def _read_atomic_models_from_pdb(
     atomic_models_scattering_params = {}
 
     atoms_for_alignment = mdtraj.load(atomic_models_filenames[0])
+    atoms_for_alignment = atoms_for_alignment.center_coordinates()
     atom_indices = atoms_for_alignment.topology.select("protein and not element H")
 
     for i in range(len(atomic_models_filenames)):
@@ -108,7 +109,7 @@ def _read_atomic_models_from_pdb(
         )
 
         atomic_models_scattering_params[i] = {
-            "atom_positions": atom_positions.xyz[0][atom_indices],
+            "atom_positions": atom_positions.xyz[0][atom_indices] * 10.0,
             "gaussian_amplitudes": gaussian_amplitudes,
             "gaussian_variances": gaussian_variances,
         }
