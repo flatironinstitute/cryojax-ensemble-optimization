@@ -84,17 +84,17 @@ def _compute_likelihood_image_and_walker(
 
 
 @eqx.filter_jit
+@partial(eqx.filter_vmap, in_axes=(0, None, 0, 0, None, None), out_axes=0)
 @partial(
     eqx.filter_vmap,
     in_axes=(None, eqx.if_array(0), None, None, None, eqx.if_array(0)),
     out_axes=0,
 )
-@partial(eqx.filter_vmap, in_axes=(0, None, 0, 0, None, None), out_axes=0)
-def compute_likelihood_matrix(
-    ensemble_walkers: Float[Array, " n_atoms 3"],
+def _compute_likelihood_matrix(
+    ensemble_walkers: Float[Array, "n_atoms 3"],
     relion_stack: ParticleStack,
-    gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
-    gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
+    gaussian_amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
+    gaussian_variances: Float[Array, "n_atoms n_gaussians_per_atom"],
     image_to_walker_log_likelihood_fn: LossFn,
     per_particle_args: PerParticleArgs,
 ) -> Float[Array, "n_images n_walkers"]:
@@ -125,6 +125,42 @@ def compute_likelihood_matrix(
         image_to_walker_log_likelihood_fn,
         per_particle_args,
     )
+
+def compute_likelihood_matrix(
+    ensemble_walkers: Float[Array, "n_walkers n_atoms 3"],
+    relion_stack: ParticleStack,
+    gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
+    gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
+    image_to_walker_log_likelihood_fn: LossFn,
+    per_particle_args: PerParticleArgs,
+) -> Float[Array, "n_images n_walkers"]:
+    """
+    Compute the likelihood matrix for a set of walkers and a Relion stack.
+    The likelihood is computed for each walker and each image in the stack.
+
+    **Arguments:**
+    - `ensemble_walkers`: The walkers of the ensemble. This is a 3D array
+        with shape (n_walkers, n_atoms, 3).
+    - `relion_stack`: A cryojax `ParticleStack` object.
+    - `gaussian_amplitudes`: The amplitudes for the GMM atom potential.
+    - `gaussian_variances`: The variances for the GMM atom potential.
+    - `image_to_walker_log_likelihood_fn`: The function to compute the likelihood
+        between the computed image and the observed image.
+    - `per_particle_args`: The arguments to pass to the likelihood function.
+    **Returns:**
+    - The likelihood matrix of the ensemble. This is a 2D array
+        such that the n, m element is p(y_n | x_m), where y_n is the n-th image
+        and x_m is the m-th walker (atomic model).
+    """
+
+    return _compute_likelihood_matrix(
+        ensemble_walkers,
+        relion_stack,
+        gaussian_amplitudes,
+        gaussian_variances,
+        image_to_walker_log_likelihood_fn,
+        per_particle_args,
+    ).T # order of vmaps!
 
 
 @eqx.filter_jit

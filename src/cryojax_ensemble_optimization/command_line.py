@@ -37,7 +37,7 @@ def _get_commands(cmd_dir: str, doc_str: str = "") -> None:
     # use to mark a module in these directories as added to the command namespace
     for module_file in module_files:
         if module_file != "__init__.py" and module_file[-3:] == ".py":
-            module_name = ".".join(["cryojax_ensemble_opt", dir_lbl, module_file[:-3]])
+            module_name = ".".join(["cryojax_ensemble_optimization", dir_lbl, module_file[:-3]])
             module = import_module(module_name)
 
             if hasattr(module, "add_args"):
