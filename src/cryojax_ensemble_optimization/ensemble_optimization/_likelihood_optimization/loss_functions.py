@@ -126,6 +126,7 @@ def _compute_likelihood_matrix(
         per_particle_args,
     )
 
+
 def compute_likelihood_matrix(
     ensemble_walkers: Float[Array, "n_walkers n_atoms 3"],
     relion_stack: ParticleStack,
@@ -160,7 +161,7 @@ def compute_likelihood_matrix(
         gaussian_variances,
         image_to_walker_log_likelihood_fn,
         per_particle_args,
-    ).T # order of vmaps!
+    ).T  # order of vmaps!
 
 
 @eqx.filter_jit
