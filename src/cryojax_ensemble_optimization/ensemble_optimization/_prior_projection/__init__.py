@@ -10,4 +10,7 @@ from ._molecular_dynamics import (
     EnsembleSteeredMDSimulator as EnsembleSteeredMDSimulator,
     SteeredMDSimulator as SteeredMDSimulator,
 )
-from .base_prior_projector import AbstractPriorProjector as AbstractPriorProjector
+from .base_prior_projector import (
+    AbstractEnsemblePriorProjector as AbstractEnsemblePriorProjector,
+    AbstractPriorProjector as AbstractPriorProjector,
+)

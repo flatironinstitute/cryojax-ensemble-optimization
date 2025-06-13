@@ -37,6 +37,8 @@ cd cryojax_ensemble_optimization
 pip install .
 ```
 
+If you intent to use a GPU for JAX operations you might need to install a cuda supported version of JAX manually. We recommend following the official [install JAX](https://github.com/google/jax#installation) instructions.
+
 
 ## Acknowledgements
 TODO

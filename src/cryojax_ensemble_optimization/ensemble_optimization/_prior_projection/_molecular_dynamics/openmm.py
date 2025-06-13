@@ -22,7 +22,7 @@ import numpy as np
 import openmm
 import openmm.app as openmm_app
 import openmm.unit as openmm_unit
-from jaxtyping import Array, Float, Int, PRNGKeyArray
+from jaxtyping import Array, Float, Int
 
 from ..base_prior_projector import AbstractEnsemblePriorProjector, AbstractPriorProjector
 
@@ -121,7 +121,6 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
     @override
     def __call__(
         self,
-        key: PRNGKeyArray,
         ref_walkers: Float[Array, "n_atoms 3"],
         state: str,
     ) -> Tuple[Float[Array, "n_atoms 3"], str]:
@@ -175,16 +174,12 @@ class EnsembleSteeredMDSimulator(AbstractEnsemblePriorProjector, strict=True):
     @override
     def __call__(
         self,
-        key: PRNGKeyArray,
         ref_positions: Float[Array, "n_walkers n_atoms 3"],
         states: List[str],
     ) -> Tuple[Float[Array, "n_walkers n_atoms 3"], List[str]]:
-        keys = jax.random.split(key, len(self.projectors))
         projected_walkers = np.zeros_like(ref_positions)
         for i, projector in enumerate(self.projectors):
-            projected_walkers[i], states[i] = projector(
-                keys[i], ref_positions[i], states[i]
-            )
+            projected_walkers[i], states[i] = projector(ref_positions[i], states[i])
         return jnp.array(projected_walkers), states
 
 

@@ -1,4 +1,5 @@
-from typing import TypeVar
+from typing import Tuple, TypeVar
+from typing_extensions import override
 
 import equinox as eqx
 import jax
@@ -7,22 +8,13 @@ from jaxtyping import Array, Float, Int, PRNGKeyArray
 
 from .._forcefields.base_forcefield import AbstractForceField
 from .._forcefields.biasing_forces import compute_harmonic_bias_potential_energy
+from ..base_prior_projector import AbstractPriorProjector
 
 
 EnergyFuncArgs = TypeVar("EnergyFuncArgs")
 
 
-class AbstractSampler(eqx.Module, strict=True):
-    """
-    Abstract class for a sampler.
-    """
-
-    n_steps: eqx.AbstractVar[Int]
-    step_size: eqx.AbstractVar[Float]
-    forcefield: AbstractForceField
-
-
-class SteeredOverdampedLangevinSampler(AbstractSampler):
+class SteeredOverdampedLangevinSampler(AbstractPriorProjector):
     """
     Overdamped Langevin sampler for Overdamped Langevin dynamics.
     """
@@ -51,35 +43,65 @@ class SteeredOverdampedLangevinSampler(AbstractSampler):
         self.forcefield = forcefield
         self.biasing_force_constant = biasing_force_constant
 
+    @override
+    def initialize(
+        self, init_state: Tuple[PRNGKeyArray, Float[Array, "n_atoms 3"]]
+    ) -> Tuple[PRNGKeyArray, Float[Array, "n_atoms 3"]]:
+        """
+        Initialize the sampler with the initial state. For this sampler, the initial state
+        is the indentity, and its purpsoe is simply to validate the type of the input.
+
+        **Arguments:**
+        init_state: Initial positions of the atoms or walkers, and initial key.
+
+        **Returns:**
+        Initial state for the sampler.
+        """
+        key, initial_walker = init_state
+
+        assert (
+            initial_walker.ndim == 2 and initial_walker.shape[1] == 3
+        ), "initial_walker must be a 2D array with shape (n_atoms, 3)"
+        assert jnp.isdtype(
+            initial_walker, "real floating"
+        ), "initial_walker must be a real floating point array"
+
+        return init_state
+
     def __call__(
         self,
-        key: PRNGKeyArray,
-        initial_atom_positions: Float[Array, "n_atoms 3"],
-        ref_atom_positions: Float[Array, "n_atoms 3"],
-    ) -> Float[Array, "n_steps n_atoms 3"]:
+        ref_walkers: Float[Array, "n_atoms 3"],
+        state: Tuple[PRNGKeyArray, Float[Array, "n_atoms 3"]],
+    ) -> Tuple[
+        Float[Array, "n_atoms 3"],
+        Tuple[PRNGKeyArray, Float[Array, "n_atoms 3"]],
+    ]:
         """
         Sample a trajectory from the initial atom positions.
 
         **Arguments:**
         key: JAX random key for generating random numbers.
-        initial_atom_positions: Initial positions of the atoms.
+        initial_walkers: Initial positions of the atoms.
         energy_fn_args: Arguments for the energy function.
 
         **Returns:**
         trajectory: Overdamped Langevin Dynamics Trajectory.
         """
-        return _run_steered_overdamped_langevin(
+
+        key, initial_walkers = state
+        key, walkers = _run_steered_overdamped_langevin(
             key,
-            initial_atom_positions,
-            ref_atom_positions,
+            initial_walkers,
+            ref_walkers,
             self.n_steps,
             self.step_size,
             self.forcefield,
             self.biasing_force_constant,
         )
+        return walkers, (key, walkers)
 
 
-class ParallelSteeredOverdampedLangevinSampler(AbstractSampler):
+class ParallelSteeredOverdampedLangevinSampler(AbstractPriorProjector):
     """
     Parallel Overdamped Langevin sampler for Overdamped Langevin dynamics.
     """
@@ -108,39 +130,69 @@ class ParallelSteeredOverdampedLangevinSampler(AbstractSampler):
         self.forcefield = forcefield
         self.biasing_force_constant = biasing_force_constant
 
+    @override
+    def initialize(
+        self, init_state: Tuple[PRNGKeyArray, Float[Array, "n_walkers n_atoms 3"]]
+    ) -> Tuple[PRNGKeyArray, Float[Array, "n_atoms 3"]]:
+        """
+        Initialize the sampler with the initial state. For this sampler, the initial state
+        is the indentity, and its purpsoe is simply to validate the type of the input.
+
+        **Arguments:**
+        init_state: Initial positions of the atoms or walkers, and initial key.
+
+        **Returns:**
+        Initial state for the sampler.
+        """
+        key, initial_walker = init_state
+
+        assert (
+            initial_walker.ndim == 3 and initial_walker.shape[2] == 3
+        ), "initial_walker must be a 2D array with shape (n_atoms, 3)"
+        assert jnp.isdtype(
+            initial_walker, "real floating"
+        ), "initial_walker must be a real floating point array"
+
+        return init_state
+
     def __call__(
         self,
-        key: PRNGKeyArray,
-        initial_atom_positions: Float[Array, "n_walkers n_atoms 3"],
-        ref_atom_positions: Float[Array, "n_walkers n_atoms 3"],
-    ) -> Float[Array, "n_walkers n_steps n_atoms 3"]:
+        ref_walkers: Float[Array, "n_walkers n_atoms 3"],
+        state: Tuple[PRNGKeyArray, Float[Array, "n_walkers n_atoms 3"]],
+    ) -> Tuple[
+        Float[Array, "n_walkers n_atoms 3"],
+        Tuple[PRNGKeyArray, Float[Array, "n_walkers n_atoms 3"]],
+    ]:
         """
         Sample a trajectory from the initial atom positions.
 
         **Arguments:**
         key: JAX random key for generating random numbers.
-        initial_atom_positions: Initial positions of the atoms.
+        initial_walkers: Initial positions of the atoms.
         energy_fn_args: Arguments for the energy function.
 
         **Returns:**
-        trajectory: Overdamped Langevin Dynamics Trajectory for multiple walkers.
+        trajectory: Overdamped Langevin Dynamics Trajectory.
         """
-        return _run_steered_overdamped_langevin_parallel(
+
+        key, initial_walkers = state
+        key, walkers = _run_steered_overdamped_langevin_parallel(
             key,
-            initial_atom_positions,
-            ref_atom_positions,
+            initial_walkers,
+            ref_walkers,
             self.n_steps,
             self.step_size,
             self.forcefield,
             self.biasing_force_constant,
         )
+        return walkers, (key, walkers)
 
 
 @eqx.filter_jit
 def _take_steered_overdamped_langevin_step(
     key: PRNGKeyArray,
     atom_positions: Float[Array, "n_atoms 3"],
-    ref_atom_positions: Float[Array, "n_atoms 3"],
+    ref_walkers: Float[Array, "n_atoms 3"],
     forcefield: AbstractForceField,
     biasing_force_constant: Float,
     step_size: Float,
@@ -148,7 +200,7 @@ def _take_steered_overdamped_langevin_step(
     energy_gradient = jax.grad(lambda x: forcefield(x))(atom_positions)
 
     biasing_gradient = jax.grad(compute_harmonic_bias_potential_energy)(
-        atom_positions, ref_atom_positions, biasing_force_constant
+        atom_positions, ref_walkers, biasing_force_constant
     )
 
     gradient = energy_gradient + biasing_gradient
@@ -196,7 +248,7 @@ def _run_steered_overdamped_langevin(
 def _take_steered_overdamped_langevin_step_parallel(
     key: PRNGKeyArray,
     atom_positions: Float[Array, "n_walkers n_atoms 3"],
-    ref_atom_positions: Float[Array, "n_walkers n_atoms 3"],
+    ref_walkers: Float[Array, "n_walkers n_atoms 3"],
     forcefield: AbstractForceField,
     biasing_force_constant: Float,
     step_size: Float,
@@ -205,7 +257,7 @@ def _take_steered_overdamped_langevin_step_parallel(
 
     biasing_gradient = eqx.filter_vmap(
         jax.grad(compute_harmonic_bias_potential_energy), in_axes=(0, 0, None)
-    )(atom_positions, ref_atom_positions, biasing_force_constant)
+    )(atom_positions, ref_walkers, biasing_force_constant)
 
     gradient = energy_gradient + biasing_gradient
 

@@ -23,7 +23,7 @@ def _likelihood_isotropic_gaussian(
     scale = (co - c * o) / (cc - c**2)
     bias = o - scale * c
 
-    return jnp.sum((scale * computed_image - observed_image + bias) ** 2) / (
+    return -jnp.sum((scale * computed_image - observed_image + bias) ** 2) / (
         2 * noise_variance
     )
 

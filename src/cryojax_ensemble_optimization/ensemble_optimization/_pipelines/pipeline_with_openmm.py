@@ -90,7 +90,6 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
         # print("Walkers aligned.")
 
         for i in tqdm(range(self.n_steps)):
-            key, subkey = jax.random.split(key)
             """
             if stride_for_pose is True:
                 new_dataset = pose_estimation(walkers)
@@ -110,7 +109,7 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
             # print("Likelihood Optimization done.")
 
             # print("Prior Projection: ")
-            walkers, md_states = self.prior_projector(subkey, walkers, md_states)
+            walkers, md_states = self.prior_projector(walkers, md_states)
 
             walkers = _align_walkers_to_reference(
                 walkers, self.reference_structure, self.atom_indices_for_opt

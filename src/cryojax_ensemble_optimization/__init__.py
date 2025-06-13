@@ -5,4 +5,4 @@ from . import (
     io as io,
     simulator as simulator,
 )
-from .cryojax_ensemble_opt_version import __version__ as __version__
+from .cryojax_ensemble_optimization_version import __version__ as __version__
