@@ -56,7 +56,7 @@ build-backend = "hatchling.build"
 source = "vcs"
 
 [tool.hatch.build.hooks.vcs]
-version-file = "src/cryojax_ensemble_optimization/cryojax_ensemble_optimizationimization_version.py"
+version-file = "src/cryojax_ensemble_optimization/cryojax_ensemble_optimization_version.py"
 
 [tool.ruff]
 extend-include = ["*.ipynb"]

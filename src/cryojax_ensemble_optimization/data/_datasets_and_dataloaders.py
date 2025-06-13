@@ -23,9 +23,14 @@ class CustomJaxDataset(jdl.Dataset):
         self.per_particle_args = per_particle_args
 
     def __getitem__(self, index) -> Dict[str, ParticleStack | PerParticleArgs]:
+        if self.per_particle_args is None:
+            per_particle_args = None
+        else:
+            per_particle_args = self.per_particle_args[index]
+
         data = {
             "particle_stack": self.cryojax_dataset[index],
-            "per_particle_args": self.per_particle_args,
+            "per_particle_args": per_particle_args,
         }
         return data
 
