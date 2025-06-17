@@ -62,7 +62,7 @@ def simulate_relion_dataset(
     key: PRNGKeyArray,
     parameter_file: RelionParticleParameterFile,
     path_to_relion_project: str,
-    images_per_mrc: int,
+    images_per_file: int,
     potentials: Tuple[cxs.AbstractPotentialRepresentation],
     potential_integrator: cxs.AbstractPotentialIntegrator,
     ensemble_probabilities: Float[Array, " n_potentials"],
@@ -130,7 +130,7 @@ def simulate_relion_dataset(
         compute_image_fn=render_image_with_white_gaussian_noise,
         constant_args=constant_args,
         per_particle_args=per_particle_args,
-        images_per_mrc=images_per_mrc,
+        images_per_file=images_per_file,
         batch_size=batch_size,
         overwrite=overwrite,
     )

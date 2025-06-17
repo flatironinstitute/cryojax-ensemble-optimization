@@ -90,7 +90,6 @@ def _compute_likelihood_image_and_walker(
     in_axes=(None, eqx.if_array(0), None, None, None, eqx.if_array(0)),
     out_axes=0,
 )
-@partial(eqx.filter_vmap, in_axes=(0, None, 0, 0, None, None), out_axes=0)
 def _compute_likelihood_matrix(
     ensemble_walkers: Float[Array, " n_atoms 3"],
     relion_stack: Dict,

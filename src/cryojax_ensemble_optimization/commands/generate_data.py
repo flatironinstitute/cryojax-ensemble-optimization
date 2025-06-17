@@ -62,7 +62,7 @@ def simulate_particle_stack_from_config(config: DatasetGeneratorConfig):
         key=key_stack,
         parameter_file=parameter_file,
         path_to_relion_project=config_dict["path_to_relion_project"],
-        images_per_mrc=config_dict["images_per_mrc"],
+        images_per_file=config_dict["images_per_file"],
         potentials=potentials,
         potential_integrator=cxs.GaussianMixtureProjection(),
         ensemble_probabilities=config_dict["atomic_models_params"][
