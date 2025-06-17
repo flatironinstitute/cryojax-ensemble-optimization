@@ -2,7 +2,7 @@ from typing import Dict, Optional
 
 import jax_dataloader as jdl
 from cryojax.data import (
-    ParticleStack,
+    AbstractParticleStackDataset,
     RelionParticleStackDataset,
 )
 from jaxtyping import PRNGKeyArray
@@ -22,7 +22,7 @@ class CustomJaxDataset(jdl.Dataset):
         self.cryojax_dataset = cryojax_dataset
         self.per_particle_args = per_particle_args
 
-    def __getitem__(self, index) -> Dict[str, ParticleStack | PerParticleArgs]:
+    def __getitem__(self, index) -> Dict[str, AbstractParticleStackDataset | PerParticleArgs]:
         if self.per_particle_args is None:
             per_particle_args = None
         else:
