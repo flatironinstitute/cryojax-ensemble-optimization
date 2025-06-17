@@ -32,7 +32,7 @@ dependencies = [
     "mdtraj",
     "tqdm",
     "healpy",
-    "cryojax",
+    "cryojax @ git+https://github.com/mjo22/cryojax",
 ]
 dynamic = ["version"]
 
