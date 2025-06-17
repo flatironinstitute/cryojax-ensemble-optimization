@@ -13,13 +13,13 @@ from jaxtyping import Array, Float
 def read_atomic_models(
     atomic_models_filenames: List[str],
     *,
-    select: str = "all",
+    selection_string: str = "all",
     loads_b_factors: bool = False,
 ) -> Dict[int, Dict[str, Float[Array, ""]]]:
     """
     **Arguments:**
         atomic_models_filenames: List of filenames of the atomic models.
-        select: Selection string for the atomic models in mdtraj format.
+        selection_string: Selection string for the atomic models in mdtraj format.
         loads_b_factors: Whether to load B-factors from the PDB files.
     **Returns:**
         atomic_models_scattering_params: Dictionary of atomic model scattering parameters.
@@ -49,7 +49,9 @@ def read_atomic_models(
 
     if file_extension == ".pdb":
         atomic_models_scattering_params = _read_atomic_models_from_pdb(
-            atomic_models_filenames, select=select, loads_b_factors=loads_b_factors
+            atomic_models_filenames,
+            selection_string=selection_string,
+            loads_b_factors=loads_b_factors,
         )
     else:
         raise NotImplementedError(f"File extension {file_extension} not supported.")
@@ -59,7 +61,7 @@ def read_atomic_models(
 
 def _read_atomic_models_from_pdb(
     atomic_models_filenames: List[str],
-    select: str = "all",
+    selection_string: str = "all",
     loads_b_factors: bool = False,
 ) -> Dict[int, Dict[str, Float[Array, ""]]]:
     atomic_models_scattering_params = {}
@@ -74,7 +76,7 @@ def _read_atomic_models_from_pdb(
                 atomic_models_filenames[i],
                 center=True,
                 loads_b_factors=True,
-                select=select,
+                selection_string=selection_string,
             )
 
             scattering_factors = get_tabulated_scattering_factor_parameters(
@@ -90,7 +92,7 @@ def _read_atomic_models_from_pdb(
                 atomic_models_filenames[i],
                 center=True,
                 loads_b_factors=False,
-                select=select,
+                selection_string=selection_string,
             )
 
             scattering_factors = get_tabulated_scattering_factor_parameters(
@@ -102,7 +104,7 @@ def _read_atomic_models_from_pdb(
         atom_positions = mdtraj.load(
             atomic_models_filenames[i],
         )
-        atom_indices = atom_positions.topology.select(select)
+        atom_indices = atom_positions.topology.select(selection_string)
 
         atom_positions = atom_positions.superpose(
             atoms_for_alignment, frame=0, atom_indices=atom_indices

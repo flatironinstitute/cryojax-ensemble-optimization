@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 import mdtraj
 import yaml
-from cryojax.data import RelionParticleParameterDataset, RelionParticleStackDataset
+from cryojax.data import RelionParticleParameterFile, RelionParticleStackDataset
 
 from ..data import create_dataloader
 from ..ensemble_optimization import (
@@ -97,7 +97,7 @@ def construct_ensemble_optimization_pipeline(
     """
 
     restrain_atom_list = get_atom_indices_from_pdb(
-        select=config["atom_selection"],
+        selection_string=config["atom_selection"],
         pdb_file=config["path_to_reference_model"],
     )
 
@@ -125,7 +125,7 @@ def load_initial_walkers_and_scattering_params(config):
     )
 
     restrain_atom_list = get_atom_indices_from_pdb(
-        select=config["atom_selection"],
+        selection_string=config["atom_selection"],
         pdb_file=config["path_to_reference_model"],
     )
 
@@ -144,11 +144,13 @@ def run_ensemble_optimization(config):
     key = jax.random.key(config["rng_seed"])
     key_dataloader, key_pipeline = jax.random.split(key)
     relion_stack_dataset = RelionParticleStackDataset(
-        RelionParticleParameterDataset(
+        RelionParticleParameterFile(
             path_to_starfile=config["path_to_starfile"],
-            path_to_relion_project=config["path_to_relion_project"],
+            mode="r",
             loads_envelope=config["loads_envelope"],
-        )
+        ),
+        path_to_relion_project=config["path_to_relion_project"],
+        mode="r",
     )
     dataloader = create_dataloader(
         relion_stack_dataset,

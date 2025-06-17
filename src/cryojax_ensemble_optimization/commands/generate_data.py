@@ -10,7 +10,7 @@ import jax
 import yaml
 from cryojax.image.operators import CircularCosineMask
 
-from ..data import generate_relion_parameter_dataset, simulate_relion_dataset
+from ..data import generate_relion_parameter_file, simulate_relion_dataset
 from ..internal import DatasetGeneratorConfig
 from ..io import load_atomic_models_as_potentials
 
@@ -41,26 +41,28 @@ def simulate_particle_stack_from_config(config: DatasetGeneratorConfig):
     key = jax.random.key(seed)
 
     key_param, key_stack = jax.random.split(key)
-    parameter_dataset = generate_relion_parameter_dataset(key_param, config)
+    parameter_file = generate_relion_parameter_file(key_param, config)
 
     # dumping so serialization happens
     config_dict = dict(config.model_dump())
 
     potentials = load_atomic_models_as_potentials(
         config_dict["atomic_models_params"]["path_to_atomic_models"],
-        select=config_dict["atomic_models_params"]["atom_selection"],
+        selection_string=config_dict["atomic_models_params"]["atom_selection"],
         loads_b_factors=config_dict["atomic_models_params"]["loads_b_factors"],
     )
 
     mask = CircularCosineMask(
-        coordinate_grid=parameter_dataset[0].instrument_config.coordinate_grid_in_pixels,
+        coordinate_grid=parameter_file[0]["instrument_config"].coordinate_grid_in_pixels,
         radius=config_dict["mask_radius"],
         rolloff_width=config_dict["mask_rolloff_width"],
     )
 
     simulate_relion_dataset(
         key=key_stack,
-        parameter_dataset=parameter_dataset,
+        parameter_file=parameter_file,
+        path_to_relion_project=config_dict["path_to_relion_project"],
+        images_per_mrc=config_dict["images_per_mrc"],
         potentials=potentials,
         potential_integrator=cxs.GaussianMixtureProjection(),
         ensemble_probabilities=config_dict["atomic_models_params"][
@@ -69,6 +71,7 @@ def simulate_particle_stack_from_config(config: DatasetGeneratorConfig):
         mask=mask,
         noise_snr_range=config_dict["noise_snr"],
         overwrite=config_dict["overwrite"],
+        batch_size=config_dict["batch_size_for_generation"],
     )
     return
 
