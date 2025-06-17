@@ -45,7 +45,7 @@ This will install the required dependencies for development, the most important 
 Make sure that your code is formatted according to our guidelines by running:
 
 ```bash
-pre-commit run --all-times
+pre-commit run --all-files
 ```
 
 This will make sure the code is formatted correcly, fix whatever can be automatically fixed, and tell you if something else needs to be fixed.
