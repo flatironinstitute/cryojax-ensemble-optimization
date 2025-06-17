@@ -1,10 +1,10 @@
 from functools import partial
+from typing import Dict
 
 import cryojax.simulator as cxs
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from cryojax.data import ParticleStack
 from jaxtyping import Array, Float
 
 from ..._custom_types import Image, LossFn, PerParticleArgs
@@ -49,7 +49,7 @@ def _likelihood_isotropic_gaussian_marginalized(
 
 def _compute_likelihood_image_and_walker(
     walker: Float[Array, "n_atoms 3"],
-    relion_stack: ParticleStack,
+    relion_stack: Dict,
     gaussian_amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
     gaussian_variances: Float[Array, "n_atoms n_gaussians_per_atom"],
     image_to_walker_log_likelihood_fn: LossFn,
@@ -61,24 +61,24 @@ def _compute_likelihood_image_and_walker(
         gaussian_variances,
     )
     structural_ensemble = cxs.SingleStructureEnsemble(
-        potential, relion_stack.parameters.pose
+        potential, relion_stack["parameters"]["pose"]
     )
 
     scattering_theory = cxs.WeakPhaseScatteringTheory(
         structural_ensemble=structural_ensemble,
         potential_integrator=cxs.GaussianMixtureProjection(),
-        transfer_theory=relion_stack.parameters.transfer_theory,
+        transfer_theory=relion_stack["parameters"]["transfer_theory"],
     )
 
     imaging_pipeline = cxs.ContrastImageModel(
-        relion_stack.parameters.instrument_config, scattering_theory
+        relion_stack["parameters"]["instrument_config"], scattering_theory
     )
 
     computed_image = imaging_pipeline.render(outputs_real_space=True)
 
     return image_to_walker_log_likelihood_fn(
         computed_image,
-        relion_stack.images,
+        relion_stack["images"],
         per_particle_args,
     )
 
@@ -91,10 +91,10 @@ def _compute_likelihood_image_and_walker(
     out_axes=0,
 )
 def _compute_likelihood_matrix(
-    ensemble_walkers: Float[Array, "n_atoms 3"],
-    relion_stack: ParticleStack,
-    gaussian_amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
-    gaussian_variances: Float[Array, "n_atoms n_gaussians_per_atom"],
+    ensemble_walkers: Float[Array, " n_atoms 3"],
+    relion_stack: Dict,
+    gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
+    gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     image_to_walker_log_likelihood_fn: LossFn,
     per_particle_args: PerParticleArgs,
 ) -> Float[Array, "n_images n_walkers"]:
@@ -105,7 +105,7 @@ def _compute_likelihood_matrix(
     **Arguments:**
     - `ensemble_walkers`: The walkers of the ensemble. This is a 3D array
         with shape (n_walkers, n_atoms, 3).
-    - `relion_stack`: A cryojax `ParticleStack` object.
+    - `relion_stack`: A cryojax  Dict` object.
     - `gaussian_amplitudes`: The amplitudes for the GMM atom potential.
     - `gaussian_variances`: The variances for the GMM atom potential.
     - `image_to_walker_log_likelihood_fn`: The function to compute the likelihood
@@ -129,7 +129,7 @@ def _compute_likelihood_matrix(
 
 def compute_likelihood_matrix(
     ensemble_walkers: Float[Array, "n_walkers n_atoms 3"],
-    relion_stack: ParticleStack,
+    relion_stack: Dict,
     gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     image_to_walker_log_likelihood_fn: LossFn,
@@ -194,7 +194,7 @@ def compute_neg_log_likelihood_from_weights(
 def compute_neg_log_likelihood(
     walkers: Float[Array, "n_walkers n_atoms 3"],
     weights: Float[Array, " n_walkers"],
-    relion_stack: ParticleStack,
+    relion_stack: Dict,
     gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     image_to_walker_log_likelihood_fn: LossFn,
@@ -210,7 +210,7 @@ def compute_neg_log_likelihood(
         walkers: The walkers of the ensemble. This is a 3D array
             with shape (n_walkers, n_atoms, 3).
         weights: The weights of the ensemble.
-        relion_stack: A cryojax `ParticleStack` object.
+        relion_stack: A cryojax  Dict` object.
         gaussian_amplitudes: The amplitudes for the GMM atom potential.
         gaussian_variances: The variances for the GMM atom potential.
         image_to_walker_log_likelihood_fn: The function to compute the likelihood

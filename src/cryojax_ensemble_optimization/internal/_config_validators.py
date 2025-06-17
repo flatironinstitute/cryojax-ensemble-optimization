@@ -205,7 +205,12 @@ class DatasetGeneratorConfig(BaseModel, extra="forbid"):
         description="Path to the RELION project directory."
     )
     path_to_starfile: Path = Field(description="Path to the RELION star file.")
-    batch_size: PositiveInt = Field(description="Batch size for data generation.")
+    images_per_file: PositiveInt = Field(description="Images per .mrcs.")
+    batch_size_for_generation: PositiveInt = Field(
+        default=1,
+        description="Batch size for the data generation. "
+        + "This is used to generate the data in batches.",
+    )
     overwrite: bool = Field(False, description="Overwrite existing files if True.")
 
     @field_validator("atomic_models_params")
