@@ -92,8 +92,7 @@ def param_gaussian_3d(cfg: CoarseGrain):
     )
 
     # select centering atom for coarse grained model
-    select = args['mdtraj_select']
-    atom_positions, atom_identities, _ = read_atoms_from_pdb(fname, center=True, loads_b_factors=True, select=select)
+    atom_positions, atom_identities, _ = read_atoms_from_pdb(fname, center=True, loads_b_factors=True, selection_string=args['mdtraj_select'])
 
     # make model for iterative least squares optimization based inference (optimistix)
     model = Gaussian3D(
