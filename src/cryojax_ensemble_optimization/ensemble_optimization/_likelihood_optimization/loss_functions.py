@@ -4,7 +4,7 @@ import cryojax.simulator as cxs
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from cryojax.data import ParticleStack
+from cryojax.data import RelionParticleStackDataset
 from jaxtyping import Array, Float
 
 from ..._custom_types import Image, LossFn, PerParticleArgs
@@ -49,7 +49,7 @@ def _likelihood_isotropic_gaussian_marginalized(
 
 def _compute_likelihood_image_and_walker(
     walker: Float[Array, "n_atoms 3"],
-    relion_stack: ParticleStack,
+    relion_stack: RelionParticleStackDataset,
     gaussian_amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
     gaussian_variances: Float[Array, "n_atoms n_gaussians_per_atom"],
     image_to_walker_log_likelihood_fn: LossFn,
@@ -92,7 +92,7 @@ def _compute_likelihood_image_and_walker(
 )
 def _compute_likelihood_matrix(
     ensemble_walkers: Float[Array, "n_atoms 3"],
-    relion_stack: ParticleStack,
+    relion_stack: RelionParticleStackDataset,
     gaussian_amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
     gaussian_variances: Float[Array, "n_atoms n_gaussians_per_atom"],
     image_to_walker_log_likelihood_fn: LossFn,
@@ -129,7 +129,7 @@ def _compute_likelihood_matrix(
 
 def compute_likelihood_matrix(
     ensemble_walkers: Float[Array, "n_walkers n_atoms 3"],
-    relion_stack: ParticleStack,
+    relion_stack: RelionParticleStackDataset,
     gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     image_to_walker_log_likelihood_fn: LossFn,
@@ -194,7 +194,7 @@ def compute_neg_log_likelihood_from_weights(
 def compute_neg_log_likelihood(
     walkers: Float[Array, "n_walkers n_atoms 3"],
     weights: Float[Array, " n_walkers"],
-    relion_stack: ParticleStack,
+    relion_stack: RelionParticleStackDataset,
     gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     image_to_walker_log_likelihood_fn: LossFn,
