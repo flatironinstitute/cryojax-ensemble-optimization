@@ -1,0 +1,22 @@
+dot_bracket: '....((((((...((((((.....(((.((((.(((..(((((((((....)))))))))..((.......))....)))......)))))))....))))))..)).))))((...((((...(((((((((...)))))))))..))))...))..'
+pdb_fname: '/mnt/home/gwoollard/ceph/repos/cryojax-ensemble-reweighting-rna/data/rna_from_pilar/chainA_1gid.pdb'
+mdtraj_select: 'name "C2''"'
+
+optimization:
+  num_steps: 100
+  learning_rate: 1e-3
+
+
+spring:
+  equilibrium_distance: 11.08
+  constant: 1.0
+
+soft_sphere:
+  constant: 1.0
+  sigma: 1
+  epsilon: 1
+  alpha: 2
+
+polymer:
+  constant: 1.0
+  equilibrium_distance: 6.03
