@@ -1,10 +1,7 @@
-import jax.numpy as jnp
 import numpy as np
-import jax
 
 from .geometry import (
     grid_SO3,
-    quaternions_to_SO3_jnp,
     getbestneighbors_base_SO3,
     getbestneighbors_next_SO3,
 )
