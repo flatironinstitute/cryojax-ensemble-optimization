@@ -7,11 +7,7 @@ import cryojax.simulator as cxs
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from cryojax.data import (
-    RelionParticleParameterFile,
-    write_simulated_image_stack_from_starfile,
-    write_starfile_with_particle_parameters,
-)
+from cryojax.data import RelionParticleParameterFile
 from cryojax.image.operators import AbstractMask, FourierGaussian
 from cryojax.rotations import SO3
 from jaxtyping import Array, Float, PRNGKeyArray
