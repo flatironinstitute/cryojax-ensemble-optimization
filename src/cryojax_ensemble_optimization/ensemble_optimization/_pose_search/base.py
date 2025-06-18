@@ -1,9 +1,9 @@
 import numpy as np
 
 from .geometry import (
-    grid_SO3,
     getbestneighbors_base_SO3,
     getbestneighbors_next_SO3,
+    grid_SO3,
 )
 
 
