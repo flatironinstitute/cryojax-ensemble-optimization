@@ -3,7 +3,7 @@ from typing import Tuple
 import cryojax.simulator as cxs
 import jax.numpy as jnp
 from cryojax.data import (
-    RelionParticleParameters,
+    RelionParticleParameterFile,
 )
 from cryojax.image.operators import AbstractMask
 from cryojax.inference.distributions import IndependentGaussianPixels
@@ -11,7 +11,7 @@ from jaxtyping import Array, Float, Int, PRNGKeyArray
 
 
 def render_image_with_white_gaussian_noise(
-    relion_particle_parameters: RelionParticleParameters,
+    relion_particle_parameters: RelionParticleParameterFile,
     constant_args: Tuple[
         Tuple[cxs.AbstractPotentialRepresentation],
         cxs.AbstractPotentialIntegrator,
