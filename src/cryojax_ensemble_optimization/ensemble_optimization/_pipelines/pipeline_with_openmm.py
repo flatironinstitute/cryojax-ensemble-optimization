@@ -8,6 +8,7 @@ import jax.numpy as jnp
 import mdtraj
 from jax_dataloader import DataLoader
 from jaxtyping import Array, Float, Int, PRNGKeyArray
+from mdtraj.formats import XTCTrajectoryFile
 from tqdm import tqdm
 
 from .._likelihood_optimization.optimizers import (
@@ -76,9 +77,7 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
 
         # print("Preparing writers for output...")
         writers = [
-            mdtraj.formats.XTCTrajectoryFile(
-                os.path.join(output_directory, f"traj_walker_{i}.xtc"), "w"
-            )
+            XTCTrajectoryFile(os.path.join(output_directory, f"traj_walker_{i}.xtc"), "w")
             for i in range(walkers.shape[0])
         ]
         # print("Writers prepared.")

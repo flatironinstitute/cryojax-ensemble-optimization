@@ -31,7 +31,8 @@ rng_seed: 0
 # Output parameters
 path_to_relion_project: ./tutorial_data/
 path_to_starfile: ./tutorial_data/tutorial_alanine.star
-batch_size: 1000
+images_per_file: 1000
+batch_size_for_generation: 1000 # for parallel computation
 overwrite: True
 
 atomic_models_params:

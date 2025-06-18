@@ -33,7 +33,6 @@ dependencies = [
     "tqdm",
     "healpy",
     "cryojax",
-    "OpenMM",
 ]
 dynamic = ["version"]
 

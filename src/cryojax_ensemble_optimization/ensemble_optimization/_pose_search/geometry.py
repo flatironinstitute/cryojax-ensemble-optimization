@@ -1,13 +1,15 @@
 """
 Geometry related codes
-The SO(3) grid part codes are adpated from deeprefine (https://github.com/minhuanli/deeprefine/blob/master/deeprefine/geometry.py) based on Hopf Fibration
+The SO(3) grid part codes are adpated from deeprefine
+(https://github.com/minhuanli/deeprefine/blob/master/deeprefine/geometry.py)
+based on Hopf Fibration
 All jax-ified functions have a `_jnp` suffix, other functions are numpy based
 """
 
+import healpy as hp
 import jax
 import jax.numpy as jnp
 import numpy as np
-import healpy as hp
 
 
 def construct_SO3_jnp(v1, v2):
@@ -33,7 +35,8 @@ def construct_SO3_jnp(v1, v2):
 def decompose_SO3(R, a=1, b=1, c=1):
     """
     Decompose the rotation matrix into the two vector representation
-    This decomposition is not unique, so a, b, c can be set as arbitrary constants you like
+    This decomposition is not unique, so a, b, c can be set as
+    arbitrary constants you like
     c != 0
     Parameters
     ----------
@@ -43,7 +46,8 @@ def decompose_SO3(R, a=1, b=1, c=1):
         Arbitrary constants for the decomposition (c must be nonzero)
     Returns
     -------
-    v1, v2: Two real-valued 3D arrays, as the continuous representation of the rotation matrix
+    v1, v2: Two real-valued 3D arrays, as the continuous
+    representation of the rotation matrix
     """
     assert c != 0, "Give a nonzero c!"
     v1 = a * R[:, 0]

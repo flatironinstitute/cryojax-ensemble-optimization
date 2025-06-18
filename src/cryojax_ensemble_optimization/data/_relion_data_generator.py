@@ -1,13 +1,17 @@
 import logging
 import os
 from functools import partial
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 import cryojax.simulator as cxs
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from cryojax.data import RelionParticleParameterFile
+from cryojax.data import (
+    RelionParticleParameterFile,
+    RelionParticleStackDataset,
+    simulate_particle_stack,
+)
 from cryojax.image.operators import AbstractMask, FourierGaussian
 from cryojax.rotations import SO3
 from jaxtyping import Array, Float, PRNGKeyArray
@@ -16,7 +20,7 @@ from ..internal._config_validators import DatasetGeneratorConfig
 from ..simulator._image_rendering import render_image_with_white_gaussian_noise
 
 
-def generate_relion_parameter_dataset(
+def generate_relion_parameter_file(
     key: PRNGKeyArray, config: DatasetGeneratorConfig
 ) -> RelionParticleParameterFile:
     """
@@ -24,14 +28,14 @@ def generate_relion_parameter_dataset(
     This functions writes to disk a starfile containing the
     generated particle parameters. The starfile is saved to the path
     specified in the configuration. The function also returns a
-    `cryojax.data.RelionParticleParameterDataset` object that can be used to read the
+    `cryojax.data.RelionParticleParameterFile` object that can be used to read the
     starfile and access the particle parameters.
 
     **Arguments:**
         key: JAX random key for generating random numbers.
         config: Configuration object containing the parameters for generating the dataset.
     **Returns:**
-        parameter_dataset: A RelionParticleParameterDataset object containing
+        parameter_file: A RelionParticleParameterFile object containing
         the generated particle parameters.
     """
 
@@ -40,27 +44,25 @@ def generate_relion_parameter_dataset(
     key, *subkeys = jax.random.split(key, config_dict["number_of_images"] + 1)
     particle_parameters = _make_particle_parameters(jnp.array(subkeys), config_dict)
 
-    write_starfile_with_particle_parameters(
-        particle_parameters,
-        config_dict["path_to_starfile"],
-        mrc_batch_size=config_dict["batch_size"],
-        overwrite=config_dict["overwrite"],
-    )
     logging.info(
         "Starfile generated. Saved to {}".format(config_dict["path_to_starfile"])
     )
 
-    parameter_dataset = RelionParticleParameterFile(
+    parameter_file = RelionParticleParameterFile(
         path_to_starfile=config_dict["path_to_starfile"],
-        path_to_relion_project=config_dict["path_to_relion_project"],
+        mode="w",
+        exists_ok=config_dict["overwrite"],
     )
+    parameter_file.append(particle_parameters)
 
-    return parameter_dataset
+    return parameter_file
 
 
 def simulate_relion_dataset(
     key: PRNGKeyArray,
-    parameter_dataset: RelionParticleParameterFile,
+    parameter_file: RelionParticleParameterFile,
+    path_to_relion_project: str,
+    images_per_file: int,
     potentials: Tuple[cxs.AbstractPotentialRepresentation],
     potential_integrator: cxs.AbstractPotentialIntegrator,
     ensemble_probabilities: Float[Array, " n_potentials"],
@@ -68,6 +70,7 @@ def simulate_relion_dataset(
     noise_snr_range: List[Float],
     *,
     overwrite: bool = False,
+    batch_size: int = 1,
 ):
     assert len(potentials) == len(ensemble_probabilities), (
         "The number of potentials must be equal to the number of ensemble probabilities."
@@ -84,23 +87,22 @@ def simulate_relion_dataset(
     # Generate parameters for each image
     snr_per_image = jax.random.uniform(
         key_snr,
-        (len(parameter_dataset),),
+        (len(parameter_file),),
         minval=noise_snr_range[0],
         maxval=noise_snr_range[1],
     )
 
-    keys_per_image = jax.random.split(key_noise, len(parameter_dataset))
+    keys_per_image = jax.random.split(key_noise, len(parameter_file))
 
     ensemble_indices_per_image = jax.random.choice(
         key_potentials,
         a=len(ensemble_probabilities),
-        shape=(len(parameter_dataset),),
+        shape=(len(parameter_file),),
         p=ensemble_probabilities,
         replace=True,
     )
 
     # Write metadata to disk
-    path_to_relion_project = parameter_dataset.path_to_relion_project
     jnp.savez(
         os.path.join(path_to_relion_project, "metadata.npz"),
         snr_per_image=snr_per_image,
@@ -116,13 +118,20 @@ def simulate_relion_dataset(
         ensemble_indices_per_image,
         snr_per_image,
     )
-    write_simulated_image_stack_from_starfile(
-        param_dataset=parameter_dataset,
+
+    stack_dataset = RelionParticleStackDataset(
+        parameter_file=parameter_file,
+        path_to_relion_project=path_to_relion_project,
+        mode="w",
+        mrcfile_settings={"overwrite": overwrite},
+    )
+    simulate_particle_stack(
+        dataset=stack_dataset,
         compute_image_fn=render_image_with_white_gaussian_noise,
         constant_args=constant_args,
         per_particle_args=per_particle_args,
-        is_jittable=True,
-        batch_size_per_mrc=1000,
+        images_per_file=images_per_file,
+        batch_size=batch_size,
         overwrite=overwrite,
     )
     logging.info("Images generated. Saved to {}".format(path_to_relion_project))
@@ -131,9 +140,7 @@ def simulate_relion_dataset(
 
 
 @partial(eqx.filter_vmap, in_axes=(0, None))
-def _make_particle_parameters(
-    key: PRNGKeyArray, config: dict
-) -> RelionParticleParameterFile:
+def _make_particle_parameters(key: PRNGKeyArray, config: dict) -> Dict:
     """
     WARNING: this function assumes the `config` has been validated
     by `cryojax_ensemble_refinement.internal.GeneratorConfig`.
@@ -240,7 +247,7 @@ def _make_particle_parameters(
         envelope=envelope,
     )
 
-    relion_particle_parameters = RelionParticleParameterFile(
+    relion_particle_parameters = dict(
         instrument_config=instrument_config,
         pose=pose,
         transfer_theory=transfer_theory,

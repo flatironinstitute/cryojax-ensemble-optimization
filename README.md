@@ -15,16 +15,7 @@ uv venv my-venv-name --python 3.11
 ```
 Don't forget to activate your environment!
 
-Most dependencies are installed automatically when you install the package. However, the current version of the package used the `dev` branch of `cryoJAX`, and for this reason it needs to be installed manually. To do this, clone the cryoJAX repo, switch branches and install
-
-```bash
-git clone git@github.com:mjo22/cryojax.git
-cd cryojax
-git checkout dev
-pip install .
-```
-
-In addition, although OpenMM is a required dependency, it is not installed automatically as its installation might require specific steps. If you are not worried about the OpenMM installation, you can install it directly from PyPI using pip:
+Most dependencies are installed automatically when you install the package. However, although OpenMM is a required dependency, it is not installed automatically as its installation might require specific steps. If you are not worried about the OpenMM installation, you can install it directly from PyPI using pip:
 ```bash
 pip install openmm
 ```
@@ -39,6 +30,25 @@ pip install .
 
 If you intent to use a GPU for JAX operations you might need to install a cuda supported version of JAX manually. We recommend following the official [install JAX](https://github.com/google/jax#installation) instructions.
 
+## Contributing
+
+If you are contributing to this project please install the package with the following command
+
+```bash
+pip install -e ".[dev]"
+```
+
+This will install the required dependencies for development, the most important being `Ruff` and `pre-commit`. After installation activate your environment and install the `pre-commit` hooks by running
+
+`pre-commit install`
+
+Make sure that your code is formatted according to our guidelines by running:
+
+```bash
+pre-commit run --all-files
+```
+
+This will make sure the code is formatted correcly, fix whatever can be automatically fixed, and tell you if something else needs to be fixed.
 
 ## Acknowledgements
 TODO

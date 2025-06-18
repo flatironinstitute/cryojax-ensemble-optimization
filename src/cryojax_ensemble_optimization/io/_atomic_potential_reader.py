@@ -9,7 +9,7 @@ from ..io._atomic_model_reader import read_atomic_models
 def load_atomic_models_as_potentials(
     atomic_models_filenames: List[str],
     *,
-    select: str = "all",
+    selection_string: str = "all",
     loads_b_factors: bool = False,
 ) -> Tuple[cxs.GaussianMixtureAtomicPotential]:
     """
@@ -19,7 +19,7 @@ def load_atomic_models_as_potentials(
     **Arguments:**
         atomic_models_filenames: List of filenames containing atomic models.
             The atomic models are expected to be in pdb format.
-        select: Selection string for the atomic models in mdtraj format.
+        selection_string: Selection string for the atomic models in mdtraj format.
         loads_b_factors: If True, loads b factors from the atomic models.
     **Returns:**
         A tuple of Gaussian mixture potentials.
@@ -28,7 +28,9 @@ def load_atomic_models_as_potentials(
 
     logging.info("Reading atomic models")
     atomic_models_scattering_params = read_atomic_models(
-        atomic_models_filenames, select=select, loads_b_factors=loads_b_factors
+        atomic_models_filenames,
+        selection_string=selection_string,
+        loads_b_factors=loads_b_factors,
     )
     for atomic_model in atomic_models_scattering_params.values():
         potential = cxs.GaussianMixtureAtomicPotential(
