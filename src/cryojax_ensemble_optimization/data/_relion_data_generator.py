@@ -8,8 +8,7 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 from cryojax.data import (
-    RelionParticleParameterDataset,
-    RelionParticleParameters,
+    RelionParticleParameterFile,
     write_simulated_image_stack_from_starfile,
     write_starfile_with_particle_parameters,
 )
@@ -23,7 +22,7 @@ from ..simulator._image_rendering import render_image_with_white_gaussian_noise
 
 def generate_relion_parameter_dataset(
     key: PRNGKeyArray, config: DatasetGeneratorConfig
-) -> RelionParticleParameterDataset:
+) -> RelionParticleParameterFile:
     """
 
     This functions writes to disk a starfile containing the
@@ -55,7 +54,7 @@ def generate_relion_parameter_dataset(
         "Starfile generated. Saved to {}".format(config_dict["path_to_starfile"])
     )
 
-    parameter_dataset = RelionParticleParameterDataset(
+    parameter_dataset = RelionParticleParameterFile(
         path_to_starfile=config_dict["path_to_starfile"],
         path_to_relion_project=config_dict["path_to_relion_project"],
     )
@@ -65,7 +64,7 @@ def generate_relion_parameter_dataset(
 
 def simulate_relion_dataset(
     key: PRNGKeyArray,
-    parameter_dataset: RelionParticleParameterDataset,
+    parameter_dataset: RelionParticleParameterFile,
     potentials: Tuple[cxs.AbstractPotentialRepresentation],
     potential_integrator: cxs.AbstractPotentialIntegrator,
     ensemble_probabilities: Float[Array, " n_potentials"],
@@ -138,7 +137,7 @@ def simulate_relion_dataset(
 @partial(eqx.filter_vmap, in_axes=(0, None))
 def _make_particle_parameters(
     key: PRNGKeyArray, config: dict
-) -> RelionParticleParameters:
+) -> RelionParticleParameterFile:
     """
     WARNING: this function assumes the `config` has been validated
     by `cryojax_ensemble_refinement.internal.GeneratorConfig`.
@@ -245,7 +244,7 @@ def _make_particle_parameters(
         envelope=envelope,
     )
 
-    relion_particle_parameters = RelionParticleParameters(
+    relion_particle_parameters = RelionParticleParameterFile(
         instrument_config=instrument_config,
         pose=pose,
         transfer_theory=transfer_theory,
