@@ -3,14 +3,13 @@ Weight and position optimizers for ensemble refinement.
 """
 
 from functools import partial
-from typing import Tuple
+from typing import Dict, Tuple
 from typing_extensions import Literal, override
 
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax_dataloader as jdl
-from cryojax.data import RelionParticleStackDataset
 from cryojax.internal import error_if_negative, error_if_not_positive
 from jaxopt import ProjectedGradient
 from jaxopt.projection import projection_simplex
@@ -228,7 +227,7 @@ def _optimize_weights(
 def _optimize_walkers_positions(
     walkers: Float[Array, "n_walkers n_atoms 3"],
     weights: Float[Array, " n_walkers"],
-    relion_stack: RelionParticleStackDataset,
+    relion_stack: Dict,
     step_size: Float,
     gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
@@ -261,7 +260,7 @@ def _optimize_walkers_positions(
 def _optimize_ensemble(
     walkers: Float[Array, "n_walkers n_atoms 3"],
     weights: Float[Array, " n_walkers"],
-    relion_stack: RelionParticleStackDataset,
+    relion_stack: Dict,
     step_size: Float,
     gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],

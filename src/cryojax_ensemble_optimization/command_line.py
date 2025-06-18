@@ -9,7 +9,7 @@ import argparse
 import os
 from importlib import import_module
 
-from .cryojax_ensemble_opt_version import __version__
+from .cryojax_ensemble_optimization_version import __version__
 
 
 def _get_commands(cmd_dir: str, doc_str: str = "") -> None:

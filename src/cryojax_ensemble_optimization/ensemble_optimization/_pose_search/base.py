@@ -4,6 +4,7 @@ from .geometry import (
     grid_SO3,
     getbestneighbors_base_SO3,
     getbestneighbors_next_SO3,
+    grid_SO3,
 )
 
 
@@ -12,7 +13,8 @@ def global_SO3_hier_search(lossfn, base_grid=1, n_rounds=5, N_candidates=40):
     Perform a global search on the SO3 grid using a hierarchical approach.
 
     Args:
-        lossfn: A function that computes the loss for a given set of quaternions, return a numpy array
+        lossfn: A function that computes the loss for a given set of quaternions,
+        return a numpy array
         base_grid: The base resolution of the SO3 grid. 1 -> 30, 2 -> 15
         n_rounds: The number of rounds to perform the search.
         N_candidates: The number of candidate quaternions to consider in each round.
@@ -29,9 +31,9 @@ def global_SO3_hier_search(lossfn, base_grid=1, n_rounds=5, N_candidates=40):
 
     # Iterate through the specified number of rounds
     # if n_rounds == 1, skip the whole for loop
-    assert n_rounds >= 1, (
-        "n_rounds must be greater or equal than 1 for hierarchical search"
-    )
+    assert (
+        n_rounds >= 1
+    ), "n_rounds must be greater or equal than 1 for hierarchical search"
     for i in range(n_rounds - 1):
         if i == 0:
             # Get the best neighbors from the base SO3 grid, minimize the loss
