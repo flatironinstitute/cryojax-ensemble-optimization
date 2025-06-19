@@ -5,7 +5,7 @@ import pytest
 from jax.scipy.spatial.transform import Rotation as R
 from scipy.spatial.transform import Rotation as Rsp
 
-from cryojax_ensemble_optimization.ensemble_optimization._pose_search.base import (
+from cryojax_ensemble_optimization.ensemble_optimization import (
     global_SO3_hier_search,
 )
 

@@ -1,4 +1,6 @@
-import numpy as np
+import equinox as eqx
+import jax
+import jax.numpy as jnp
 
 from .geometry import (
     getbestneighbors_base_SO3,
@@ -7,6 +9,7 @@ from .geometry import (
 )
 
 
+@eqx.filter_jit
 def global_SO3_hier_search(lossfn, base_grid=1, n_rounds=5, N_candidates=40):
     """
     Perform a global search on the SO3 grid using a hierarchical approach.
@@ -28,28 +31,37 @@ def global_SO3_hier_search(lossfn, base_grid=1, n_rounds=5, N_candidates=40):
     # Compute the initial loss for the base grid
     loss = lossfn(base_quats)  # numpy array
 
-    # Iterate through the specified number of rounds
-    # if n_rounds == 1, skip the whole for loop
-    assert (
-        n_rounds >= 1
-    ), "n_rounds must be greater or equal than 1 for hierarchical search"
-    for i in range(n_rounds - 1):
-        if i == 0:
-            # Get the best neighbors from the base SO3 grid, minimize the loss
-            allnb_quats, allnb_s2s1 = getbestneighbors_base_SO3(
-                loss, base_quats, N=N_candidates, base_resol=base_grid
-            )
-        else:
-            # Get the best neighbors from the current SO3 grid
-            allnb_quats, allnb_s2s1 = getbestneighbors_next_SO3(
-                loss, allnb_quats, allnb_s2s1, curr_res=base_grid + i, N=N_candidates
-            )
+    allnb_quats, allnb_s2s1 = getbestneighbors_base_SO3(
+        loss, base_quats, N=N_candidates, base_resol=base_grid
+    )
 
-        # Compute the loss for the neighbors
+    # Do first round because the getbestneighbors_base func does not
+    # output the same shape as the _next function
+    allnb_quats, allnb_s2s1 = getbestneighbors_next_SO3(
+        loss, allnb_quats, allnb_s2s1, curr_res=base_grid + 1, N=N_candidates
+    )
+
+    def body_fun(i, val):
+        allnb_quats, allnb_s2s1 = val
+
         loss = lossfn(allnb_quats)
+        allnb_quats, allnb_s2s1 = getbestneighbors_next_SO3(
+            loss, allnb_quats, allnb_s2s1, curr_res=base_grid + i, N=N_candidates
+        )
+        return (allnb_quats, allnb_s2s1)
+
+    # Just in case n_rounds = 1
+    allnb_quats, allnb_s2s1 = jax.lax.cond(
+        n_rounds > 1,
+        lambda _: jax.lax.fori_loop(2, n_rounds, body_fun, (allnb_quats, allnb_s2s1)),
+        lambda _: (allnb_quats, allnb_s2s1),
+        None,
+    )
+
+    loss = lossfn(allnb_quats)
 
     # Find the best quaternion and its associated loss
-    best_index = np.argmin(loss)
+    best_index = jnp.argmin(loss)
     best_quats = allnb_quats[best_index]
     best_loss = loss[best_index]
 
