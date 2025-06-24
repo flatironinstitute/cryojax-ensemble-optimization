@@ -100,7 +100,6 @@ def hp_to_zphi(nside, bighp, xp, yp, dx, dy):
     )
 
 
-
 def zphi2xyz(z, phi, rad):
     x = rad * jnp.cos(phi)
     y = rad * jnp.sin(phi)
@@ -113,6 +112,7 @@ def xyz2radec(x, y, z):
         jnp.fabs(z) > 0.9, jnp.pi / 2 - jnp.arctan2(jnp.hypot(x, y), z), jnp.arcsin(z)
     )
     return ra, dec
+
 
 def healpixl_nested_to_xy(nside, hp):
     ns2 = nside * nside
@@ -138,7 +138,6 @@ def healpixl_nested_to_xy(nside, hp):
     return bighp, x, y
 
 
-
 def isnorthpolar(bighealpix):
     return bighealpix <= 3
 
@@ -146,9 +145,11 @@ def isnorthpolar(bighealpix):
 def issouthpolar(bighealpix):
     return bighealpix >= 8
 
+
 ##############
 # API funcs
 ##############
+
 
 def vec2ang_radec(x, y, z):
     return xyz2radec(x, y, z)
@@ -160,12 +161,14 @@ def vec2ang(x, y, z):
     theta = jnp.pi / 2 - dec
     return theta, phi
 
+
 def _pix2ang(nside, hp, dx=None, dy=None):
     dx = 0.5 if dx is None else dx
     dy = 0.5 if dy is None else dy
     return vec2ang(
         *zphi2xyz(*hp_to_zphi(nside, *healpixl_nested_to_xy(nside, hp), dx, dy))
     )
+
 
 @jax.jit
 def pix2ang(nside, hp_indices):

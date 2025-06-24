@@ -9,7 +9,6 @@ All jax-ified functions have a `_jnp` suffix, other functions are numpy based
 from functools import partial
 from typing import Tuple
 
-import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -104,7 +103,7 @@ def hopf_to_quat(theta, phi, psi):
     return _hopf_to_quat(theta, phi, psi).reshape(-1, 4)
 
 
-def grid_SO3(resol) -> np.ndarray:
+def grid_SO3(resol):
     theta, phi = grid_s2(resol)
     psi = grid_s1(resol)
     quat = hopf_to_quat(theta, phi, psi).reshape(-1, 4)
@@ -302,7 +301,6 @@ def get_neighbor_SO3(quat, s2i, s1i, curr_res):
 
 
 # Loss based neighbor search
-@eqx.filter_jit
 def getbestneighbors_base_SO3(loss, base_quats, N=10, base_resol=1):
     _, bestN_index = jax.lax.top_k(-loss, k=N)
     best_quats = base_quats[bestN_index]
@@ -311,7 +309,6 @@ def getbestneighbors_base_SO3(loss, base_quats, N=10, base_resol=1):
     return allnb_quats.reshape(-1, 4), allnb_s2s1.reshape(-1, 2)
 
 
-@eqx.filter_jit
 def getbestneighbors_next_SO3(loss, quats, s2s1_arr, curr_res=2, N=50):
     _, bestN_index = jax.lax.top_k(-loss, k=N)
     best_quats = quats[bestN_index]

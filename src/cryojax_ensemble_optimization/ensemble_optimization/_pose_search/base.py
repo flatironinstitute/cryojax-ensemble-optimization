@@ -25,6 +25,8 @@ def global_SO3_hier_search(lossfn, base_grid=1, n_rounds=5, N_candidates=40):
         best_quats: The best quaternions found during the search.
         best_loss: The loss associated with the best quaternions.
     """
+
+    print("compiling!")
     # Initialize the base SO3 grid
     base_quats = grid_SO3(base_grid)
 
@@ -37,6 +39,8 @@ def global_SO3_hier_search(lossfn, base_grid=1, n_rounds=5, N_candidates=40):
 
     # Do first round because the getbestneighbors_base func does not
     # output the same shape as the _next function
+    loss = lossfn(allnb_quats)  # numpy array
+
     allnb_quats, allnb_s2s1 = getbestneighbors_next_SO3(
         loss, allnb_quats, allnb_s2s1, curr_res=base_grid + 1, N=N_candidates
     )
