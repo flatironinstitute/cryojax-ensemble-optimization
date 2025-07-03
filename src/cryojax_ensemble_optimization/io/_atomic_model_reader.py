@@ -43,9 +43,9 @@ def read_atomic_models(
         [Path(file).suffix == file_extension for file in atomic_models_filenames]
     ), "All files must have the same extension."
 
-    assert all(
-        [Path(file).exists() for file in atomic_models_filenames]
-    ), "Some files do not exist."
+    assert all([Path(file).exists() for file in atomic_models_filenames]), (
+        "Some files do not exist."
+    )
 
     if file_extension == ".pdb":
         atomic_models_scattering_params = _read_atomic_models_from_pdb(
@@ -104,10 +104,11 @@ def _read_atomic_models_from_pdb(
         atom_positions = mdtraj.load(
             atomic_models_filenames[i],
         )
-        atom_indices = atom_positions.topology.select(selection_string)
 
         atom_positions = atom_positions.superpose(
-            atoms_for_alignment, frame=0, atom_indices=atom_indices
+            atoms_for_alignment,
+            frame=0,
+            atom_indices=atom_positions.topology.select("name CA"),
         )
 
         atomic_models_scattering_params[i] = {
