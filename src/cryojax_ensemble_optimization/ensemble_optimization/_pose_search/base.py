@@ -41,10 +41,6 @@ def global_SO3_hier_search(lossfn, base_grid=1, n_rounds=5, N_candidates=40):
     # output the same shape as the _next function
     loss = lossfn(allnb_quats)  # numpy array
 
-    allnb_quats, allnb_s2s1 = getbestneighbors_next_SO3(
-        loss, allnb_quats, allnb_s2s1, curr_res=base_grid + 1, N=N_candidates
-    )
-
     def body_fun(i, val):
         allnb_quats, allnb_s2s1 = val
 
@@ -57,7 +53,7 @@ def global_SO3_hier_search(lossfn, base_grid=1, n_rounds=5, N_candidates=40):
     # Just in case n_rounds = 1
     allnb_quats, allnb_s2s1 = jax.lax.cond(
         n_rounds > 1,
-        lambda _: jax.lax.fori_loop(2, n_rounds, body_fun, (allnb_quats, allnb_s2s1)),
+        lambda _: jax.lax.fori_loop(1, n_rounds, body_fun, (allnb_quats, allnb_s2s1)),
         lambda _: (allnb_quats, allnb_s2s1),
         None,
     )
