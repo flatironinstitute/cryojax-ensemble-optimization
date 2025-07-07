@@ -52,7 +52,7 @@ def global_SO3_hier_search(lossfn, base_grid=1, n_rounds=5, N_candidates=40):
             loss, base_quats, N=N_candidates, base_resol=base_grid
         )
 
-        # Just in case n_rounds = 0
+        # Just in case n_rounds = 1
         allnb_quats, allnb_s2s1 = jax.lax.cond(
             n_rounds > 1,
             lambda _: jax.lax.fori_loop(1, n_rounds, body_fun, (allnb_quats, allnb_s2s1)),
