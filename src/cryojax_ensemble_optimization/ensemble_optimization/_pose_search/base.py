@@ -42,26 +42,32 @@ def global_SO3_hier_search(lossfn, base_grid=1, n_rounds=5, N_candidates=40):
     # Compute the initial loss for the base grid
     loss = lossfn(base_quats)  # numpy array
 
-    allnb_quats, allnb_s2s1 = getbestneighbors_base_SO3(
-        loss, base_quats, N=N_candidates, base_resol=base_grid
-    )
+    if n_rounds <= 0:
+        # If no rounds are to be performed, return the base quaternions and their loss
+        best_index = jnp.argmin(loss)
+        return base_quats[best_index], loss[best_index]
 
-    # Just in case n_rounds = 0
-    allnb_quats, allnb_s2s1 = jax.lax.cond(
-        n_rounds > 0,
-        lambda _: jax.lax.fori_loop(1, n_rounds, body_fun, (allnb_quats, allnb_s2s1)),
-        lambda _: (allnb_quats, allnb_s2s1),
-        None,
-    )
+    else:
+        allnb_quats, allnb_s2s1 = getbestneighbors_base_SO3(
+            loss, base_quats, N=N_candidates, base_resol=base_grid
+        )
 
-    loss = lossfn(allnb_quats)
+        # Just in case n_rounds = 0
+        allnb_quats, allnb_s2s1 = jax.lax.cond(
+            n_rounds > 1,
+            lambda _: jax.lax.fori_loop(1, n_rounds, body_fun, (allnb_quats, allnb_s2s1)),
+            lambda _: (allnb_quats, allnb_s2s1),
+            None,
+        )
 
-    # Find the best quaternion and its associated loss
-    best_index = jnp.argmin(loss)
-    best_quats = allnb_quats[best_index]
-    best_loss = loss[best_index]
+        loss = lossfn(allnb_quats)
 
-    return best_quats, best_loss
+        # Find the best quaternion and its associated loss
+        best_index = jnp.argmin(loss)
+        best_quats = allnb_quats[best_index]
+        best_loss = loss[best_index]
+
+        return best_quats, best_loss
 
 
 def local_SO3_hier_search(lossfn, base_grid=1, n_rounds=5, N_candidates=40):
