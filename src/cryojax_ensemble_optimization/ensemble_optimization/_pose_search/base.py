@@ -26,7 +26,16 @@ def global_SO3_hier_search(lossfn, base_grid=1, n_rounds=5, N_candidates=40):
         best_loss: The loss associated with the best quaternions.
     """
 
-    print("compiling!")
+    def body_fun(i, val):
+        allnb_quats, allnb_s2s1 = val
+
+        loss = lossfn(allnb_quats)
+        allnb_quats, allnb_s2s1 = getbestneighbors_next_SO3(
+            loss, allnb_quats, allnb_s2s1, curr_res=base_grid + i, N=N_candidates
+        )
+        return (allnb_quats, allnb_s2s1)
+
+
     # Initialize the base SO3 grid
     base_quats = grid_SO3(base_grid)
 
@@ -36,19 +45,6 @@ def global_SO3_hier_search(lossfn, base_grid=1, n_rounds=5, N_candidates=40):
     allnb_quats, allnb_s2s1 = getbestneighbors_base_SO3(
         loss, base_quats, N=N_candidates, base_resol=base_grid
     )
-
-    # Do first round because the getbestneighbors_base func does not
-    # output the same shape as the _next function
-    loss = lossfn(allnb_quats)  # numpy array
-
-    def body_fun(i, val):
-        allnb_quats, allnb_s2s1 = val
-
-        loss = lossfn(allnb_quats)
-        allnb_quats, allnb_s2s1 = getbestneighbors_next_SO3(
-            loss, allnb_quats, allnb_s2s1, curr_res=base_grid + i, N=N_candidates
-        )
-        return (allnb_quats, allnb_s2s1)
 
     # Just in case n_rounds = 0
     allnb_quats, allnb_s2s1 = jax.lax.cond(
