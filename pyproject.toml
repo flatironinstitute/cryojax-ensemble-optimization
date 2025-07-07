@@ -31,7 +31,6 @@ dependencies = [
     "pydantic",
     "mdtraj",
     "tqdm",
-    "healpy",
     "cryojax",
 ]
 dynamic = ["version"]

@@ -11,6 +11,7 @@ from ._pipelines import (
     AbstractEnsembleOptimizationPipeline as AbstractEnsembleOptimizationPipeline,
     EnsembleOptimizationPipeline as EnsembleOptimizationPipeline,
 )
+from ._pose_search import global_SO3_hier_search as global_SO3_hier_search
 from ._prior_projection import (
     AbstractEnsemblePriorProjector as AbstractEnsemblePriorProjector,
     AbstractForceField as AbstractForceField,
