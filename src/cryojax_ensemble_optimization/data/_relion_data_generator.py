@@ -71,7 +71,7 @@ def simulate_relion_dataset(
     *,
     overwrite: bool = False,
     batch_size: int = 1,
-):
+) -> RelionParticleStackDataset:
     assert len(potentials) == len(ensemble_probabilities), (
         "The number of potentials must be equal to the number of ensemble probabilities."
         f" {len(potentials)} != {len(ensemble_probabilities)}"
@@ -119,14 +119,14 @@ def simulate_relion_dataset(
         snr_per_image,
     )
 
-    stack_dataset = RelionParticleStackDataset(
+    relion_dataset = RelionParticleStackDataset(
         parameter_file=parameter_file,
         path_to_relion_project=path_to_relion_project,
         mode="w",
         mrcfile_settings={"overwrite": overwrite},
     )
     simulate_particle_stack(
-        dataset=stack_dataset,
+        dataset=relion_dataset,
         compute_image_fn=render_image_with_white_gaussian_noise,
         constant_args=constant_args,
         per_particle_args=per_particle_args,
@@ -136,7 +136,7 @@ def simulate_relion_dataset(
     )
     logging.info("Images generated. Saved to {}".format(path_to_relion_project))
     logging.info("Simulated dataset generation complete.")
-    return
+    return relion_dataset
 
 
 @partial(eqx.filter_vmap, in_axes=(0, None))

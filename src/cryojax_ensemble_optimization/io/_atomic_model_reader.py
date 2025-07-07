@@ -68,7 +68,7 @@ def _read_atomic_models_from_pdb(
 
     atoms_for_alignment = mdtraj.load(atomic_models_filenames[0])
     atoms_for_alignment = atoms_for_alignment.center_coordinates()
-    atom_indices = atoms_for_alignment.topology.select("protein and not element H")
+    atom_indices = atoms_for_alignment.topology.select(selection_string)
 
     for i in range(len(atomic_models_filenames)):
         if loads_b_factors:
