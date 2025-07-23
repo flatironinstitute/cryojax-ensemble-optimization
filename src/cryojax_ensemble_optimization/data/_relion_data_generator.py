@@ -7,12 +7,13 @@ import cryojax.simulator as cxs
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from cryojax.data import (
+from cryojax.dataset import (
     RelionParticleParameterFile,
     RelionParticleStackDataset,
     simulate_particle_stack,
 )
-from cryojax.image.operators import AbstractMask, FourierGaussian
+from cryojax.ndimage.operators import FourierGaussian
+from cryojax.ndimage.transforms import AbstractMask
 from cryojax.rotations import SO3
 from jaxtyping import Array, Float, PRNGKeyArray
 
@@ -28,7 +29,7 @@ def generate_relion_parameter_file(
     This functions writes to disk a starfile containing the
     generated particle parameters. The starfile is saved to the path
     specified in the configuration. The function also returns a
-    `cryojax.data.RelionParticleParameterFile` object that can be used to read the
+    `cryojax.dataset.RelionParticleParameterFile` object that can be used to read the
     starfile and access the particle parameters.
 
     **Arguments:**
@@ -64,7 +65,6 @@ def simulate_relion_dataset(
     path_to_relion_project: str,
     images_per_file: int,
     potentials: Tuple[cxs.AbstractPotentialRepresentation],
-    potential_integrator: cxs.AbstractPotentialIntegrator,
     ensemble_probabilities: Float[Array, " n_potentials"],
     mask: AbstractMask,
     noise_snr_range: List[Float],
@@ -112,7 +112,7 @@ def simulate_relion_dataset(
     logging.info(f"  {os.path.join(path_to_relion_project, 'metadata.npz')}")
 
     # Bundle arguments and write images
-    constant_args = (potentials, potential_integrator, mask)
+    constant_args = (potentials, mask)
     per_particle_args = (
         keys_per_image,
         ensemble_indices_per_image,
@@ -146,11 +146,10 @@ def _make_particle_parameters(key: PRNGKeyArray, config: dict) -> Dict:
     by `cryojax_ensemble_refinement.internal.GeneratorConfig`.
     Skipping this step could lead to unexpected behavior.
     """
-    instrument_config = cxs.InstrumentConfig(
+    instrument_config = cxs.BasicConfig(
         shape=(config["box_size"], config["box_size"]),
         pixel_size=config["pixel_size"],
         voltage_in_kilovolts=config["voltage_in_kilovolts"],
-        pad_scale=config["pad_scale"],
     )
     # Generate random parameters
 
@@ -248,7 +247,7 @@ def _make_particle_parameters(key: PRNGKeyArray, config: dict) -> Dict:
     )
 
     relion_particle_parameters = dict(
-        instrument_config=instrument_config,
+        config=instrument_config,
         pose=pose,
         transfer_theory=transfer_theory,
     )
