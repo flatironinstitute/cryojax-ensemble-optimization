@@ -1,23 +1,27 @@
 from typing import Dict, Tuple
 
 import cryojax.simulator as cxs
+import jax
 import jax.numpy as jnp
-from cryojax.image.operators import AbstractMask
-from cryojax.inference.distributions import IndependentGaussianPixels
+from cryojax.ndimage.transforms import AbstractMask
 from jaxtyping import Array, Float, Int, PRNGKeyArray
+
+
+def _select_potential(potentials, idx):
+    funcs = [lambda i=i: potentials[i] for i in range(len(potentials))]
+    return jax.lax.switch(idx, funcs)
 
 
 def render_image_with_white_gaussian_noise(
     particle_parameters: Dict,
     constant_args: Tuple[
         Tuple[cxs.AbstractPotentialRepresentation],
-        cxs.AbstractPotentialIntegrator,
         AbstractMask,
     ],
     per_particle_args: Tuple[PRNGKeyArray, Int, Float],
 ) -> Float[
     Array,
-    "{relion_particle_stack.instrument_config.y_dim} {relion_particle_stack.instrument_config.x_dim}",  # noqa
+    "{relion_particle_stack.config.y_dim} {relion_particle_stack.config.x_dim}",  # noqa
 ]:
     """
     Renders an image given the particle parameters, potential,
@@ -33,28 +37,21 @@ def render_image_with_white_gaussian_noise(
 
     """
     key_noise, potential_idx, snr = per_particle_args
-    potentials, potential_integrator, mask = constant_args
+    potentials, mask = constant_args
+    potential = _select_potential(potentials, potential_idx)
 
-    structural_ensemble = cxs.DiscreteStructuralEnsemble(
-        potentials,
+    image_model = cxs.make_image_model(
+        potential,
+        particle_parameters["config"],
         particle_parameters["pose"],
-        cxs.DiscreteConformationalVariable(potential_idx),
-    )
-
-    scattering_theory = cxs.WeakPhaseScatteringTheory(
-        structural_ensemble,
-        potential_integrator,
         particle_parameters["transfer_theory"],
+        signal_region=(mask.array == 1),
+        normalizes_signal=True,
     )
 
-    image_model = cxs.ContrastImageModel(
-        particle_parameters["instrument_config"], scattering_theory, mask=mask
-    )
-
-    distribution = IndependentGaussianPixels(
+    distribution = cxs.IndependentGaussianPixels(
         image_model,
         variance=1.0,
         signal_scale_factor=jnp.sqrt(snr),
-        normalizes_signal=True,
     )
-    return distribution.sample(key_noise, applies_mask=False)
+    return distribution.sample(key_noise)

@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 import mdtraj
 import yaml
-from cryojax.data import RelionParticleParameterFile, RelionParticleStackDataset
+from cryojax.dataset import RelionParticleParameterFile, RelionParticleStackDataset
 
 from ..data import create_dataloader
 from ..ensemble_optimization import (
