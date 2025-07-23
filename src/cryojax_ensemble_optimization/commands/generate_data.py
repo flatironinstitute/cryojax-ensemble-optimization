@@ -5,10 +5,9 @@ import logging
 import os
 import sys
 
-import cryojax.simulator as cxs
 import jax
 import yaml
-from cryojax.image.operators import CircularCosineMask
+from cryojax.ndimage.transforms import CircularCosineMask
 
 from ..data import generate_relion_parameter_file, simulate_relion_dataset
 from ..internal import DatasetGeneratorConfig
@@ -53,7 +52,7 @@ def simulate_particle_stack_from_config(config: DatasetGeneratorConfig):
     )
 
     mask = CircularCosineMask(
-        coordinate_grid=parameter_file[0]["instrument_config"].coordinate_grid_in_pixels,
+        coordinate_grid=parameter_file[0]["config"].coordinate_grid_in_pixels,
         radius=config_dict["mask_radius"],
         rolloff_width=config_dict["mask_rolloff_width"],
     )
@@ -64,7 +63,6 @@ def simulate_particle_stack_from_config(config: DatasetGeneratorConfig):
         path_to_relion_project=config_dict["path_to_relion_project"],
         images_per_file=config_dict["images_per_file"],
         potentials=potentials,
-        potential_integrator=cxs.GaussianMixtureProjection(),
         ensemble_probabilities=config_dict["atomic_models_params"][
             "atomic_models_probabilities"
         ],
