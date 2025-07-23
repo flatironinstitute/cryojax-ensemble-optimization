@@ -1,24 +1,29 @@
+from dataclasses import dataclass
+from functools import partial
+from pathlib import Path
+
+import hydra
 import jax
 import jax.numpy as jnp
+from cryojax.io import read_atoms_from_pdb
 from jax import jit
-from functools import partial
-from dataclasses import dataclass
-import hydra
-from pathlib import Path
 from omegaconf import OmegaConf
 
-from cryojax.io import read_atoms_from_pdb
 
 Array = jnp.ndarray
 
-repo_root = Path(__file__).parent.parent  # Navigate to repo root (assuming this script is under /src)
+repo_root = Path(
+    __file__
+).parent.parent  # Navigate to repo root (assuming this script is under /src)
 config_path = repo_root / "config_files"  # Path to the configs folder
 output_dir = repo_root / "outputs"  # Path to outputs directory
+
 
 @dataclass
 class OptimizationConfig:
     learnign_rate: float
     num_steps: int
+
 
 @dataclass
 class Spring:
@@ -28,10 +33,10 @@ class Spring:
 
 @dataclass
 class SoftSphere:
-  constant: float
-  sigma: float
-  epsilon: float
-  alpha: float
+    constant: float
+    sigma: float
+    epsilon: float
+    alpha: float
 
 
 @dataclass
@@ -44,41 +49,43 @@ class StructuralHamiltonian:
 
 
 def dot_bracket_to_base_pair_indices(dot_bracket: str) -> Array:
-    '''Convert dot-bracket notation to base pair indices.
+    """Convert dot-bracket notation to base pair indices.
     Args:
         dot_bracket (str): Dot-bracket notation string.
     Returns:
         jnp.ndarray: Array of shape (n_pairs, 2) containing indices of base pairs.
-    '''
+    """
     # Initialize an empty stack and a list to store pairs
     stack = []
     pairs = []
 
     # Traverse the dot-bracket notation
     for i, char in enumerate(dot_bracket):
-        if char == '(':
+        if char == "(":
             # Push the index of '(' onto the stack
             stack.append(i)
-        elif char == ')':
+        elif char == ")":
             # Pop from the stack to get the matching '(' index
             start_index = stack.pop()
             # Store the pair (start_index, end_index)
             pairs.append((start_index, i))
-    
+
     return jnp.array(pairs)
 
 
-def pairwise_distance_energy(pairs: Array, coords: Array, equilibrium_distance: float) -> Array:
-    '''Calculate the spring energy based on pairwise distances.
+def pairwise_distance_energy(
+    pairs: Array, coords: Array, equilibrium_distance: float
+) -> Array:
+    """Calculate the spring energy based on pairwise distances.
     Args:
-        pairs (jnp.ndarray): Array of shape (n_pairs, 2) containing indices of atom pairs.
-        coords (jnp.ndarray): Array of shape (n_atoms, 3) containing the coordinates of atoms.
+        pairs (jnp.ndarray): shape=(n_pairs, 2) containing indices of atom pairs.
+        coords (jnp.ndarray): shape=(n_atoms, 3) containing the coordinates of atoms.
         equilibrium_distance (float): The equilibrium distance for the spring potential.
     Returns:
         jnp.ndarray: The total spring energy.
-    '''
-    ri = coords[pairs[:, 0]]  
-    rj = coords[pairs[:, 1]] 
+    """
+    ri = coords[pairs[:, 0]]
+    rj = coords[pairs[:, 1]]
 
     distances = jnp.linalg.norm(ri - rj, axis=1)
 
@@ -87,16 +94,18 @@ def pairwise_distance_energy(pairs: Array, coords: Array, equilibrium_distance: 
     return spring_energy, distances
 
 
-def upside_down_gaussian_energy(pairs: Array, coords: Array, eq_dist: float, sigma: float) -> Array:
-    '''Calculate the upside-down Gaussian energy based on pairwise distances.
+def upside_down_gaussian_energy(
+    pairs: Array, coords: Array, eq_dist: float, sigma: float
+) -> Array:
+    """Calculate the upside-down Gaussian energy based on pairwise distances.
     Args:
-        pairs (jnp.ndarray): Array of shape (n_pairs, 2) containing indices of atom pairs.
-        coords (jnp.ndarray): Array of shape (n_atoms, 3) containing the coordinates of atoms.
+        pairs (jnp.ndarray): shape=(n_pairs, 2) containing indices of atom pairs.
+        coords (jnp.ndarray): shape=(n_atoms, 3) containing the coordinates of atoms.
         eq_dist (float): The equilibrium distance for the Gaussian potential.
         sigma (float): The width of the Gaussian.
     Returns:
         jnp.ndarray: The total Gaussian well energy.
-    '''
+    """
     # Calculate the pairwise distances
     ri = coords[pairs[:, 0]]
     rj = coords[pairs[:, 1]]
@@ -107,7 +116,8 @@ def upside_down_gaussian_energy(pairs: Array, coords: Array, eq_dist: float, sig
 
 
 def optimize_equilibrium_distance(pairs, coords, init_eq_dist, learning_rate, num_steps):
-    '''Optimize the equilibrium distance using gradient descent.'''
+    """Optimize the equilibrium distance using gradient descent."""
+
     def loss_fn(eq_dist):
         spring_energy, _ = pairwise_distance_energy(pairs, coords, eq_dist)
         total_energy = spring_energy
@@ -139,12 +149,26 @@ def optimize_equilibrium_distance(pairs, coords, init_eq_dist, learning_rate, nu
     return eq_dist, jnp.array(losses), jnp.array(vals)
 
 
-def optimize_coords(pairs, init_coords, eq_dist, sigma, epsilon, alpha, spring_constant, soft_sphere_constant, learning_rate, num_steps):
-    '''Optimize the equilibrium distance using gradient descent.'''
+def optimize_coords(
+    pairs,
+    init_coords,
+    eq_dist,
+    sigma,
+    epsilon,
+    alpha,
+    spring_constant,
+    soft_sphere_constant,
+    learning_rate,
+    num_steps,
+):
+    """Optimize the equilibrium distance using gradient descent."""
+
     def loss_fn(coords):
         spring_energy, distances = pairwise_distance_energy(pairs, coords, eq_dist)
         soft_sphere_energy = soft_sphere(distances, sigma, epsilon, alpha)
-        total_energy = spring_constant*spring_energy + soft_sphere_constant*soft_sphere_energy
+        total_energy = (
+            spring_constant * spring_energy + soft_sphere_constant * soft_sphere_energy
+        )
         return total_energy
 
     # Initialize
@@ -175,15 +199,16 @@ def optimize_coords(pairs, init_coords, eq_dist, sigma, epsilon, alpha, spring_c
 
 @partial(jit, static_argnums=(1,))
 def safe_mask(mask, fn, operand, placeholder=0):
-  masked = jnp.where(mask, operand, 0)
-  return jnp.where(mask, fn(masked), placeholder)
+    masked = jnp.where(mask, operand, 0)
+    return jnp.where(mask, fn(masked), placeholder)
 
 
-def soft_sphere(dr: Array,
-                sigma: Array=1,
-                epsilon: Array=1,
-                alpha: Array=2,
-                ) -> Array:
+def soft_sphere(
+    dr: Array,
+    sigma: Array = 1,
+    epsilon: Array = 1,
+    alpha: Array = 2,
+) -> Array:
     """Finite ranged repulsive interaction between soft spheres from https://jax-md.readthedocs.io/en/main/_modules/jax_md/energy.html#soft_sphere
 
     Args:
@@ -201,7 +226,11 @@ def soft_sphere(dr: Array,
     dr = dr / sigma
     fn = lambda dr: epsilon / alpha * (f32(1.0) - dr) ** alpha
 
-    if isinstance(alpha, float) or isinstance(alpha, int) or issubclass(type(alpha.dtype), jnp.integer):
+    if (
+        isinstance(alpha, float)
+        or isinstance(alpha, int)
+        or issubclass(type(alpha.dtype), jnp.integer)
+    ):
         return jnp.where(dr < 1.0, fn(dr), f32(0.0)).sum()
 
     return safe_mask(dr < 1.0, fn, dr, f32(0.0)).sum()
@@ -209,43 +238,59 @@ def soft_sphere(dr: Array,
 
 @hydra.main(config_path=str(config_path), config_name="config_structural_hamiltonian")
 def main(cfg: StructuralHamiltonian):
-    '''Main function to run the structural Hamiltonian calculations.
-    
-    Read in dot-bracket notation and PDB file, calculate the spring energy based on pairwise distances,
-    and optimize the equilibrium distance using gradient descent.
-    '''
+    """Main function to run the structural Hamiltonian calculations.
+
+    Read in dot-bracket notation and PDB file, calculate the spring energy based on
+    pairwise distances, and optimize the equilibrium distance using gradient descent.
+    """
     config = OmegaConf.to_container(cfg, resolve=True)
-    base_pair_indices = dot_bracket_to_base_pair_indices(config['dot_bracket'])
-    print(config['mdtraj_select'])
-    atom_positions, _, _ = read_atoms_from_pdb(config['pdb_fname'], center=True, loads_b_factors=True, select=config['mdtraj_select'])
+    base_pair_indices = dot_bracket_to_base_pair_indices(config["dot_bracket"])
+    print(config["mdtraj_select"])
+    atom_positions, _, _ = read_atoms_from_pdb(
+        config["pdb_fname"],
+        center=True,
+        loads_b_factors=True,
+        select=config["mdtraj_select"],
+    )
     print(f"Atom positions: {atom_positions[:10]}")
-    spring_energy, distances = pairwise_distance_energy(base_pair_indices, atom_positions, config['spring']['equilibrium_distance'])
+    spring_energy, distances = pairwise_distance_energy(
+        base_pair_indices, atom_positions, config["spring"]["equilibrium_distance"]
+    )
     print(f"Spring energy: {spring_energy:.4f}")
-    clash_energy = soft_sphere(distances, 
-                               sigma=config['soft_sphere']['sigma'], 
-                               epsilon=config['soft_sphere']['epsilon'],
-                               alpha=config['soft_sphere']['alpha'])
+    clash_energy = soft_sphere(
+        distances,
+        sigma=config["soft_sphere"]["sigma"],
+        epsilon=config["soft_sphere"]["epsilon"],
+        alpha=config["soft_sphere"]["alpha"],
+    )
     print(f"Clash energy: {clash_energy:.4f}")
 
-    final_eq_dist, _, _ = optimize_equilibrium_distance(base_pair_indices, atom_positions, init_eq_dist=3.0,
-                                                        learning_rate=config['optimization']['learning_rate'],
-                                                        num_steps=config['optimization']['num_steps'])
+    final_eq_dist, _, _ = optimize_equilibrium_distance(
+        base_pair_indices,
+        atom_positions,
+        init_eq_dist=3.0,
+        learning_rate=config["optimization"]["learning_rate"],
+        num_steps=config["optimization"]["num_steps"],
+    )
     print(f"Final equilibrium distance: {final_eq_dist:.4f}")
 
-    final_atom_positions, _ = optimize_coords(base_pair_indices, atom_positions, 
-                                              eq_dist=config['spring']['equilibrium_distance']
-                                                , sigma=config['soft_sphere']['sigma'],
-                                                epsilon=config['soft_sphere']['epsilon'],
-                                                alpha=config['soft_sphere']['alpha'],
-                                                spring_constant=config['spring']['constant'],
-                                                soft_sphere_constant=config['soft_sphere']['constant'],
-                                                learning_rate=config['optimization']['learning_rate'],
-                                                num_steps=config['optimization']['num_steps'],
-                                                )
-                                              
+    final_atom_positions, _ = optimize_coords(
+        base_pair_indices,
+        atom_positions,
+        eq_dist=config["spring"]["equilibrium_distance"],
+        sigma=config["soft_sphere"]["sigma"],
+        epsilon=config["soft_sphere"]["epsilon"],
+        alpha=config["soft_sphere"]["alpha"],
+        spring_constant=config["spring"]["constant"],
+        soft_sphere_constant=config["soft_sphere"]["constant"],
+        learning_rate=config["optimization"]["learning_rate"],
+        num_steps=config["optimization"]["num_steps"],
+    )
+
     print(f"Final equilibrium distance: {final_atom_positions[:10]}")
     rmsd = jnp.sqrt(jnp.mean((atom_positions - final_atom_positions) ** 2))
     print(f"RMSD: {rmsd:.4f}")
+
 
 if __name__ == "__main__":
     main()
