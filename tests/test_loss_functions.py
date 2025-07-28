@@ -3,7 +3,6 @@ import jax.numpy as jnp
 import yaml
 from cryojax.dataset import RelionParticleParameterFile, RelionParticleStackDataset
 
-import cryojax_ensemble_optimization as cxsopt
 from cryojax_ensemble_optimization.ensemble_optimization import (
     compute_likelihood_matrix as compute_likelihood_matrix,
     compute_neg_log_likelihood as compute_neg_log_likelihood,
@@ -12,6 +11,7 @@ from cryojax_ensemble_optimization.ensemble_optimization import (
 from cryojax_ensemble_optimization.ensemble_optimization._likelihood_optimization import (
     loss_functions as lf,
 )
+from cryojax_ensemble_optimization.internal import DatasetGeneratorConfig
 
 
 _likelihood_isotropic_gaussian = lf._likelihood_isotropic_gaussian
@@ -45,7 +45,7 @@ def test_compute_likelihood_matrix():
         config_json = yaml.safe_load(f)
 
     key = jax.random.PRNGKey(config_json["rng_seed"])
-    config = dict(cxsopt.internal.DatasetGeneratorConfig(**config_json).model_dump())
+    config = dict(DatasetGeneratorConfig(**config_json).model_dump())
     relion_stack = RelionParticleStackDataset(
         RelionParticleParameterFile(
             path_to_starfile=config["path_to_starfile"],
