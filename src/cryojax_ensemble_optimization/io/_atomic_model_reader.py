@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Dict, List
 
+import jax.numpy as jnp
 import mdtraj
 from cryojax.constants import (
     convert_b_factor_to_variance,
@@ -53,8 +54,36 @@ def read_atomic_models(
             selection_string=selection_string,
             loads_b_factors=loads_b_factors,
         )
+    elif file_extension == ".npz":
+        atomic_models_scattering_params = _read_atomic_models_from_npz(
+            atomic_models_filenames,
+        )
     else:
         raise NotImplementedError(f"File extension {file_extension} not supported.")
+
+    return atomic_models_scattering_params
+
+
+def _read_atomic_models_from_npz(
+    atomic_models_filenames: List[str],
+) -> Dict[int, Dict[str, Float[Array, ""]]]:
+    atomic_models_scattering_params = {}
+
+    for i, filename in enumerate(atomic_models_filenames):
+        data = jnp.load(filename)
+
+        try:
+            atomic_models_scattering_params[i] = {
+                "atom_positions": data["bead_positions"],
+                "gaussian_amplitudes": data["gaussian_amplitudes"],
+                "gaussian_variances": data["gaussian_variances"],
+            }
+        except KeyError as e:
+            raise ValueError(
+                f"Missing key in npz file {filename}: {e}. "
+                + "Keys should be 'bead_positions', 'gaussian_amplitudes', "
+                + "and 'gaussian_variances'."
+            )
 
     return atomic_models_scattering_params
 
