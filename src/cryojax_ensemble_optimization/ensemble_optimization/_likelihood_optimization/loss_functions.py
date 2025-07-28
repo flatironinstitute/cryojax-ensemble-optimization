@@ -15,6 +15,10 @@ def _likelihood_isotropic_gaussian(
     observed_image: Image,
     noise_variance: Float,
 ) -> Float:
+    """
+    Notes:
+    returns NaN when compute_image is a constant image
+    """
     cc = jnp.mean(computed_image**2)
     co = jnp.mean(observed_image * computed_image)
     c = jnp.mean(computed_image)
@@ -33,6 +37,11 @@ def _likelihood_isotropic_gaussian_marginalized(
     observed_image: Float[Array, "n_pixels n_pixels"],
     _=None,
 ) -> Float:
+    """
+    Notes:
+    returns NaN when compute_image is a constant image
+    returns inf when compute_image is equal to observed_image
+    """
     cc = jnp.mean(computed_image**2)
     co = jnp.mean(observed_image * computed_image)
     c = jnp.mean(computed_image)
