@@ -9,6 +9,7 @@ from ._likelihood_optimization import (
 )
 from ._pipelines import (
     AbstractEnsembleOptimizationPipeline as AbstractEnsembleOptimizationPipeline,
+    EnsembleOptimizationLangevinPipeline as EnsembleOptimizationLangevinPipeline,
     EnsembleOptimizationPipeline as EnsembleOptimizationPipeline,
 )
 from ._prior_projection import (
@@ -17,7 +18,9 @@ from ._prior_projection import (
     AbstractPriorProjector as AbstractPriorProjector,
     compute_harmonic_bias_potential_energy as compute_harmonic_bias_potential_energy,
     EnsembleSteeredMDSimulator as EnsembleSteeredMDSimulator,
+    OverdampedLangevinSampler as OverdampedLangevinSampler,
     ParallelSteeredOverdampedLangevinSampler as ParallelSteeredOverdampedLangevinSampler,
+    RNAForceField as RNAForceField,
     SteeredMDSimulator as SteeredMDSimulator,
     SteeredOverdampedLangevinSampler as SteeredOverdampedLangevinSampler,
 )

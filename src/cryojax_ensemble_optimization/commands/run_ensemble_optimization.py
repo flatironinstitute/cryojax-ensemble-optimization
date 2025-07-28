@@ -17,9 +17,9 @@ from ..ensemble_optimization import (
     IterativeEnsembleLikelihoodOptimizer,
     SteeredMDSimulator,
 )
-from ..internal import cryojaxERConfig
+from ..internal._config_validators import EnsOptMDConfig
 from ..io import read_atomic_models
-from ..utils import get_atom_indices_from_pdb
+from ..io.utils import get_atom_indices_from_pdb
 
 
 def add_args(parser):
@@ -187,7 +187,7 @@ def main(args):
 
     with open(args.config, "r") as f:
         config_dict = yaml.safe_load(f)
-        config = dict(cryojaxERConfig(**config_dict).model_dump())
+        config = dict(EnsOptMDConfig(**config_dict).model_dump())
 
     if config["projector_params"]["platform"] == "CPU":
         if config["projector_params"]["platform_properties"]["Threads"] is None:
@@ -229,6 +229,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=yaml.dump(cryojaxERConfig.model_json_schema(), indent=4),
+        epilog=yaml.dump(EnsOptMDConfig.model_json_schema(), indent=4),
     )
     main(add_args(parser).parse_args())
