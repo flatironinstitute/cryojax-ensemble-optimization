@@ -1,11 +1,13 @@
 import mdtraj
 import pytest
+import jax.numpy as jnp
 
 # from jaxtyping import install_import_hook
 # with install_import_hook("cryojax_ensemble_optimization", "typeguard.typechecked"):
 from cryojax_ensemble_optimization.io import (
     load_atomic_models_as_potentials,
     read_atomic_models,
+    read_rna_pair_string,
 )
 
 
@@ -84,3 +86,23 @@ def test_load_as_potentials(path_to_atomic_models, selection_string):
         assert potential.gaussian_variances.shape[1] == 5
 
     assert len(potentials) == len(path_to_atomic_models)
+
+
+def test_read_rna_pair_string():
+    
+    def _sort_rows(a):
+        return jnp.sort(a, axis=1)
+
+    def _sort_rows_then_whole(a):
+        return jnp.sort(_sort_rows(a), axis=0)
+    
+    dotbracket_list = ["()", "(.)", "((..))"]
+    expected_pairs_list = [jnp.array([[0,1]]), jnp.array([[0,2]]), jnp.array([[0, 5], [1, 4]]), jnp.array([])]
+
+    for dotbracket, expected_pairs in zip(dotbracket_list, expected_pairs_list):
+        
+        pairs = read_rna_pair_string(dotbracket)
+        assert jnp.array_equal(
+            _sort_rows_then_whole(pairs),
+            _sort_rows_then_whole(expected_pairs)
+        )

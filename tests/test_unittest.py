@@ -2,7 +2,7 @@ import unittest
 
 import jax
 import numpy as np
-from cryojax_ensemble_refinement.lklhood_and_grads import (
+from cryojax_ensemble_optimization.lklhood_and_grads import (
     calc_lklhood,
     calc_lklhood_grad_strucs,
     calc_lklhood_grad_weights,
