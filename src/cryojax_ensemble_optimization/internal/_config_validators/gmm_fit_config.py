@@ -1,4 +1,3 @@
-
 from pydantic import (
     BaseModel,
     Field,
@@ -8,16 +7,15 @@ from pydantic import (
 
 
 class GMMFitConfig(BaseModel, extra="forbid"):
-
     box_size: PositiveInt = Field(
         default=128,
         description="Size of the box in pixels."
-        + "This is used to compute the density used to fit the GMM"
+        + "This is used to compute the density used to fit the GMM",
     )
     voxel_size: PositiveFloat = Field(
         default=2.0,
         description="Size of the voxel in Angstroms."
-        + "This is used to compute the density used to fit the GMM"
+        + "This is used to compute the density used to fit the GMM",
     )
     fit_selection_string: str = Field(
         default='name "C2"',
@@ -41,16 +39,16 @@ class GMMFitConfig(BaseModel, extra="forbid"):
     )
     atol: float = Field(
         default=1e-3,
-        description="Absolute tolerance for the GaussNewton Algorithm used to fit the GMM." # noqa
+        description="Absolute tolerance for the GaussNewton Algorithm used to fit the GMM."  # noqa
         + "This is used to define the convergence criteria for the GMM fitting.",
     )
     rtol: float = Field(
         default=1e-3,
-        description="Relative tolerance for the GaussNewton Algorithm used to fit the GMM." # noqa
+        description="Relative tolerance for the GaussNewton Algorithm used to fit the GMM."  # noqa
         + "This is used to define the convergence criteria for the GMM fitting.",
     )
     max_steps: PositiveInt = Field(
         default=500,
-        description="Maximum number of steps for the GaussNewton Algorithm used to fit the GMM." # noqa
+        description="Maximum number of steps for the GaussNewton Algorithm used to fit the GMM."  # noqa
         + "This is used to define the maximum number of steps for the GMM fitting.",
     )

@@ -1,25 +1,12 @@
 import glob
 import os
-import warnings
-from functools import partial
 from pathlib import Path
-from typing import Dict, List, Optional, Union
-from typing_extensions import Annotated, Literal
+from typing import List, Union
 
-import jax.numpy as jnp
-import mdtraj
 from natsort import natsorted
 from pydantic import (
-    AfterValidator,
-    BaseModel,
     DirectoryPath,
-    Field,
-    field_serializer,
-    field_validator,
     FilePath,
-    model_validator,
-    PositiveFloat,
-    PositiveInt,
 )
 
 
@@ -81,7 +68,3 @@ def _validate_files_with_type(
             + f"Valid file types are: {', '.join([f'.{file_types}'])}"
         )
     return [str(f) for f in output]
-
-
-
-

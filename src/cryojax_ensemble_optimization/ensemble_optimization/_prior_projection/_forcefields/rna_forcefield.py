@@ -5,6 +5,7 @@ from jaxtyping import Array, Float, Int
 
 from .base_forcefield import AbstractForceField
 
+
 DEFAULT_SPRING_PARAMS = dict(
     force_constant=1.0,
     equilibrium_distance=11.08,

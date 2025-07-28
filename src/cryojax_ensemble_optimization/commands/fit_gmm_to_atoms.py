@@ -22,7 +22,7 @@ def add_args(parser):
         "-o", "--output_file", type=str, default=None, help="Path to the output file"
     )
     parser.add_argument(
-       "-i", "--input_pdb", type=str, default=None, help="Path to the reference file"
+        "-i", "--input_pdb", type=str, default=None, help="Path to the reference file"
     )
     return parser
 
@@ -42,14 +42,11 @@ def warnexists(out):
 
 
 def main(args):
-
     config_file = args.config
     input_pdb = args.input_pdb
     output_file = Path(args.output_file)
 
-    _validate_files_with_type(
-        input_pdb, [".pdb"]
-    )
+    _validate_files_with_type(input_pdb, [".pdb"])
     if config_file is None:
         config = GMMFitConfig()
         config_file = "default_config.yaml"
@@ -62,9 +59,7 @@ def main(args):
     basedir = output_file.parent
     warnexists(basedir)
     mkbasedir(basedir)
-    print(
-        "A copy of the config file and the log will be written to {}".format(basedir)
-    )
+    print("A copy of the config file and the log will be written to {}".format(basedir))
     sys.stdout.flush()
 
     # make copy of config to output_path
@@ -89,7 +84,7 @@ def main(args):
     )
 
     logging.info("Simulating particle stack...")
-    
+
     fitted_gmm = generate_gmm_model_from_atomic_model(
         pdb_file=input_pdb,
         box_size=config.box_size,

@@ -3,11 +3,9 @@ import pathlib
 from typing import Any, Tuple
 from typing_extensions import override
 
-import jax
 import jax.numpy as jnp
-import mdtraj
 from jax_dataloader import DataLoader
-from jaxtyping import Array, Float, Int, PRNGKeyArray
+from jaxtyping import Array, Float, PRNGKeyArray
 from mdtraj.formats import XYZTrajectoryFile
 from tqdm import tqdm
 
@@ -58,7 +56,6 @@ class EnsembleOptimizationLangevinPipeline(
         Float[Array, "n_steps n_walkers n_atoms 3"],
         Float[Array, "n_steps n_walkers"],
     ]:
-
         # print("Initializing projetor...")
         if initial_state_for_projector is None:
             initial_state_for_projector = self.prior_projector.initialize(
