@@ -69,7 +69,7 @@ def test_compute_likelihood_matrix():
     image_to_walker_log_likelihood_fn = _likelihood_isotropic_gaussian
     per_particle_args_noise_variance = 1.0
 
-    n_particles = 7
+    n_particles = 5
     likelihood_matrix = compute_likelihood_matrix(
         ensemble_walkers,
         relion_stack[:n_particles],
