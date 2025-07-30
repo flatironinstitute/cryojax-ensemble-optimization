@@ -5,15 +5,16 @@ import cryojax.simulator as cxs
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from jaxtyping import Array, Float
+from dm_pix import rotate
+from jax.nn import relu
+from jaxtyping import Array, Float, Int
 
 from ..._custom_types import Image, LossFn, PerParticleArgs
 
 
-def _likelihood_isotropic_gaussian(
+def _optimal_scale_and_bias(
     computed_image: Image,
     observed_image: Image,
-    noise_variance: Float,
 ) -> Float:
     """
     Notes:
@@ -26,6 +27,93 @@ def _likelihood_isotropic_gaussian(
 
     scale = (co - c * o) / (cc - c**2)
     bias = o - scale * c
+
+    return scale, bias, cc, co, c, o
+
+
+def _likelihood_sliced_wasserstein(
+    computed_image: Image,
+    observed_image: Image,
+    n_projections: Int,
+) -> Float:
+    """
+    Compute the likelihood using the sliced Wasserstein distance.
+    """
+    scale, bias, _, _, _, _ = _optimal_scale_and_bias(computed_image, observed_image)
+    angles = jnp.linspace(0, jnp.pi, n_projections, endpoint=False)
+
+    def rotate_and_project(image, angles):
+        image_channel_one = jnp.expand_dims(image, -1)
+        projected_image = jax.vmap(
+            lambda angle: jnp.sum(
+                rotate(image_channel_one, angle) * image_channel_one, axis=1
+            )
+        )(angles)
+        return jnp.squeeze(projected_image, -1)
+
+    rescaled_computed_image = scale * computed_image + bias
+    projections_computed_pos = rotate_and_project(relu(rescaled_computed_image), angles)
+    projections_observed_pos = rotate_and_project(relu(observed_image), angles)
+    projections_computed_neg = rotate_and_project(-relu(-rescaled_computed_image), angles)
+    projections_observed_neg = rotate_and_project(-relu(-observed_image), angles)
+    p = 2  # TODO: pass in param as 1 or 2
+    w_pos = wasserstein_1d_torch_pairwise(
+        projections_computed_pos, projections_observed_pos, p
+    )
+    w_neg = wasserstein_1d_torch_pairwise(
+        projections_computed_neg, projections_observed_neg, p
+    )
+    sliced_wasserstein = w_pos + w_neg
+    return sliced_wasserstein
+
+
+def wasserstein_1d_torch_pairwise(a, b, p):
+    """
+    Compute all pairwise 1D Wasserstein-2^2 distances between two batches of histograms.
+    Assumes spatial bins are equally spaced.
+
+    Args:
+        a: (N1, n) tensor of histograms (each row sums to 1)
+        b: (N2, n) tensor of histograms
+        eps: numerical stability value for normalization
+
+    Returns:
+        w2_matrix: (N1, N2) tensor where w2_matrix[i, j] = W2^2(a[i], b[j])
+
+    Notes:
+    Eq 2 in https://openreview.net/forum?id=yPBtJ4JPwi
+    """
+    eps = 1e-8
+    # Normalize histograms
+    a = a / (a.sum(axis=1, keepdims=True) + eps)  # (N1, n)
+    b = b / (b.sum(axis=1, keepdims=True) + eps)  # (N2, n)
+
+    # Compute CDFs
+    cdf_a = jnp.cumsum(a, axis=1)  # (N1, n)
+    cdf_b = jnp.cumsum(b, axis=1)  # (N2, n)
+
+    # Compute pairwise squared L2 distances between CDFs
+    diff = cdf_a - cdf_b
+    if p == 1:
+        w = jnp.abs(diff).mean()
+    elif p == 2:
+        w = (diff**2).mean()
+    else:
+        raise ValueError(f"Unsupported p value: {p}. Only p=1 and p=2 are supported.")
+
+    return w
+
+
+def _likelihood_isotropic_gaussian(
+    computed_image: Image,
+    observed_image: Image,
+    noise_variance: Float,
+) -> Float:
+    """
+    Notes:
+    returns NaN when compute_image is a constant image
+    """
+    scale, bias, cc, co, c, o = _optimal_scale_and_bias(computed_image, observed_image)
 
     return -jnp.sum((scale * computed_image - observed_image + bias) ** 2) / (
         2 * noise_variance
@@ -42,13 +130,7 @@ def _likelihood_isotropic_gaussian_marginalized(
     returns NaN when compute_image is a constant image
     returns inf when compute_image is equal to observed_image
     """
-    cc = jnp.mean(computed_image**2)
-    co = jnp.mean(observed_image * computed_image)
-    c = jnp.mean(computed_image)
-    o = jnp.mean(observed_image)
-
-    scale = (co - c * o) / (cc - c**2)
-    bias = o - scale * c
+    scale, bias, cc, co, c, o = _optimal_scale_and_bias(computed_image, observed_image)
     n_pixels = computed_image.size
 
     return (2 - n_pixels) * jnp.log(

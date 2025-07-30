@@ -66,7 +66,9 @@ def test_compute_likelihood_matrix():
     gaussian_variances = (
         jax.random.normal(key, (n_walkers, n_atoms, n_gaussians_per_atom)) ** 2
     )
-    image_to_walker_log_likelihood_fn = _likelihood_isotropic_gaussian
+
+    # test of _likelihood_isotropic_gaussian
+    image_to_walker_log_likelihood_fn = lf._likelihood_isotropic_gaussian
     per_particle_args_noise_variance = 1.0
 
     n_particles = 5
@@ -77,5 +79,20 @@ def test_compute_likelihood_matrix():
         gaussian_variances,
         image_to_walker_log_likelihood_fn,
         per_particle_args_noise_variance,
+    )
+    assert likelihood_matrix.shape == (n_particles, n_walkers)
+
+    # test of _likelihood_sliced_wasserstein
+    image_to_walker_log_likelihood_fn = lf._likelihood_sliced_wasserstein
+    per_particle_args_n_projections = 7
+
+    n_particles = 5
+    likelihood_matrix = compute_likelihood_matrix(
+        ensemble_walkers,
+        relion_stack[:n_particles],
+        gaussian_amplitudes,
+        gaussian_variances,
+        image_to_walker_log_likelihood_fn,
+        per_particle_args_n_projections,
     )
     assert likelihood_matrix.shape == (n_particles, n_walkers)
