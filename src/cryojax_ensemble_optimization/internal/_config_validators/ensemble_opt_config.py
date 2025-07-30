@@ -108,7 +108,7 @@ class EnsOptMDConfig(BaseModel, extra="forbid"):
         + "If a pattern is provided, all files matching the pattern will be used."
     )
     path_to_reference_model: Annotated[
-        str, AfterValidator(partial(_validate_file_with_type, file_types=[".pdb"]))
+        str, AfterValidator(partial(_validate_file_with_type, file_type=".pdb"))
     ] = Field(
         description="Path to the reference model. "
         + "This model should be aligned to the cryo-EM particles, "
@@ -191,12 +191,12 @@ class EnsOptMDConfig(BaseModel, extra="forbid"):
     @field_validator("path_to_reference_model")
     @classmethod
     def validate_path_to_reference_model(cls, v):
-        return _validate_file_with_type(v, file_types=[".pdb"])
+        return _validate_file_with_type(v, file_type=".pdb")
 
     @field_validator("path_to_starfile")
     @classmethod
     def validate_path_to_starfile(cls, v):
-        return _validate_file_with_type(v, file_type=[".star"])
+        return _validate_file_with_type(v, file_type=".star")
 
     @field_validator("likelihood_optimizer_params")
     @classmethod
