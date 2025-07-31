@@ -60,21 +60,15 @@ def _compute_likelihood_image_and_walker(
         gaussian_amplitudes,
         gaussian_variances,
     )
-    structural_ensemble = cxs.SingleStructureEnsemble(
-        potential, relion_stack["parameters"]["pose"]
+
+    image_model = cxs.make_image_model(
+        potential,
+        relion_stack["parameters"]["config"],
+        relion_stack["parameters"]["pose"],
+        relion_stack["parameters"]["transfer_theory"],
     )
 
-    scattering_theory = cxs.WeakPhaseScatteringTheory(
-        structural_ensemble=structural_ensemble,
-        potential_integrator=cxs.GaussianMixtureProjection(),
-        transfer_theory=relion_stack["parameters"]["transfer_theory"],
-    )
-
-    imaging_pipeline = cxs.ContrastImageModel(
-        relion_stack["parameters"]["instrument_config"], scattering_theory
-    )
-
-    computed_image = imaging_pipeline.render(outputs_real_space=True)
+    computed_image = image_model.simulate(outputs_real_space=True)
 
     return image_to_walker_log_likelihood_fn(
         computed_image,

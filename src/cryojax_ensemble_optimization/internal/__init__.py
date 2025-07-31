@@ -1,4 +1,5 @@
 from ._config_validators import (
-    cryojaxERConfig as cryojaxERConfig,
     DatasetGeneratorConfig as DatasetGeneratorConfig,
+    EnsOptMDConfig as EnsOptMDConfig,
+    GMMFitConfig as GMMFitConfig,
 )
