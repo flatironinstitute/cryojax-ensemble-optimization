@@ -17,7 +17,7 @@ def _validate_file_with_type(filename: str, file_type: str) -> str:
     assert Path(filename).exists(), f"File {filename} does not exist."
     assert Path(filename).is_file(), f"Path {filename} is not a file."
 
-    if not Path(filename).suffix == f".{file_type}":
+    if not Path(filename).suffix == f"{file_type}":
         raise ValueError(f"File {filename} is not a {file_type} file.")
     return filename
 
