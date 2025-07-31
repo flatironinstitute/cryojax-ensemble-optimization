@@ -40,4 +40,3 @@ LossFn: TypeAlias = Callable[
     ],
     Float,
 ]
-

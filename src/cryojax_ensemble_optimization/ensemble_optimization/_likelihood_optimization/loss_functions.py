@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Dict, Optional, Tuple, Any
+from typing import Any, Optional, Tuple
 
 import cryojax.simulator as cxs
 import equinox as eqx
@@ -7,8 +7,8 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float
 
+from ..._custom_types import ConstantT, LossFn, ParticleStackInfo, PerParticleT
 from ...simulator._dilated_mask import DilatedMask
-from ..._custom_types import LossFn, ParticleStackInfo, PerParticleT, ConstantT
 
 
 def _make_image_model(

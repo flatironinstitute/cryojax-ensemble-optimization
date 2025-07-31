@@ -6,7 +6,7 @@ from cryojax.dataset import (
 )
 from jaxtyping import PRNGKeyArray
 
-from .._custom_types import PerParticleT, ParticleStackInfo
+from .._custom_types import ParticleStackInfo, PerParticleT
 
 
 class CustomJaxDataset(jdl.Dataset):
