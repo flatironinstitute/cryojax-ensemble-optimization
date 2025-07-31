@@ -2,7 +2,6 @@
 Weight and position optimizers for ensemble refinement.
 """
 
-from functools import partial
 from typing import Optional, Tuple
 from typing_extensions import Literal, override
 
@@ -176,6 +175,7 @@ class SteepestDescWalkerPositionsOptimizer(
 class IterativeEnsembleLikelihoodOptimizer(AbstractEnsembleParameterOptimizer):
     step_size: Float
     n_steps: Int
+    n_batches_per_step: Int
     gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]
     gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]
     image_to_walker_log_likelihood_fn: LossFn
@@ -186,6 +186,7 @@ class IterativeEnsembleLikelihoodOptimizer(AbstractEnsembleParameterOptimizer):
         self,
         step_size: Float,
         n_steps: Int,
+        n_batches_per_step: Int,
         gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
         gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
         image_to_walker_log_likelihood_fn: Literal[
@@ -197,6 +198,8 @@ class IterativeEnsembleLikelihoodOptimizer(AbstractEnsembleParameterOptimizer):
     ):
         self.step_size = step_size
         self.n_steps = n_steps
+        self.n_batches_per_step = n_batches_per_step
+
         self.gaussian_variances = error_if_not_positive(gaussian_variances)
         self.gaussian_amplitudes = error_if_not_positive(gaussian_amplitudes)
         if image_to_walker_log_likelihood_fn == "iso_gaussian":
@@ -223,19 +226,32 @@ class IterativeEnsembleLikelihoodOptimizer(AbstractEnsembleParameterOptimizer):
         dataloader: jdl.DataLoader,
     ):
         for _ in range(self.n_steps):
-            batch = next(iter(dataloader))
-            walkers, weights = _optimize_ensemble(
-                walkers,
-                weights,
-                batch["particle_stack"],
-                self.step_size,
-                self.gaussian_amplitudes,
-                self.gaussian_variances,
-                self.dilated_mask,
-                image_to_walker_log_likelihood_fn=self.image_to_walker_log_likelihood_fn,
-                per_particle_args=batch["per_particle_args"],
-                loss_fn_constant_args=self.loss_fn_constant_args,
-            )
+            gradients = jnp.zeros_like(walkers)
+            weights = jnp.ones_like(weights) / weights.shape[0]
+
+            for _ in range(self.n_batches_per_step):
+                batch = next(iter(dataloader))
+                tmp_grads, tmp_weights = _compute_ensemble_gradients(
+                    walkers,
+                    weights,
+                    batch["particle_stack"],
+                    self.gaussian_amplitudes,
+                    self.gaussian_variances,
+                    self.dilated_mask,
+                    image_to_walker_log_likelihood_fn=self.image_to_walker_log_likelihood_fn,
+                    per_particle_args=batch["per_particle_args"],
+                    loss_fn_constant_args=self.loss_fn_constant_args,
+                )
+                gradients += tmp_grads
+                weights += tmp_weights
+            gradients /= self.n_batches_per_step
+            weights /= self.n_batches_per_step
+
+            norms = jnp.linalg.norm(gradients, axis=(2), keepdims=True)
+            norms = jnp.where(norms < 1e-12, 1.0, norms)
+            gradients /= norms
+
+            walkers = walkers - self.step_size * gradients
         return walkers, weights
 
 
@@ -288,11 +304,10 @@ def _optimize_walkers_positions(
 
 
 @eqx.filter_jit
-def _optimize_ensemble(
+def _compute_ensemble_gradients(
     walkers: Float[Array, "n_walkers n_atoms 3"],
     weights: Float[Array, " n_walkers"],
     relion_stack: ParticleStackInfo,
-    step_size: Float,
     gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     dilated_mask: Optional[DilatedMask] = None,
@@ -320,7 +335,6 @@ def _optimize_ensemble(
         The optimized walkers and weights of the ensemble.
     """
 
-    @partial(jax.grad, argnums=0, has_aux=True)
     def _loss_fn(walkers, weights):
         likelihood_matrix = compute_likelihood_matrix(
             walkers,
@@ -337,15 +351,7 @@ def _optimize_ensemble(
         loss = compute_neg_log_likelihood_from_weights(weights, likelihood_matrix)
         return loss, weights
 
-    gradients, weights = _loss_fn(walkers, weights)
-
-    norms = jnp.linalg.norm(gradients, axis=(2), keepdims=True)
-    # set small norms to 1 (avoid making small gradients large!)
-    norms = jnp.where(norms < 1e-12, 1.0, norms)
-    gradients /= norms
-    walkers = walkers - step_size * gradients
-
-    return walkers, weights
+    return jax.grad(_loss_fn, argnums=0, has_aux=True)(walkers, weights)
 
 
 def _compute_full_likelihood_matrix(
