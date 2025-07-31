@@ -105,9 +105,10 @@ def _read_atomic_models_from_pdb(
             atomic_models_filenames[i],
         )
         atom_indices = atom_positions.topology.select(selection_string)
+        align_indices = atom_positions.topology.select("name CA")
 
         atom_positions = atom_positions.superpose(
-            atoms_for_alignment, frame=0, atom_indices=atom_indices
+            atoms_for_alignment, frame=0, atom_indices=align_indices
         )
 
         atomic_models_scattering_params[i] = {

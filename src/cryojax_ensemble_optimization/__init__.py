@@ -1,6 +1,7 @@
 from . import (
     data as data,
     ensemble_optimization as ensemble_optimization,
+    flexible_fitting as flexible_fitting,
     internal as internal,
     io as io,
     simulator as simulator,

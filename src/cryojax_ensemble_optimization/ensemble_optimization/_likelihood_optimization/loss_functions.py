@@ -66,7 +66,7 @@ def _compute_likelihood_image_and_walker(
 
     scattering_theory = cxs.WeakPhaseScatteringTheory(
         structural_ensemble=structural_ensemble,
-        potential_integrator=cxs.GaussianMixtureProjection(),
+        potential_integrator=cxs.GaussianMixtureProjection(),  # n_batches=50),
         transfer_theory=relion_stack["parameters"]["transfer_theory"],
     )
 
@@ -127,6 +127,7 @@ def _compute_likelihood_matrix(
     )
 
 
+@eqx.filter_jit
 def compute_likelihood_matrix(
     ensemble_walkers: Float[Array, "n_walkers n_atoms 3"],
     relion_stack: Dict,
@@ -162,6 +163,27 @@ def compute_likelihood_matrix(
         image_to_walker_log_likelihood_fn,
         per_particle_args,
     ).T  # order of vmaps!
+
+    # map, nomap = eqx.partition(relion_stack, eqx.is_array)
+
+    # def map_over_images(walker, ga, gv):
+    #     return jax.lax.map(
+    #         lambda x: _compute_likelihood_image_and_walker(
+    #             walker,
+    #             eqx.combine(x[0], nomap),
+    #             ga,
+    #             gv,
+    #             image_to_walker_log_likelihood_fn,
+    #             x[1],
+    #         ),
+    #         xs=(map, per_particle_args),
+    #         batch_size=50
+    #     )
+
+    # return jax.lax.map(
+    #     lambda x: map_over_images(x[0], x[1], x[2]),
+    #     xs=(ensemble_walkers, gaussian_amplitudes, gaussian_variances),
+    # ).T
 
 
 @eqx.filter_jit

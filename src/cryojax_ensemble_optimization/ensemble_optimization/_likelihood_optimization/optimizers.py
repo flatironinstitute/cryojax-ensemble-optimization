@@ -198,17 +198,32 @@ class IterativeEnsembleLikelihoodOptimizer(AbstractEnsembleParameterOptimizer):
         dataloader: jdl.DataLoader,
     ):
         for _ in range(self.n_steps):
-            batch = next(iter(dataloader))
-            walkers, weights = _optimize_ensemble(
-                walkers,
-                weights,
-                batch["particle_stack"],
-                self.step_size,
-                self.gaussian_amplitudes,
-                self.gaussian_variances,
-                image_to_walker_log_likelihood_fn=self.image_to_walker_log_likelihood_fn,
-                per_particle_args=batch["per_particle_args"],
-            )
+            gradients = jnp.zeros_like(walkers)
+            weights = jnp.ones_like(weights) / weights.shape[0]
+
+            for _ in range(20):
+                batch = next(iter(dataloader))
+                tmp_grads, tmp_weights = _optimize_ensemble(
+                    walkers,
+                    weights,
+                    batch["particle_stack"],
+                    self.step_size,
+                    self.gaussian_amplitudes,
+                    self.gaussian_variances,
+                    image_to_walker_log_likelihood_fn=self.image_to_walker_log_likelihood_fn,
+                    per_particle_args=batch["per_particle_args"],
+                )
+                gradients += tmp_grads
+                weights += tmp_weights
+            gradients /= 20.0
+            weights /= 20.0
+
+            norms = jnp.linalg.norm(gradients, axis=(2), keepdims=True)
+            # set small norms to 1 (avoid making small gradients large!)
+            norms = jnp.where(norms < 1e-12, 1.0, norms)
+            gradients /= norms
+
+            walkers = walkers - self.step_size * gradients
         return walkers, weights
 
 
@@ -248,10 +263,10 @@ def _optimize_walkers_positions(
         per_particle_args,
     )
 
-    norms = jnp.linalg.norm(gradients, axis=(2), keepdims=True)
-    # set small norms to 1 (avoid making small gradients large!)
-    norms = jnp.where(norms < 1e-12, 1.0, norms)
-    gradients /= norms
+    # norms = jnp.linalg.norm(gradients, axis=(2), keepdims=True)
+    # # set small norms to 1 (avoid making small gradients large!)
+    # norms = jnp.where(norms < 1e-12, 1.0, norms)
+    # gradients /= norms
 
     return walkers - step_size * gradients
 
@@ -304,13 +319,13 @@ def _optimize_ensemble(
 
     gradients, weights = _loss_fn(walkers, weights)
 
-    norms = jnp.linalg.norm(gradients, axis=(2), keepdims=True)
+    # norms = jnp.linalg.norm(gradients, axis=(2), keepdims=True)
     # set small norms to 1 (avoid making small gradients large!)
-    norms = jnp.where(norms < 1e-12, 1.0, norms)
-    gradients /= norms
-    walkers = walkers - step_size * gradients
+    # norms = jnp.where(norms < 1e-12, 1.0, norms)
+    # gradients /= norms
+    # walkers = walkers - step_size * gradients
 
-    return walkers, weights
+    return gradients, weights
 
 
 def _compute_full_likelihood_matrix(
