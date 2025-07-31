@@ -1,0 +1,12 @@
+pdb_fname: /mnt/home/gwoollard/ceph/repos/cryojax-ensemble-reweighting-rna/data/rna_from_pilar/chainA_1gid.pdb
+fname_out: /mnt/home/gwoollard/ceph/repos/cryojax-ensemble-reweighting-rna/data/rna_params/rna_one_bead_params.npz
+mdtraj_select: 'name "C2''"'
+n_pix: 24
+voxel_size: 7.0
+optimization:
+  max_steps: 500
+  atol: 1e-3
+  rtol: 1e-3
+  initial_point:
+    variance: 1.0
+    weight: 40.0

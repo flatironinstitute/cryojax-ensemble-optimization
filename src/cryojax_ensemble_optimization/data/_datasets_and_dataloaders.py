@@ -1,7 +1,7 @@
 from typing import Dict, Optional
 
 import jax_dataloader as jdl
-from cryojax.data import (
+from cryojax.dataset import (
     RelionParticleStackDataset,
 )
 from jaxtyping import PRNGKeyArray
