@@ -19,7 +19,7 @@ class PolymerEnergyParams(TypedDict):
 
 DEFAULT_SPRING_PARAMS = dict(
     force_constant=1.0,
-    equilibrium_distance=11.08,
+    equilibrium_distance=14.0,
 )
 
 
