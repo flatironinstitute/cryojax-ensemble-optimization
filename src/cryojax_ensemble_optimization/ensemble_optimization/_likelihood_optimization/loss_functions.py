@@ -65,9 +65,10 @@ def _likelihood_sliced_wasserstein(
 
 def _wasserstein_1d_via_cdf(histograms_1: Array, histograms_2: Array, p: Int) -> Float:
     """
-    Compute all pairwise 1D Wasserstein-2^2 distances between two batches
-    of histograms via the cumulative distribution functions (CDFs).
-    Assumes spatial bins are equally spaced.
+    Compute the 1D Sliced Wasserstein-p^p distance.
+
+    Computes the Wasserstein distance between two sets of histograms via the c
+    umulative distribution functions (CDFs). Assumes spatial bins are equally spaced.
     Histograms are normalized to sum to 1 in this function.
 
     Args:
