@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Any, Optional, Tuple
+from typing import Optional, Tuple
 
 import cryojax.simulator as cxs
 import equinox as eqx
@@ -53,9 +53,28 @@ def likelihood_isotropic_gaussian(
     gaussian_variances: Float[Array, "n_atoms n_gaussians_per_atom"],
     dilated_mask: Optional[DilatedMask] = None,
     *,
-    constant_args: Tuple[Any] = (),
+    constant_args: float = 1.0,
     per_particle_args: float,
-) -> float:
+) -> Float:
+    """
+    Compute the likelihood of a walker given a Relion stack using an isotropic Gaussian
+    likelihood function.
+
+    **Arguments:**
+    - `walker`: A `walker` that is, a point cloud representing an atomic model.
+    - `relion_stack`: A cryojax `ParticleStack` object.
+    - `gaussian_amplitudes`: The amplitudes for the GMM atom potential.
+    - `gaussian_variances`: The variances for the GMM atom potential.
+    - `dilated_mask`: An optional dilated mask to apply to the computed image.
+    - `constant_args`: For this particular function the constant argument
+        is the sign of the observed image. For typical Relion stacks this is -1.0.
+        For data generated with cryoJAX this is 1.0.
+    - `per_particle_args`: The noise variance for the likelihood function.
+
+    **Returns:**
+    - The log likelihood of the walker given the Relion stack.
+
+    """
     noise_variance = per_particle_args
 
     image_model = _make_image_model(
@@ -73,7 +92,7 @@ def likelihood_isotropic_gaussian(
         mask2d = jnp.ones_like(computed_image)
 
     computed_image = computed_image * mask2d
-    observed_image = observed_image * mask2d
+    observed_image = constant_args * observed_image * mask2d
 
     scale, offset = _compute_optimal_scale_and_offset(computed_image, observed_image)
 
@@ -89,9 +108,25 @@ def likelihood_isotropic_gaussian_marginalized(
     gaussian_variances: Float[Array, "n_atoms n_gaussians_per_atom"],
     dilated_mask: Optional[DilatedMask] = None,
     *,
-    constant_args: ConstantT = (),
+    constant_args: float = 1.0,
     per_particle_args: PerParticleT = (),
-) -> float:
+) -> Float:
+    """
+    Compute the marginalized likelihood of a walker given a Relion stack using an
+    isotropic Gaussian likelihood function where the variance has been marginalized.
+    This is useful when the variance is not known or is not fixed.
+
+    **Arguments:**
+    - `walker`: A `walker` that is, a point cloud representing an atomic model.
+    - `relion_stack`: A cryojax `ParticleStack` object.
+    - `gaussian_amplitudes`: The amplitudes for the GMM atom potential.
+    - `gaussian_variances`: The variances for the GMM atom potential.
+    - `dilated_mask`: An optional dilated mask to apply to the computed image.
+    - `constant_args`: For this particular function the constant argument
+        is the sign of the observed image. For typical Relion stacks this is -1.0.
+        For data generated with cryoJAX this is 1.0.
+    - `per_particle_args`: not used in this function.
+    """
     image_model = _make_image_model(
         walker,
         relion_stack,
@@ -107,7 +142,7 @@ def likelihood_isotropic_gaussian_marginalized(
         mask2d = jnp.ones_like(computed_image)
 
     computed_image = computed_image * mask2d
-    observed_image = observed_image * mask2d
+    observed_image = constant_args * observed_image * mask2d
 
     scale, offset = _compute_optimal_scale_and_offset(computed_image, observed_image)
     n_pixels = computed_image.size
@@ -157,7 +192,7 @@ def _compute_likelihood_matrix(
         relion_stack,
         gaussian_amplitudes,
         gaussian_variances,
-        dilated_mask=dilated_mask,
+        dilated_mask,
         constant_args=constant_args,
         per_particle_args=per_particle_args,
     )

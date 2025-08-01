@@ -41,7 +41,7 @@ class ProjGradDescWeightOptimizer(AbstractEnsembleParameterOptimizer, strict=Tru
         image_to_walker_log_likelihood_fn: (
             Literal["iso_gaussian", "iso_gaussian_var_marg"] | LossFn
         ),
-        loss_fn_constant_args: ConstantT = (),
+        loss_fn_constant_args: Optional[ConstantT] = None,
         dilated_mask: Optional[DilatedMask] = None,
     ):
         self.n_steps = 1  # not used
@@ -62,14 +62,26 @@ class ProjGradDescWeightOptimizer(AbstractEnsembleParameterOptimizer, strict=Tru
 
         if image_to_walker_log_likelihood_fn == "iso_gaussian":
             self.image_to_walker_log_likelihood_fn = likelihood_isotropic_gaussian
+            self.loss_fn_constant_args = (
+                1.0 if loss_fn_constant_args is None else loss_fn_constant_args
+            )
+
         elif image_to_walker_log_likelihood_fn == "iso_gaussian_var_marg":
             self.image_to_walker_log_likelihood_fn = (
                 likelihood_isotropic_gaussian_marginalized
             )
-        else:
-            self.image_to_walker_log_likelihood_fn = image_to_walker_log_likelihood_fn
+            self.loss_fn_constant_args = (
+                1.0 if loss_fn_constant_args is None else loss_fn_constant_args
+            )
 
-        self.loss_fn_constant_args = loss_fn_constant_args
+        else:
+            assert callable(image_to_walker_log_likelihood_fn), (
+                "If `image_to_walker_log_likelihood_fn` is not 'iso_gaussian' or "
+                + "'iso_gaussian_var_marg', it must be a callable function."
+            )
+            self.image_to_walker_log_likelihood_fn = image_to_walker_log_likelihood_fn
+            self.loss_fn_constant_args = loss_fn_constant_args
+
         self.dilated_mask = dilated_mask
 
     @override
@@ -130,7 +142,7 @@ class SteepestDescWalkerPositionsOptimizer(
         image_to_walker_log_likelihood_fn: (
             Literal["iso_gaussian", "iso_gaussian_var_marg"] | LossFn
         ),
-        loss_fn_constant_args: ConstantT = (),
+        loss_fn_constant_args: Optional[ConstantT] = None,
         dilated_mask: Optional[DilatedMask] = None,
     ):
         assert n_steps > 0, "n_steps must be positive"
@@ -140,16 +152,25 @@ class SteepestDescWalkerPositionsOptimizer(
 
         if image_to_walker_log_likelihood_fn == "iso_gaussian":
             self.image_to_walker_log_likelihood_fn = likelihood_isotropic_gaussian
+            self.loss_fn_constant_args = (
+                1.0 if loss_fn_constant_args is None else loss_fn_constant_args
+            )
         elif image_to_walker_log_likelihood_fn == "iso_gaussian_var_marg":
             self.image_to_walker_log_likelihood_fn = (
                 likelihood_isotropic_gaussian_marginalized
             )
-
+            self.loss_fn_constant_args = (
+                1.0 if loss_fn_constant_args is None else loss_fn_constant_args
+            )
         else:
+            assert callable(image_to_walker_log_likelihood_fn), (
+                "If `image_to_walker_log_likelihood_fn` is not 'iso_gaussian' or "
+                + "'iso_gaussian_var_marg', it must be a callable function."
+            )
             self.image_to_walker_log_likelihood_fn = image_to_walker_log_likelihood_fn
+            self.loss_fn_constant_args = loss_fn_constant_args
 
         self.step_size = error_if_negative(step_size)
-        self.loss_fn_constant_args = loss_fn_constant_args
         self.dilated_mask = dilated_mask
 
     @override
@@ -179,8 +200,8 @@ class IterativeEnsembleLikelihoodOptimizer(AbstractEnsembleParameterOptimizer):
     gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]
     gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]
     image_to_walker_log_likelihood_fn: LossFn
-    dilated_mask: Optional[DilatedMask] = None
     loss_fn_constant_args: ConstantT
+    dilated_mask: Optional[DilatedMask] = None
 
     def __init__(
         self,
@@ -193,7 +214,7 @@ class IterativeEnsembleLikelihoodOptimizer(AbstractEnsembleParameterOptimizer):
             "iso_gaussian", "iso_gaussian_var_marg"
         ]
         | LossFn,
-        loss_fn_constant_args: ConstantT = (),
+        loss_fn_constant_args: Optional[ConstantT] = None,
         dilated_mask: Optional[DilatedMask] = None,
     ):
         self.step_size = step_size
@@ -204,9 +225,15 @@ class IterativeEnsembleLikelihoodOptimizer(AbstractEnsembleParameterOptimizer):
         self.gaussian_amplitudes = error_if_not_positive(gaussian_amplitudes)
         if image_to_walker_log_likelihood_fn == "iso_gaussian":
             self.image_to_walker_log_likelihood_fn = likelihood_isotropic_gaussian
+            self.loss_fn_constant_args = (
+                1.0 if loss_fn_constant_args is None else loss_fn_constant_args
+            )
         elif image_to_walker_log_likelihood_fn == "iso_gaussian_var_marg":
             self.image_to_walker_log_likelihood_fn = (
                 likelihood_isotropic_gaussian_marginalized
+            )
+            self.loss_fn_constant_args = (
+                1.0 if loss_fn_constant_args is None else loss_fn_constant_args
             )
         else:
             assert callable(image_to_walker_log_likelihood_fn), (
@@ -214,8 +241,8 @@ class IterativeEnsembleLikelihoodOptimizer(AbstractEnsembleParameterOptimizer):
                 + "'iso_gaussian_var_marg', it must be a callable function."
             )
             self.image_to_walker_log_likelihood_fn = image_to_walker_log_likelihood_fn
+            self.loss_fn_constant_args = loss_fn_constant_args
 
-        self.loss_fn_constant_args = loss_fn_constant_args
         self.dilated_mask = dilated_mask
 
     @override
@@ -313,7 +340,7 @@ def _compute_ensemble_gradients(
     dilated_mask: Optional[DilatedMask] = None,
     *,
     image_to_walker_log_likelihood_fn: LossFn,
-    loss_fn_constant_args: ConstantT = (),
+    loss_fn_constant_args: ConstantT,
     per_particle_args: PerParticleT,
 ) -> Tuple[
     Float[Array, "n_walkers n_atoms 3"],
@@ -362,7 +389,7 @@ def _compute_full_likelihood_matrix(
     dilated_mask: DilatedMask | None,
     *,
     image_to_walker_log_likelihood_fn: LossFn,
-    loss_fn_constant_args: ConstantT = (),
+    loss_fn_constant_args: ConstantT,
 ) -> Array:
     """
     Compute the full likelihood matrix for the given walkers and dataloader.
