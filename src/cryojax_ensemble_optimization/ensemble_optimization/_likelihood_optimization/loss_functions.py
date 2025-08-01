@@ -57,51 +57,51 @@ def _likelihood_sliced_wasserstein(
     projections_computed_neg = rotate_and_project(-relu(-rescaled_computed_image), angles)
     projections_observed_neg = rotate_and_project(-relu(-observed_image), angles)
     p = 2  # TODO: pass in param as 1 or 2
-    w_pos = wasserstein_1d_torch_pairwise(
-        projections_computed_pos, projections_observed_pos, p
-    )
-    w_neg = wasserstein_1d_torch_pairwise(
-        projections_computed_neg, projections_observed_neg, p
-    )
+    w_pos = _wasserstein_1d_via_cdf(projections_computed_pos, projections_observed_pos, p)
+    w_neg = _wasserstein_1d_via_cdf(projections_computed_neg, projections_observed_neg, p)
     sliced_wasserstein = w_pos + w_neg
     return sliced_wasserstein
 
 
-def wasserstein_1d_torch_pairwise(a, b, p):
+def _wasserstein_1d_via_cdf(histograms_1: Array, histograms_2: Array, p: Int) -> Float:
     """
-    Compute all pairwise 1D Wasserstein-2^2 distances between two batches of histograms.
+    Compute all pairwise 1D Wasserstein-2^2 distances between two batches
+    of histograms via the cumulative distribution functions (CDFs).
     Assumes spatial bins are equally spaced.
+    Histograms are normalized to sum to 1 in this function.
 
     Args:
-        a: (N1, n) tensor of histograms (each row sums to 1)
-        b: (N2, n) tensor of histograms
+        histograms_1: (n_hist, n_pix) tensor of histograms (each row will be sumed to 1)
+        histograms_2: (n_hist, n_pix) tensor of histograms
         eps: numerical stability value for normalization
 
     Returns:
-        w2_matrix: (N1, N2) tensor where w2_matrix[i, j] = W2^2(a[i], b[j])
+        wasserstein^p: scalar value of the Wasserstein^p distance.
 
     Notes:
     Eq 2 in https://openreview.net/forum?id=yPBtJ4JPwi
     """
     eps = 1e-8
     # Normalize histograms
-    a = a / (a.sum(axis=1, keepdims=True) + eps)  # (N1, n)
-    b = b / (b.sum(axis=1, keepdims=True) + eps)  # (N2, n)
+    histograms_1 = histograms_1 / (
+        histograms_1.sum(axis=1, keepdims=True) + eps
+    )  # (n_hist, n_pix)
+    histograms_2 = histograms_2 / (histograms_2.sum(axis=1, keepdims=True) + eps)
 
     # Compute CDFs
-    cdf_a = jnp.cumsum(a, axis=1)  # (N1, n)
-    cdf_b = jnp.cumsum(b, axis=1)  # (N2, n)
+    cdf_1 = jnp.cumsum(histograms_1, axis=1)  # (n_hist, n_pix)
+    cdf_2 = jnp.cumsum(histograms_2, axis=1)
 
     # Compute pairwise squared L2 distances between CDFs
-    diff = cdf_a - cdf_b
+    diff = cdf_1 - cdf_2
     if p == 1:
-        w = jnp.abs(diff).mean()
+        wasserstein_1d = jnp.abs(diff).mean()
     elif p == 2:
-        w = (diff**2).mean()
+        wasserstein_1d = (diff**2).mean()
     else:
         raise ValueError(f"Unsupported p value: {p}. Only p=1 and p=2 are supported.")
 
-    return w
+    return wasserstein_1d
 
 
 def _likelihood_isotropic_gaussian(
