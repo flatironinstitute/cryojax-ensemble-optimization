@@ -6,9 +6,20 @@ from jaxtyping import Array, Float, Int
 from .base_forcefield import AbstractForceField
 
 
+DEFAULT_POLYMER_PARAMS = dict(
+    force_constant=1.0,
+    equilibrium_distance=6.0,
+)
+
+
+class PolymerEnergyParams(TypedDict):
+    force_constant: float
+    equilibrium_distance: float
+
+
 DEFAULT_SPRING_PARAMS = dict(
     force_constant=1.0,
-    equilibrium_distance=11.08,
+    equilibrium_distance=14.0,
 )
 
 
@@ -36,6 +47,7 @@ class RNAForceField(AbstractForceField):
     def __init__(
         self,
         bond_pair_indices: Int[Array, "n_pairs 2"],
+        polymer_energy_params: PolymerEnergyParams = DEFAULT_POLYMER_PARAMS,
         spring_energy_params: SpringEnergyParams = DEFAULT_SPRING_PARAMS,
         soft_sphere_energy_params: SoftSphereEnergyParams = DEFAULT_SOFT_SPHERE_PARAMS,
     ):
@@ -47,10 +59,14 @@ class RNAForceField(AbstractForceField):
         soft_sphere_energy_params = DEFAULT_SOFT_SPHERE_PARAMS.copy()
         soft_sphere_energy_params.update(soft_sphere_energy_params)
 
+        polymer_energy_params = DEFAULT_POLYMER_PARAMS.copy()
+        polymer_energy_params.update(polymer_energy_params)
+
         self.energy_fn_args = (
             bond_pair_indices,
             spring_energy_params,
             soft_sphere_energy_params,
+            polymer_energy_params,
         )
 
     def __call__(self, coordinates: Float[Array, "n_atoms 3"]) -> float:
@@ -62,6 +78,7 @@ def _compute_rna_energy(
     bond_pair_indices: Int[Array, "n_pairs 2"],
     spring_energy_params: SpringEnergyParams,
     soft_sphere_energy_params: SoftSphereEnergyParams,
+    polymer_energy_params: PolymerEnergyParams,
 ) -> float:
     distances = _compute_pairwise_distances(positions, bond_pair_indices)
     spring_energy = spring_energy_params["force_constant"] * _pairwise_distance_energy(
@@ -75,7 +92,11 @@ def _compute_rna_energy(
         interaction_energy_scale=soft_sphere_energy_params["interaction_energy_scale"],
         interaction_stiffness=soft_sphere_energy_params["interaction_stiffness"],
     )
-    return spring_energy + soft_sphere_energy
+    polymer_energy = polymer_energy_params["force_constant"] * _polymer_distance_energy(
+        positions,
+        equilibrium_distance=polymer_energy_params["equilibrium_distance"],
+    )
+    return spring_energy + soft_sphere_energy + polymer_energy
 
 
 def _compute_pairwise_distances(
@@ -133,3 +154,13 @@ def _compute_soft_sphere_energy(
         * (1.0 - pairwise_distances) ** interaction_stiffness,
         0.0,
     ).sum()
+
+
+def _polymer_distance_energy(
+    positions: Float[Array, "n_atoms 3"],
+    equilibrium_distance: float,
+    force_constant: float = 1.0,
+) -> float:
+    distances = jnp.linalg.norm(positions[1:] - positions[:-1], axis=1)
+
+    return force_constant * jnp.sum((distances - equilibrium_distance) ** 2)
