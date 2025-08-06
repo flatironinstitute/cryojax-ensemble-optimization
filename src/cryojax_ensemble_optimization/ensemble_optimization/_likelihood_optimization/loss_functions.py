@@ -13,35 +13,80 @@ from ..._custom_types import ConstantT, LossFn, ParticleStackInfo, PerParticleT
 from ...simulator._dilated_mask import DilatedMask
 
 
-def _likelihood_sliced_wasserstein(
-    computed_image: Float[Array, "n_pixels n_pixels"],
-    observed_image: Float[Array, "n_pixels n_pixels"],
-    n_projections: Int,
+def _rotate_and_project(image, angles):
+    image_channel_one = jnp.expand_dims(image, -1)
+    projected_image = jax.vmap(
+        lambda angle: jnp.sum(
+            rotate(image_channel_one, angle) * image_channel_one, axis=1
+        )
+    )(angles)
+    return jnp.squeeze(projected_image, -1)
+
+
+def likelihood_sliced_wasserstein(
+    walker: Float[Array, "n_atoms 3"],
+    relion_stack: ParticleStackInfo,
+    gaussian_amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
+    gaussian_variances: Float[Array, "n_atoms n_gaussians_per_atom"],
+    dilated_mask: Optional[DilatedMask] = None,
+    *,
+    constant_args: Tuple[Int, Int] = (100, 2),
+    per_particle_args: Tuple = (),
+    # n_projections: Int,
 ) -> Float:
     """
     Compute the likelihood using the sliced Wasserstein distance.
+
+    **Arguments:**
+    - `walker`: A `walker` that is, a point cloud representing an atomic model.
+    - `relion_stack`: A cryojax `ParticleStack` object.
+    - `gaussian_amplitudes`: The amplitudes for the GMM atom potential.
+    - `gaussian_variances`: The variances for the GMM atom potential.
+    - `dilated_mask`: An optional dilated mask to apply to the computed image.
+    - `constant_args`: A tuple containing constant arguments for the function.
+        For this function these are the number of projections and the p-norm to use.
+        - n_projections: int, default 100
+        - p_norm: int, default 2
+    - `per_particle_args`: Not used in this function.
     """
+    n_projections, p_norm = constant_args
+
+    image_model = _make_image_model(
+        walker,
+        relion_stack,
+        gaussian_amplitudes,
+        gaussian_variances,
+    )
+    computed_image = image_model.simulate()
+    observed_image = relion_stack["images"]
+
+    if dilated_mask is not None:
+        mask2d = dilated_mask.project(relion_stack["parameters"]["pose"])
+    else:
+        mask2d = jnp.ones_like(computed_image)
+
+    computed_image = computed_image * mask2d
+    observed_image = n_projections * observed_image * mask2d
     scale, bias = _compute_optimal_scale_and_offset(computed_image, observed_image)
+
     angles = jnp.linspace(0, jnp.pi, n_projections, endpoint=False)
-
-    def rotate_and_project(image, angles):
-        image_channel_one = jnp.expand_dims(image, -1)
-        projected_image = jax.vmap(
-            lambda angle: jnp.sum(
-                rotate(image_channel_one, angle) * image_channel_one, axis=1
-            )
-        )(angles)
-        return jnp.squeeze(projected_image, -1)
-
     rescaled_computed_image = scale * computed_image + bias
-    projections_computed_pos = rotate_and_project(relu(rescaled_computed_image), angles)
-    projections_observed_pos = rotate_and_project(relu(observed_image), angles)
-    projections_computed_neg = rotate_and_project(-relu(-rescaled_computed_image), angles)
-    projections_observed_neg = rotate_and_project(-relu(-observed_image), angles)
-    p = 2  # TODO: pass in param as 1 or 2
-    w_pos = _wasserstein_1d_via_cdf(projections_computed_pos, projections_observed_pos, p)
-    w_neg = _wasserstein_1d_via_cdf(projections_computed_neg, projections_observed_neg, p)
+
+    projections_computed_pos = _rotate_and_project(relu(rescaled_computed_image), angles)
+    projections_observed_pos = _rotate_and_project(relu(observed_image), angles)
+    projections_computed_neg = _rotate_and_project(
+        -relu(-rescaled_computed_image), angles
+    )
+    projections_observed_neg = _rotate_and_project(-relu(-observed_image), angles)
+
+    w_pos = _wasserstein_1d_via_cdf(
+        projections_computed_pos, projections_observed_pos, p_norm
+    )
+    w_neg = _wasserstein_1d_via_cdf(
+        projections_computed_neg, projections_observed_neg, p_norm
+    )
     sliced_wasserstein = w_pos + w_neg
+
     return sliced_wasserstein
 
 
