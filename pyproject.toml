@@ -32,6 +32,8 @@ dependencies = [
     "mdtraj",
     "tqdm",
     "cryojax",
+    "openmm",
+    "dm-pix",
 ]
 dynamic = ["version"]
 
