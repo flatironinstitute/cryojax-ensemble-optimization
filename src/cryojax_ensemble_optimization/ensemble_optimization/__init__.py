@@ -4,6 +4,9 @@ from ._likelihood_optimization import (
     compute_neg_log_likelihood as compute_neg_log_likelihood,
     compute_neg_log_likelihood_from_weights as compute_neg_log_likelihood_from_weights,
     IterativeEnsembleLikelihoodOptimizer as IterativeEnsembleLikelihoodOptimizer,
+    likelihood_isotropic_gaussian as likelihood_isotropic_gaussian,
+    likelihood_isotropic_gaussian_marginalized as likelihood_isotropic_gaussian_marginalized,  # noqa: E501
+    likelihood_sliced_wasserstein as likelihood_sliced_wasserstein,
     ProjGradDescWeightOptimizer as ProjGradDescWeightOptimizer,
     SteepestDescWalkerPositionsOptimizer as SteepestDescWalkerPositionsOptimizer,
 )

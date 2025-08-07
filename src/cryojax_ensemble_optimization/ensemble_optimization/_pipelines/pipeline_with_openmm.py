@@ -127,6 +127,8 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
                 self.likelihood_optimizer.gaussian_amplitudes,
                 self.likelihood_optimizer.gaussian_variances,
                 self.likelihood_optimizer.image_to_walker_log_likelihood_fn,
+                self.likelihood_optimizer.loss_fn_constant_args,
+                self.likelihood_optimizer.dilated_mask,
             )
             walkers, weights = self.postprocess(
                 walkers, weights, dataloader, weight_optimizer

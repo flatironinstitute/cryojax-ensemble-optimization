@@ -1,96 +1,299 @@
 from functools import partial
-from typing import Dict
+from typing import Optional, Tuple
 
 import cryojax.simulator as cxs
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from jaxtyping import Array, Float
+from dm_pix import rotate
+from jax.nn import relu
+from jaxtyping import Array, Float, Int
 
-from ..._custom_types import Image, LossFn, PerParticleArgs
-
-
-def _likelihood_isotropic_gaussian(
-    computed_image: Image,
-    observed_image: Image,
-    noise_variance: Float,
-) -> Float:
-    cc = jnp.mean(computed_image**2)
-    co = jnp.mean(observed_image * computed_image)
-    c = jnp.mean(computed_image)
-    o = jnp.mean(observed_image)
-
-    scale = (co - c * o) / (cc - c**2)
-    bias = o - scale * c
-
-    return -jnp.sum((scale * computed_image - observed_image + bias) ** 2) / (
-        2 * noise_variance
-    )
+from ..._custom_types import ConstantT, LossFn, ParticleStackInfo, PerParticleT
+from ...simulator._dilated_mask import DilatedMask
 
 
-def _likelihood_isotropic_gaussian_marginalized(
-    computed_image: Float[Array, "n_pixels n_pixels"],
-    observed_image: Float[Array, "n_pixels n_pixels"],
-    _=None,
-) -> Float:
-    cc = jnp.mean(computed_image**2)
-    co = jnp.mean(observed_image * computed_image)
-    c = jnp.mean(computed_image)
-    o = jnp.mean(observed_image)
-
-    scale = (co - c * o) / (cc - c**2)
-    bias = o - scale * c
-    n_pixels = computed_image.size
-
-    return (2 - n_pixels) * jnp.log(
-        jnp.linalg.norm(scale * computed_image - observed_image + bias)
-    )
+def _rotate_and_project(image, angles):
+    image_channel_one = jnp.expand_dims(image, -1)
+    projected_image = jax.vmap(
+        lambda angle: jnp.sum(
+            rotate(image_channel_one, angle) * image_channel_one, axis=1
+        )
+    )(angles)
+    return jnp.squeeze(projected_image, -1)
 
 
-def _compute_likelihood_image_and_walker(
+def likelihood_sliced_wasserstein(
     walker: Float[Array, "n_atoms 3"],
-    relion_stack: Dict,
+    relion_stack: ParticleStackInfo,
     gaussian_amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
     gaussian_variances: Float[Array, "n_atoms n_gaussians_per_atom"],
-    image_to_walker_log_likelihood_fn: LossFn,
-    per_particle_args: PerParticleArgs,
+    dilated_mask: Optional[DilatedMask] = None,
+    *,
+    constant_args: Tuple[Int, Int] = (18, 2),
+    per_particle_args: Tuple = (),
+    # n_projections: Int,
 ) -> Float:
+    """
+    Compute the likelihood using the sliced Wasserstein distance.
+
+    **Arguments:**
+    - `walker`: A `walker` that is, a point cloud representing an atomic model.
+    - `relion_stack`: A cryojax `ParticleStack` object.
+    - `gaussian_amplitudes`: The amplitudes for the GMM atom potential.
+    - `gaussian_variances`: The variances for the GMM atom potential.
+    - `dilated_mask`: An optional dilated mask to apply to the computed image.
+    - `constant_args`: A tuple containing constant arguments for the function.
+        For this function these are the number of projections and the p-norm to use.
+        - n_projections: int, default 18
+        - p_norm: int, default 2
+    - `per_particle_args`: Not used in this function.
+    """
+    n_projections, p_norm = constant_args
+
+    image_model = _make_image_model(
+        walker,
+        relion_stack,
+        gaussian_amplitudes,
+        gaussian_variances,
+    )
+    computed_image = image_model.simulate()
+    observed_image = relion_stack["images"]
+    # jax.debug.print("Variance: {variance}", variance=jnp.var(computed_image))
+
+    if dilated_mask is not None:
+        mask2d = dilated_mask.project(relion_stack["parameters"]["pose"])
+    else:
+        mask2d = jnp.ones_like(computed_image)
+
+    computed_image = computed_image * mask2d
+    observed_image = observed_image * mask2d
+    scale, offset = _compute_optimal_scale_and_offset(computed_image, observed_image)
+    # jax.debug.print("Computed scale: {scale}, bias: {bias}", scale=scale, bias=offset)
+    # scale = 1.0
+    # offset = 0.0
+
+    angles = jnp.linspace(0, jnp.pi, n_projections, endpoint=False)
+    rescaled_computed_image = scale * computed_image + offset
+
+    projections_computed_pos = _rotate_and_project(relu(rescaled_computed_image), angles)
+    projections_observed_pos = _rotate_and_project(relu(observed_image), angles)
+    projections_computed_neg = _rotate_and_project(
+        -relu(-rescaled_computed_image), angles
+    )
+    projections_observed_neg = _rotate_and_project(-relu(-observed_image), angles)
+
+    w_pos = _wasserstein_1d_via_cdf(
+        projections_computed_pos, projections_observed_pos, p_norm
+    )
+    w_neg = _wasserstein_1d_via_cdf(
+        projections_computed_neg, projections_observed_neg, p_norm
+    )
+    sliced_wasserstein = w_pos + w_neg
+
+    return sliced_wasserstein
+
+
+def _wasserstein_1d_via_cdf(histograms_1: Array, histograms_2: Array, p: Int) -> Float:
+    """
+    Compute the 1D Sliced Wasserstein-p^p distance.
+
+    Computes the Wasserstein distance between two sets of histograms via the c
+    umulative distribution functions (CDFs). Assumes spatial bins are equally spaced.
+    Histograms are normalized to sum to 1 in this function.
+
+    Args:
+        histograms_1: (n_hist, n_pix) tensor of histograms (each row will be sumed to 1)
+        histograms_2: (n_hist, n_pix) tensor of histograms
+        eps: numerical stability value for normalization
+
+    Returns:
+        wasserstein^p: scalar value of the Wasserstein^p distance.
+
+    Notes:
+    Eq 2 in https://openreview.net/forum?id=yPBtJ4JPwi
+    """
+    eps = 1e-8
+    # Normalize histograms
+    histograms_1 = histograms_1 / (
+        histograms_1.sum(axis=1, keepdims=True) + eps
+    )  # (n_hist, n_pix)
+    histograms_2 = histograms_2 / (histograms_2.sum(axis=1, keepdims=True) + eps)
+
+    # Compute CDFs
+    cdf_1 = jnp.cumsum(histograms_1, axis=1)  # (n_hist, n_pix)
+    cdf_2 = jnp.cumsum(histograms_2, axis=1)
+
+    # Compute pairwise squared L2 distances between CDFs
+    diff = cdf_1 - cdf_2
+    if p == 1:
+        wasserstein_1d = jnp.abs(diff).mean()
+    elif p == 2:
+        wasserstein_1d = (diff**2).mean()
+    else:
+        raise ValueError(f"Unsupported p value: {p}. Only p=1 and p=2 are supported.")
+
+    return wasserstein_1d
+
+
+def _make_image_model(
+    walker: Float[Array, "n_atoms 3"],
+    relion_stack: ParticleStackInfo,
+    gaussian_amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
+    gaussian_variances: Float[Array, "n_atoms n_gaussians_per_atom"],
+) -> cxs.AbstractImageModel:
     potential = cxs.GaussianMixtureAtomicPotential(
         walker,
         gaussian_amplitudes,
         gaussian_variances,
     )
 
-    image_model = cxs.make_image_model(
+    return cxs.make_image_model(
         potential,
         relion_stack["parameters"]["config"],
         relion_stack["parameters"]["pose"],
         relion_stack["parameters"]["transfer_theory"],
-    )
-
-    computed_image = image_model.simulate(outputs_real_space=True)
-
-    return image_to_walker_log_likelihood_fn(
-        computed_image,
-        relion_stack["images"],
-        per_particle_args,
+        normalizes_signal=True,
+        physical_units=False,
     )
 
 
-@eqx.filter_jit
-@partial(eqx.filter_vmap, in_axes=(0, None, 0, 0, None, None), out_axes=0)
+def _compute_optimal_scale_and_offset(
+    target_image: Float[Array, "n_pixels n_pixels"],
+    ref_image: Float[Array, "n_pixels n_pixels"],
+) -> Tuple[Float, Float]:
+    cc = jnp.mean(target_image**2)
+    co = jnp.mean(ref_image * target_image)
+    c = jnp.mean(target_image)
+    o = jnp.mean(ref_image)
+
+    scale = (co - c * o) / (cc - c**2)
+    offset = o - scale * c
+
+    return scale, offset
+
+
+def likelihood_isotropic_gaussian(
+    walker: Float[Array, "n_atoms 3"],
+    relion_stack: ParticleStackInfo,
+    gaussian_amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
+    gaussian_variances: Float[Array, "n_atoms n_gaussians_per_atom"],
+    dilated_mask: Optional[DilatedMask] = None,
+    *,
+    constant_args: float = 1.0,
+    per_particle_args: float,
+) -> Float:
+    """
+    Compute the likelihood of a walker given a Relion stack using an isotropic Gaussian
+    likelihood function.
+
+    **Arguments:**
+    - `walker`: A `walker` that is, a point cloud representing an atomic model.
+    - `relion_stack`: A cryojax `ParticleStack` object.
+    - `gaussian_amplitudes`: The amplitudes for the GMM atom potential.
+    - `gaussian_variances`: The variances for the GMM atom potential.
+    - `dilated_mask`: An optional dilated mask to apply to the computed image.
+    - `constant_args`: For this particular function the constant argument
+        is the sign of the observed image. For typical Relion stacks this is -1.0.
+        For data generated with cryoJAX this is 1.0.
+    - `per_particle_args`: The noise variance for the likelihood function.
+
+    **Returns:**
+    - The log likelihood of the walker given the Relion stack.
+
+    """
+    noise_variance = per_particle_args
+
+    image_model = _make_image_model(
+        walker,
+        relion_stack,
+        gaussian_amplitudes,
+        gaussian_variances,
+    )
+    computed_image = image_model.simulate()
+    observed_image = relion_stack["images"]
+
+    if dilated_mask is not None:
+        mask2d = dilated_mask.project(relion_stack["parameters"]["pose"])
+    else:
+        mask2d = jnp.ones_like(computed_image)
+
+    computed_image = computed_image * mask2d
+    observed_image = constant_args * observed_image * mask2d
+
+    scale, offset = _compute_optimal_scale_and_offset(computed_image, observed_image)
+
+    return -jnp.sum((scale * computed_image - observed_image + offset) ** 2) / (
+        2 * noise_variance
+    )
+
+
+def likelihood_isotropic_gaussian_marginalized(
+    walker: Float[Array, "n_atoms 3"],
+    relion_stack: ParticleStackInfo,
+    gaussian_amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
+    gaussian_variances: Float[Array, "n_atoms n_gaussians_per_atom"],
+    dilated_mask: Optional[DilatedMask] = None,
+    *,
+    constant_args: float = 1.0,
+    per_particle_args: PerParticleT = (),
+) -> Float:
+    """
+    Compute the marginalized likelihood of a walker given a Relion stack using an
+    isotropic Gaussian likelihood function where the variance has been marginalized.
+    This is useful when the variance is not known or is not fixed.
+
+    **Arguments:**
+    - `walker`: A `walker` that is, a point cloud representing an atomic model.
+    - `relion_stack`: A cryojax `ParticleStack` object.
+    - `gaussian_amplitudes`: The amplitudes for the GMM atom potential.
+    - `gaussian_variances`: The variances for the GMM atom potential.
+    - `dilated_mask`: An optional dilated mask to apply to the computed image.
+    - `constant_args`: For this particular function the constant argument
+        is the sign of the observed image. For typical Relion stacks this is -1.0.
+        For data generated with cryoJAX this is 1.0.
+    - `per_particle_args`: not used in this function.
+    """
+    image_model = _make_image_model(
+        walker,
+        relion_stack,
+        gaussian_amplitudes,
+        gaussian_variances,
+    )
+    computed_image = image_model.simulate()
+    observed_image = relion_stack["images"]
+
+    if dilated_mask is not None:
+        mask2d = dilated_mask.project(relion_stack["parameters"]["pose"])
+    else:
+        mask2d = jnp.ones_like(computed_image)
+
+    computed_image = computed_image * mask2d
+    observed_image = constant_args * observed_image * mask2d
+
+    scale, offset = _compute_optimal_scale_and_offset(computed_image, observed_image)
+    n_pixels = computed_image.size
+
+    return (2 - n_pixels) * jnp.log(
+        jnp.linalg.norm(scale * computed_image - observed_image + offset)
+    )
+
+
+@partial(eqx.filter_vmap, in_axes=(0, None, 0, 0, None, None, None, None), out_axes=0)
 @partial(
     eqx.filter_vmap,
-    in_axes=(None, eqx.if_array(0), None, None, None, eqx.if_array(0)),
+    in_axes=(None, eqx.if_array(0), None, None, None, None, None, eqx.if_array(0)),
     out_axes=0,
 )
 def _compute_likelihood_matrix(
     ensemble_walkers: Float[Array, " n_atoms 3"],
-    relion_stack: Dict,
+    relion_stack: ParticleStackInfo,
     gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     image_to_walker_log_likelihood_fn: LossFn,
-    per_particle_args: PerParticleArgs,
+    dilated_mask: DilatedMask | None,
+    constant_args: ConstantT,
+    per_particle_args: PerParticleT,
 ) -> Float[Array, "n_images n_walkers"]:
     """
     Compute the likelihood matrix for a set of walkers and a Relion stack.
@@ -111,23 +314,27 @@ def _compute_likelihood_matrix(
         and x_m is the m-th walker (atomic model).
     """
 
-    return _compute_likelihood_image_and_walker(
+    return image_to_walker_log_likelihood_fn(
         ensemble_walkers,
         relion_stack,
         gaussian_amplitudes,
         gaussian_variances,
-        image_to_walker_log_likelihood_fn,
-        per_particle_args,
+        dilated_mask,
+        constant_args=constant_args,
+        per_particle_args=per_particle_args,
     )
 
 
 def compute_likelihood_matrix(
     ensemble_walkers: Float[Array, "n_walkers n_atoms 3"],
-    relion_stack: Dict,
+    relion_stack: ParticleStackInfo,
     gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     image_to_walker_log_likelihood_fn: LossFn,
-    per_particle_args: PerParticleArgs,
+    dilated_mask: Optional[DilatedMask] = None,
+    *,
+    constant_args: ConstantT,
+    per_particle_args: PerParticleT,
 ) -> Float[Array, "n_images n_walkers"]:
     """
     Compute the likelihood matrix for a set of walkers and a Relion stack.
@@ -154,6 +361,8 @@ def compute_likelihood_matrix(
         gaussian_amplitudes,
         gaussian_variances,
         image_to_walker_log_likelihood_fn,
+        dilated_mask,
+        constant_args,
         per_particle_args,
     ).T  # order of vmaps!
 
@@ -188,11 +397,14 @@ def compute_neg_log_likelihood_from_weights(
 def compute_neg_log_likelihood(
     walkers: Float[Array, "n_walkers n_atoms 3"],
     weights: Float[Array, " n_walkers"],
-    relion_stack: Dict,
+    relion_stack: ParticleStackInfo,
     gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     image_to_walker_log_likelihood_fn: LossFn,
-    per_particle_args: PerParticleArgs,
+    dilated_mask: Optional[DilatedMask] = None,
+    *,
+    constant_args: ConstantT,
+    per_particle_args: PerParticleT,
 ) -> Float:
     """
     Compute the negative log likelihood from the walkers and weights. The likelihood is
@@ -219,6 +431,8 @@ def compute_neg_log_likelihood(
         gaussian_amplitudes,
         gaussian_variances,
         image_to_walker_log_likelihood_fn,
-        per_particle_args,
+        dilated_mask,
+        constant_args=constant_args,
+        per_particle_args=per_particle_args,
     )
     return compute_neg_log_likelihood_from_weights(weights, lklhood_matrix)
