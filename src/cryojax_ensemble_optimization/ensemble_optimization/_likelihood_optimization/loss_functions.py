@@ -30,7 +30,7 @@ def likelihood_sliced_wasserstein(
     gaussian_variances: Float[Array, "n_atoms n_gaussians_per_atom"],
     dilated_mask: Optional[DilatedMask] = None,
     *,
-    constant_args: Tuple[Int, Int] = (100, 2),
+    constant_args: Tuple[Int, Int] = (18, 2),
     per_particle_args: Tuple = (),
     # n_projections: Int,
 ) -> Float:
@@ -45,7 +45,7 @@ def likelihood_sliced_wasserstein(
     - `dilated_mask`: An optional dilated mask to apply to the computed image.
     - `constant_args`: A tuple containing constant arguments for the function.
         For this function these are the number of projections and the p-norm to use.
-        - n_projections: int, default 100
+        - n_projections: int, default 18
         - p_norm: int, default 2
     - `per_particle_args`: Not used in this function.
     """
@@ -59,6 +59,7 @@ def likelihood_sliced_wasserstein(
     )
     computed_image = image_model.simulate()
     observed_image = relion_stack["images"]
+    # jax.debug.print("Variance: {variance}", variance=jnp.var(computed_image))
 
     if dilated_mask is not None:
         mask2d = dilated_mask.project(relion_stack["parameters"]["pose"])
@@ -66,11 +67,14 @@ def likelihood_sliced_wasserstein(
         mask2d = jnp.ones_like(computed_image)
 
     computed_image = computed_image * mask2d
-    observed_image = n_projections * observed_image * mask2d
-    scale, bias = _compute_optimal_scale_and_offset(computed_image, observed_image)
+    observed_image = observed_image * mask2d
+    scale, offset = _compute_optimal_scale_and_offset(computed_image, observed_image)
+    # jax.debug.print("Computed scale: {scale}, bias: {bias}", scale=scale, bias=offset)
+    # scale = 1.0
+    # offset = 0.0
 
     angles = jnp.linspace(0, jnp.pi, n_projections, endpoint=False)
-    rescaled_computed_image = scale * computed_image + bias
+    rescaled_computed_image = scale * computed_image + offset
 
     projections_computed_pos = _rotate_and_project(relu(rescaled_computed_image), angles)
     projections_observed_pos = _rotate_and_project(relu(observed_image), angles)
@@ -137,7 +141,7 @@ def _make_image_model(
     relion_stack: ParticleStackInfo,
     gaussian_amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
     gaussian_variances: Float[Array, "n_atoms n_gaussians_per_atom"],
-) -> cxs.ContrastImageModel:
+) -> cxs.AbstractImageModel:
     potential = cxs.GaussianMixtureAtomicPotential(
         walker,
         gaussian_amplitudes,
@@ -149,6 +153,8 @@ def _make_image_model(
         relion_stack["parameters"]["config"],
         relion_stack["parameters"]["pose"],
         relion_stack["parameters"]["transfer_theory"],
+        normalizes_signal=True,
+        physical_units=False,
     )
 
 
