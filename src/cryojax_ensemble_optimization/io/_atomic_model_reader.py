@@ -133,10 +133,11 @@ def _read_atomic_models_from_pdb(
         atom_positions = mdtraj.load(
             atomic_models_filenames[i],
         )
-        align_indices = atom_positions.topology.select("name CA")
 
         atom_positions = atom_positions.superpose(
-            atoms_for_alignment, frame=0, atom_indices=align_indices
+            atoms_for_alignment,
+            frame=0,
+            atom_indices=atom_positions.topology.select("name CA"),
         )
 
         atomic_models_scattering_params[i] = {

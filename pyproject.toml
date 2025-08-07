@@ -9,7 +9,7 @@ authors = [
 
 description = "My package description"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 keywords = ["CryoEM", "Molecular Dynamics", "single particle"]
 license = "MIT"
 classifiers = [
@@ -32,6 +32,8 @@ dependencies = [
     "mdtraj",
     "tqdm",
     "cryojax",
+    "openmm",
+    "dm-pix",
 ]
 dynamic = ["version"]
 
