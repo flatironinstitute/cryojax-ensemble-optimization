@@ -1,7 +1,13 @@
+import cryojax.simulator as cxs
 import equinox as eqx
 import jax
 import jax.numpy as jnp
+from jaxtyping import Array, Float
 
+from ..._custom_types import ParticleStackInfo
+from .._likelihood_optimization._loss_functions.common_functions import (
+    compute_optimal_scale_and_offset,
+)
 from .geometry import (
     getbestneighbors_base_SO3,
     getbestneighbors_next_SO3,
@@ -9,8 +15,43 @@ from .geometry import (
 )
 
 
+@eqx.filter_vmap(in_axes=(0, None, None))
+def loss_for_grid_search(
+    quat: Float[Array, "4"],
+    potential: cxs.AbstractPotentialRepresentation,
+    relion_stack: ParticleStackInfo,
+) -> Float:
+    pose = cxs.QuaternionPose(
+        offset_x_in_angstroms=0.0, offset_y_in_angstroms=0.0, wxyz=quat
+    )
+
+    computed_image = cxs.make_image_model(
+        potential,
+        relion_stack["parameters"]["config"],
+        pose,
+        relion_stack["parameters"]["transfer_theory"],
+        physical_units=False,
+        normalizes_signal=True,
+    ).simulate()
+
+    observed_image = relion_stack["images"]
+
+    scale, offset = compute_optimal_scale_and_offset(
+        computed_image,
+        observed_image,
+    )
+
+    return jnp.sum((scale * computed_image + offset - observed_image) ** 2)
+
+
 @eqx.filter_jit
-def global_SO3_hier_search(lossfn, base_grid=1, n_rounds=5, N_candidates=40):
+def global_SO3_hier_search(
+    potential: cxs.AbstractPotentialRepresentation,
+    relion_stack: ParticleStackInfo,
+    base_grid: int,
+    n_rounds: int,
+    N_candidates: int,
+) -> cxs.QuaternionPose:
     """
     Perform a global search on the SO3 grid using a hierarchical approach.
 
@@ -29,23 +70,22 @@ def global_SO3_hier_search(lossfn, base_grid=1, n_rounds=5, N_candidates=40):
     def body_fun(i, val):
         allnb_quats, allnb_s2s1 = val
 
-        loss = lossfn(allnb_quats)
+        loss = loss_for_grid_search(allnb_quats, potential, relion_stack)
         allnb_quats, allnb_s2s1 = getbestneighbors_next_SO3(
             loss, allnb_quats, allnb_s2s1, curr_res=base_grid + i, N=N_candidates
         )
         return (allnb_quats, allnb_s2s1)
 
-
     # Initialize the base SO3 grid
     base_quats = grid_SO3(base_grid)
 
     # Compute the initial loss for the base grid
-    loss = lossfn(base_quats)  # numpy array
+    loss = loss_for_grid_search(base_quats, potential, relion_stack)  # numpy array
 
     if n_rounds <= 0:
         # If no rounds are to be performed, return the base quaternions and their loss
         best_index = jnp.argmin(loss)
-        return base_quats[best_index], loss[best_index]
+        return cxs.QuaternionPose(wxyz=base_quats[best_index])
 
     else:
         allnb_quats, allnb_s2s1 = getbestneighbors_base_SO3(
@@ -60,14 +100,13 @@ def global_SO3_hier_search(lossfn, base_grid=1, n_rounds=5, N_candidates=40):
             None,
         )
 
-        loss = lossfn(allnb_quats)
+        loss = loss_for_grid_search(allnb_quats, potential, relion_stack)
 
         # Find the best quaternion and its associated loss
         best_index = jnp.argmin(loss)
         best_quats = allnb_quats[best_index]
-        best_loss = loss[best_index]
 
-        return best_quats, best_loss
+        return cxs.QuaternionPose(wxyz=best_quats)
 
 
 def local_SO3_hier_search(lossfn, base_grid=1, n_rounds=5, N_candidates=40):

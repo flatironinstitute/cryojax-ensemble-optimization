@@ -124,11 +124,8 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
         if self.runs_postprocessing:
             # print("Running postprocessing...")
             weight_optimizer = ProjGradDescWeightOptimizer(
-                self.likelihood_optimizer.gaussian_amplitudes,
-                self.likelihood_optimizer.gaussian_variances,
-                self.likelihood_optimizer.image_to_walker_log_likelihood_fn,
-                self.likelihood_optimizer.loss_fn_constant_args,
-                self.likelihood_optimizer.dilated_mask,
+                n_steps=500,
+                likelihood_fn=self.likelihood_optimizer.likelihood_fn,
             )
             walkers, weights = self.postprocess(
                 walkers, weights, dataloader, weight_optimizer

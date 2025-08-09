@@ -15,6 +15,7 @@ from ..ensemble_optimization import (
     EnsembleOptimizationPipeline,
     EnsembleSteeredMDSimulator,
     IterativeEnsembleLikelihoodOptimizer,
+    LikelihoodOptimalWeightsFn,
     SteeredMDSimulator,
 )
 from ..internal._config_validators import EnsOptMDConfig
@@ -78,14 +79,18 @@ def construct_md_projector(config, restrain_atom_list):
 
 
 def construct_likelihood_optimizer(config, gaussian_amplitudes, gaussian_variances):
+    likelihood_fn = LikelihoodOptimalWeightsFn(
+        gaussian_amplitudes,
+        gaussian_variances,
+        config["likelihood_optimizer_params"]["image_to_walker_log_likelihood_fn"],
+        dilated_mask=None,
+        estimates_pose=False,
+    )
     return IterativeEnsembleLikelihoodOptimizer(
         step_size=config["likelihood_optimizer_params"]["step_size"],
         n_steps=config["likelihood_optimizer_params"]["n_steps"],
-        gaussian_amplitudes=gaussian_amplitudes,
-        gaussian_variances=gaussian_variances,
-        image_to_walker_log_likelihood_fn=config["likelihood_optimizer_params"][
-            "image_to_walker_log_likelihood_fn"
-        ],
+        n_batches_per_step=config["likelihood_optimizer_params"]["n_batches_per_step"],
+        likelihood_fn=likelihood_fn,
     )
 
 
