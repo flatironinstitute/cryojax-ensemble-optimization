@@ -2,87 +2,36 @@
 Weight and position optimizers for ensemble refinement.
 """
 
-from typing import Optional, Tuple
-from typing_extensions import Literal, override
+from typing import Tuple
+from typing_extensions import override
 
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax_dataloader as jdl
-from cryojax.internal import error_if_negative, error_if_not_positive
-from jaxopt import ProjectedGradient
-from jaxopt.projection import projection_simplex
+from cryojax.internal import error_if_not_positive
 from jaxtyping import Array, Float, Int
 
-from ..._custom_types import ConstantT, LossFn, ParticleStackInfo, PerParticleT
-from ...simulator._dilated_mask import DilatedMask
-from .base_optimizer import AbstractEnsembleParameterOptimizer
-from .loss_functions import (
-    compute_likelihood_matrix,
-    compute_neg_log_likelihood,
-    compute_neg_log_likelihood_from_weights,
-    likelihood_isotropic_gaussian,
-    likelihood_isotropic_gaussian_marginalized,
+from ._loss_functions.ensemble_losses import compute_likelihood_matrix
+from ._loss_functions.likelihood_wrappers import (
+    _optimize_weights,
+    AbstractLikelihoodFn,
+    LikelihoodOptimalWeightsFn,
 )
+from .base_optimizer import AbstractEnsembleParameterOptimizer
 
 
-class ProjGradDescWeightOptimizer(AbstractEnsembleParameterOptimizer, strict=True):
+class ProjGradDescWeightOptimizer(AbstractEnsembleParameterOptimizer):
     n_steps: Int
-    gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]
-    gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]
-    image_to_walker_log_likelihood_fn: LossFn
-    loss_fn_constant_args: ConstantT
-    dilated_mask: Optional[DilatedMask] = None
+    likelihood_fn: AbstractLikelihoodFn
 
     def __init__(
         self,
-        gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
-        gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
-        image_to_walker_log_likelihood_fn: (
-            Literal["iso_gaussian", "iso_gaussian_var_marg"] | LossFn
-        ),
-        loss_fn_constant_args: Optional[ConstantT] = None,
-        dilated_mask: Optional[DilatedMask] = None,
+        n_steps: Int,
+        likelihood_fn: AbstractLikelihoodFn,
     ):
-        self.n_steps = 1  # not used
-        gaussian_variances = error_if_not_positive(gaussian_variances)
-        gaussian_amplitudes = error_if_not_positive(gaussian_amplitudes)
-
-        assert gaussian_variances.ndim == 3, (
-            "gaussian_variances must have shape "
-            + "(n_walkers, n_atoms, n_gaussians_per_atom)"
-        )
-        assert gaussian_amplitudes.ndim == 3, (
-            "gaussian_amplitudes must have shape "
-            + "(n_walkers, n_atoms, n_gaussians_per_atom)"
-        )
-
-        self.gaussian_variances = gaussian_variances
-        self.gaussian_amplitudes = gaussian_amplitudes
-
-        if image_to_walker_log_likelihood_fn == "iso_gaussian":
-            self.image_to_walker_log_likelihood_fn = likelihood_isotropic_gaussian
-            self.loss_fn_constant_args = (
-                1.0 if loss_fn_constant_args is None else loss_fn_constant_args
-            )
-
-        elif image_to_walker_log_likelihood_fn == "iso_gaussian_var_marg":
-            self.image_to_walker_log_likelihood_fn = (
-                likelihood_isotropic_gaussian_marginalized
-            )
-            self.loss_fn_constant_args = (
-                1.0 if loss_fn_constant_args is None else loss_fn_constant_args
-            )
-
-        else:
-            assert callable(image_to_walker_log_likelihood_fn), (
-                "If `image_to_walker_log_likelihood_fn` is not 'iso_gaussian' or "
-                + "'iso_gaussian_var_marg', it must be a callable function."
-            )
-            self.image_to_walker_log_likelihood_fn = image_to_walker_log_likelihood_fn
-            self.loss_fn_constant_args = loss_fn_constant_args
-
-        self.dilated_mask = dilated_mask
+        self.n_steps = n_steps
+        self.likelihood_fn = likelihood_fn
 
     @override
     def __call__(
@@ -110,15 +59,9 @@ class ProjGradDescWeightOptimizer(AbstractEnsembleParameterOptimizer, strict=Tru
             The optimized weights of the walkers.
         """
         likelihood_matrix = _compute_full_likelihood_matrix(
-            walkers,
-            dataloader,
-            self.gaussian_amplitudes,
-            self.gaussian_variances,
-            self.dilated_mask,
-            image_to_walker_log_likelihood_fn=self.image_to_walker_log_likelihood_fn,
-            loss_fn_constant_args=self.loss_fn_constant_args,
+            walkers, dataloader, self.likelihood_fn
         )
-        weights = _optimize_weights(weights, likelihood_matrix)
+        weights = _optimize_weights(weights, likelihood_matrix, self.n_steps)
         return weights
 
 
@@ -127,51 +70,18 @@ class SteepestDescWalkerPositionsOptimizer(
 ):
     step_size: Float
     n_steps: Int
-    gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]
-    gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]
-    image_to_walker_log_likelihood_fn: LossFn
-    dilated_mask: Optional[DilatedMask] = None
-    loss_fn_constant_args: ConstantT
+    likelihood_fn: AbstractLikelihoodFn
 
     def __init__(
         self,
         n_steps: Int,
         step_size: Float,
-        gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
-        gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
-        image_to_walker_log_likelihood_fn: (
-            Literal["iso_gaussian", "iso_gaussian_var_marg"] | LossFn
-        ),
-        loss_fn_constant_args: Optional[ConstantT] = None,
-        dilated_mask: Optional[DilatedMask] = None,
+        likelihood_fn: AbstractLikelihoodFn,
     ):
         assert n_steps > 0, "n_steps must be positive"
         self.n_steps = n_steps
-        self.gaussian_variances = error_if_not_positive(gaussian_variances)
-        self.gaussian_amplitudes = error_if_not_positive(gaussian_amplitudes)
-
-        if image_to_walker_log_likelihood_fn == "iso_gaussian":
-            self.image_to_walker_log_likelihood_fn = likelihood_isotropic_gaussian
-            self.loss_fn_constant_args = (
-                1.0 if loss_fn_constant_args is None else loss_fn_constant_args
-            )
-        elif image_to_walker_log_likelihood_fn == "iso_gaussian_var_marg":
-            self.image_to_walker_log_likelihood_fn = (
-                likelihood_isotropic_gaussian_marginalized
-            )
-            self.loss_fn_constant_args = (
-                1.0 if loss_fn_constant_args is None else loss_fn_constant_args
-            )
-        else:
-            assert callable(image_to_walker_log_likelihood_fn), (
-                "If `image_to_walker_log_likelihood_fn` is not 'iso_gaussian' or "
-                + "'iso_gaussian_var_marg', it must be a callable function."
-            )
-            self.image_to_walker_log_likelihood_fn = image_to_walker_log_likelihood_fn
-            self.loss_fn_constant_args = loss_fn_constant_args
-
-        self.step_size = error_if_negative(step_size)
-        self.dilated_mask = dilated_mask
+        self.step_size = error_if_not_positive(step_size)
+        self.likelihood_fn = likelihood_fn
 
     @override
     def __call__(self, walkers, weights, dataloader):
@@ -180,14 +90,9 @@ class SteepestDescWalkerPositionsOptimizer(
             walkers = _optimize_walkers_positions(
                 walkers,
                 weights,
-                batch["particle_stack"],
+                batch,
                 self.step_size,
-                self.gaussian_amplitudes,
-                self.gaussian_variances,
-                self.dilated_mask,
-                image_to_walker_log_likelihood_fn=self.image_to_walker_log_likelihood_fn,
-                constant_args=self.loss_fn_constant_args,
-                per_particle_args=batch["per_particle_args"],
+                self.likelihood_fn,
             )
 
         return walkers
@@ -197,53 +102,19 @@ class IterativeEnsembleLikelihoodOptimizer(AbstractEnsembleParameterOptimizer):
     step_size: Float
     n_steps: Int
     n_batches_per_step: Int
-    gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]
-    gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]
-    image_to_walker_log_likelihood_fn: LossFn
-    loss_fn_constant_args: ConstantT
-    dilated_mask: Optional[DilatedMask] = None
+    likelihood_fn: LikelihoodOptimalWeightsFn
 
     def __init__(
         self,
         step_size: Float,
         n_steps: Int,
         n_batches_per_step: Int,
-        gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
-        gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
-        image_to_walker_log_likelihood_fn: Literal[
-            "iso_gaussian", "iso_gaussian_var_marg"
-        ]
-        | LossFn,
-        loss_fn_constant_args: Optional[ConstantT] = None,
-        dilated_mask: Optional[DilatedMask] = None,
+        likelihood_fn: LikelihoodOptimalWeightsFn,
     ):
         self.step_size = step_size
         self.n_steps = n_steps
         self.n_batches_per_step = n_batches_per_step
-
-        self.gaussian_variances = error_if_not_positive(gaussian_variances)
-        self.gaussian_amplitudes = error_if_not_positive(gaussian_amplitudes)
-        if image_to_walker_log_likelihood_fn == "iso_gaussian":
-            self.image_to_walker_log_likelihood_fn = likelihood_isotropic_gaussian
-            self.loss_fn_constant_args = (
-                1.0 if loss_fn_constant_args is None else loss_fn_constant_args
-            )
-        elif image_to_walker_log_likelihood_fn == "iso_gaussian_var_marg":
-            self.image_to_walker_log_likelihood_fn = (
-                likelihood_isotropic_gaussian_marginalized
-            )
-            self.loss_fn_constant_args = (
-                1.0 if loss_fn_constant_args is None else loss_fn_constant_args
-            )
-        else:
-            assert callable(image_to_walker_log_likelihood_fn), (
-                "If `image_to_walker_log_likelihood_fn` is not 'iso_gaussian' or "
-                + "'iso_gaussian_var_marg', it must be a callable function."
-            )
-            self.image_to_walker_log_likelihood_fn = image_to_walker_log_likelihood_fn
-            self.loss_fn_constant_args = loss_fn_constant_args
-
-        self.dilated_mask = dilated_mask
+        self.likelihood_fn = likelihood_fn
 
     @override
     def __call__(
@@ -261,13 +132,8 @@ class IterativeEnsembleLikelihoodOptimizer(AbstractEnsembleParameterOptimizer):
                 tmp_grads, tmp_weights = _compute_ensemble_gradients(
                     walkers,
                     weights,
-                    batch["particle_stack"],
-                    self.gaussian_amplitudes,
-                    self.gaussian_variances,
-                    self.dilated_mask,
-                    image_to_walker_log_likelihood_fn=self.image_to_walker_log_likelihood_fn,
-                    per_particle_args=batch["per_particle_args"],
-                    loss_fn_constant_args=self.loss_fn_constant_args,
+                    batch,
+                    self.likelihood_fn,
                 )
                 gradients += tmp_grads
                 weights += tmp_weights
@@ -283,43 +149,27 @@ class IterativeEnsembleLikelihoodOptimizer(AbstractEnsembleParameterOptimizer):
 
 
 @eqx.filter_jit
-def _optimize_weights(
-    weights: Float[Array, " n_walkers"],
-    likelihood_matrix: Float[Array, "n_images n_walkers"],
-) -> Float[Array, " n_walkers"]:
-    pg = ProjectedGradient(
-        fun=compute_neg_log_likelihood_from_weights, projection=projection_simplex
-    )
-    return pg.run(weights, likelihood_matrix=likelihood_matrix).params
-
-
-@eqx.filter_jit
 def _optimize_walkers_positions(
     walkers: Float[Array, "n_walkers n_atoms 3"],
     weights: Float[Array, " n_walkers"],
-    relion_stack: ParticleStackInfo,
+    relion_batch,
     step_size: Float,
-    gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
-    gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
-    dilated_mask: Optional[DilatedMask] = None,
-    *,
-    image_to_walker_log_likelihood_fn: LossFn,
-    constant_args: ConstantT,
-    per_particle_args: PerParticleT,
+    likelihood_fn: AbstractLikelihoodFn,
 ) -> Float[Array, "n_walkers n_atoms 3"]:
+    def _compute_neg_log_likelihood(
+        walkers,
+        weights,
+        relion_batch,
+    ):
+        return likelihood_fn(walkers, weights, relion_batch)
+
     gradients = jax.grad(
-        compute_neg_log_likelihood,
+        _compute_neg_log_likelihood,
         argnums=0,
     )(
         walkers,
         weights,
-        relion_stack,
-        gaussian_amplitudes,
-        gaussian_variances,
-        image_to_walker_log_likelihood_fn,
-        dilated_mask,
-        constant_args=constant_args,
-        per_particle_args=per_particle_args,
+        relion_batch,
     )
 
     norms = jnp.linalg.norm(gradients, axis=(2), keepdims=True)
@@ -334,14 +184,8 @@ def _optimize_walkers_positions(
 def _compute_ensemble_gradients(
     walkers: Float[Array, "n_walkers n_atoms 3"],
     weights: Float[Array, " n_walkers"],
-    relion_stack: ParticleStackInfo,
-    gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
-    gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
-    dilated_mask: Optional[DilatedMask] = None,
-    *,
-    image_to_walker_log_likelihood_fn: LossFn,
-    loss_fn_constant_args: ConstantT,
-    per_particle_args: PerParticleT,
+    relion_batch,
+    likelihood_fn: LikelihoodOptimalWeightsFn,
 ) -> Tuple[
     Float[Array, "n_walkers n_atoms 3"],
     Float[Array, " n_walkers"],
@@ -362,34 +206,16 @@ def _compute_ensemble_gradients(
         The optimized walkers and weights of the ensemble.
     """
 
-    def _loss_fn(walkers, weights):
-        likelihood_matrix = compute_likelihood_matrix(
-            walkers,
-            relion_stack,
-            gaussian_amplitudes,
-            gaussian_variances,
-            image_to_walker_log_likelihood_fn,
-            dilated_mask,
-            constant_args=loss_fn_constant_args,
-            per_particle_args=per_particle_args,
-        )
-        weights = _optimize_weights(weights, likelihood_matrix)
-        weights = jax.nn.softmax(weights)
-        loss = compute_neg_log_likelihood_from_weights(weights, likelihood_matrix)
-        return loss, weights
+    def _loss_fn(walkers, weights, relion_batch):
+        return likelihood_fn(walkers, weights, relion_batch)
 
-    return jax.grad(_loss_fn, argnums=0, has_aux=True)(walkers, weights)
+    return jax.grad(_loss_fn, argnums=0, has_aux=True)(walkers, weights, relion_batch)
 
 
 def _compute_full_likelihood_matrix(
     walkers: Float[Array, "n_walkers n_atoms 3"],
     dataloader: jdl.DataLoader,
-    gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
-    gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
-    dilated_mask: DilatedMask | None,
-    *,
-    image_to_walker_log_likelihood_fn: LossFn,
-    loss_fn_constant_args: ConstantT,
+    likelihood_fn: AbstractLikelihoodFn,
 ) -> Array:
     """
     Compute the full likelihood matrix for the given walkers and dataloader.
@@ -403,11 +229,12 @@ def _compute_full_likelihood_matrix(
         lklhood_matrix = compute_likelihood_matrix(
             walkers,
             batch["particle_stack"],
-            gaussian_amplitudes,
-            gaussian_variances,
-            image_to_walker_log_likelihood_fn=image_to_walker_log_likelihood_fn,
-            dilated_mask=dilated_mask,
-            constant_args=loss_fn_constant_args,
+            likelihood_fn.gaussian_amplitudes,
+            likelihood_fn.gaussian_variances,
+            likelihood_fn.image_to_walker_log_likelihood_fn,
+            likelihood_fn.dilated_mask,
+            likelihood_fn.estimates_pose,
+            constant_args=likelihood_fn.loss_fn_constant_args,
             per_particle_args=batch["per_particle_args"],
         )
         likelihood_matrix.append(lklhood_matrix)

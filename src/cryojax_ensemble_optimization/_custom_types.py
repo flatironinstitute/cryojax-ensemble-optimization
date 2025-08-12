@@ -35,6 +35,7 @@ LossFn: TypeAlias = Callable[
         Float[Array, "n_atoms n_gaussians_per_atom"],
         Float[Array, "n_atoms n_gaussians_per_atom"],
         Optional[DilatedMask],
+        Optional[bool],
         ConstantT,
         PerParticleT,
     ],
