@@ -52,8 +52,6 @@ class FlexibleFittingPipeline(eqx.Module):
         *,
         output_directory: str | pathlib.Path,
         initial_state_for_projector: Any = None,
-        n_batches_of_atoms: int = 1,
-        batch_size_for_z_planes: int = 1,
     ) -> Tuple[Float[Array, "n_atoms 3"], Any]:
         # print("Initializing projetor...")
         md_state = self.prior_projector.initialize(initial_state_for_projector)
@@ -83,8 +81,6 @@ class FlexibleFittingPipeline(eqx.Module):
             loss, tmp_walker = self.likelihood_optimizer(
                 walker[self.atom_indices_for_opt, :],
                 reference_volume,
-                n_batches_of_atoms=n_batches_of_atoms,
-                batch_size_for_z_planes=batch_size_for_z_planes,
             )
 
             walker = walker.at[self.atom_indices_for_opt, :].set(tmp_walker)

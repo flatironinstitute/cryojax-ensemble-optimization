@@ -66,6 +66,8 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
         md_states = self.prior_projector.initialize(initial_state_for_projector)
         # print("Projector initialized.")
 
+        reference_structure = self.reference_structure
+
         walkers = initial_walkers.copy()
         weights = initial_weights.copy()
 
@@ -84,7 +86,7 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
 
         # print("Aligning walkers to reference structure...")
         walkers = _align_walkers_to_reference(
-            walkers, self.reference_structure, self.atom_indices_for_opt
+            walkers, reference_structure, self.atom_indices_for_opt
         )
         # print("Walkers aligned.")
 
@@ -111,7 +113,12 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
             walkers, md_states = self.prior_projector(walkers, md_states)
 
             walkers = _align_walkers_to_reference(
-                walkers, self.reference_structure, self.atom_indices_for_opt
+                walkers, reference_structure, self.atom_indices_for_opt
+            )
+
+            reference_structure = mdtraj.Trajectory(
+                walkers[0] / 10.0,
+                topology=reference_structure.topology,
             )
 
             # print("Write trajectory to files...")
@@ -124,9 +131,8 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
         if self.runs_postprocessing:
             # print("Running postprocessing...")
             weight_optimizer = ProjGradDescWeightOptimizer(
-                self.likelihood_optimizer.gaussian_amplitudes,
-                self.likelihood_optimizer.gaussian_variances,
-                self.likelihood_optimizer.image_to_walker_log_likelihood_fn,
+                n_steps=500,
+                likelihood_fn=self.likelihood_optimizer.likelihood_fn,
             )
             walkers, weights = self.postprocess(
                 walkers, weights, dataloader, weight_optimizer

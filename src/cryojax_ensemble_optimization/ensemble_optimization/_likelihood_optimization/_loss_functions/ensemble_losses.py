@@ -1,102 +1,33 @@
 from functools import partial
-from typing import Dict
+from typing import Optional
 
-import cryojax.simulator as cxs
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float
 
-from ..._custom_types import Image, LossFn, PerParticleArgs
+from ...._custom_types import ConstantT, LossFn, ParticleStackInfo, PerParticleT
+from ....simulator._dilated_mask import DilatedMask
 
 
-def _likelihood_isotropic_gaussian(
-    computed_image: Image,
-    observed_image: Image,
-    noise_variance: Float,
-) -> Float:
-    cc = jnp.mean(computed_image**2)
-    co = jnp.mean(observed_image * computed_image)
-    c = jnp.mean(computed_image)
-    o = jnp.mean(observed_image)
-
-    scale = (co - c * o) / (cc - c**2)
-    bias = o - scale * c
-
-    return -jnp.sum((scale * computed_image - observed_image + bias) ** 2) / (
-        2 * noise_variance
-    )
-
-
-def _likelihood_isotropic_gaussian_marginalized(
-    computed_image: Float[Array, "n_pixels n_pixels"],
-    observed_image: Float[Array, "n_pixels n_pixels"],
-    _=None,
-) -> Float:
-    cc = jnp.mean(computed_image**2)
-    co = jnp.mean(observed_image * computed_image)
-    c = jnp.mean(computed_image)
-    o = jnp.mean(observed_image)
-
-    scale = (co - c * o) / (cc - c**2)
-    bias = o - scale * c
-    n_pixels = computed_image.size
-
-    return (2 - n_pixels) * jnp.log(
-        jnp.linalg.norm(scale * computed_image - observed_image + bias)
-    )
-
-
-def _compute_likelihood_image_and_walker(
-    walker: Float[Array, "n_atoms 3"],
-    relion_stack: Dict,
-    gaussian_amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
-    gaussian_variances: Float[Array, "n_atoms n_gaussians_per_atom"],
-    image_to_walker_log_likelihood_fn: LossFn,
-    per_particle_args: PerParticleArgs,
-) -> Float:
-    potential = cxs.GaussianMixtureAtomicPotential(
-        walker,
-        gaussian_amplitudes,
-        gaussian_variances,
-    )
-    structural_ensemble = cxs.SingleStructureEnsemble(
-        potential, relion_stack["parameters"]["pose"]
-    )
-
-    scattering_theory = cxs.WeakPhaseScatteringTheory(
-        structural_ensemble=structural_ensemble,
-        potential_integrator=cxs.GaussianMixtureProjection(),  # n_batches=50),
-        transfer_theory=relion_stack["parameters"]["transfer_theory"],
-    )
-
-    imaging_pipeline = cxs.ContrastImageModel(
-        relion_stack["parameters"]["instrument_config"], scattering_theory
-    )
-
-    computed_image = imaging_pipeline.render(outputs_real_space=True)
-
-    return image_to_walker_log_likelihood_fn(
-        computed_image,
-        relion_stack["images"],
-        per_particle_args,
-    )
-
-
-@eqx.filter_jit
-@partial(eqx.filter_vmap, in_axes=(0, None, 0, 0, None, None), out_axes=0)
+@partial(
+    eqx.filter_vmap, in_axes=(0, None, 0, 0, None, None, None, None, None), out_axes=0
+)
 @partial(
     eqx.filter_vmap,
-    in_axes=(None, eqx.if_array(0), None, None, None, eqx.if_array(0)),
+    in_axes=(None, eqx.if_array(0), None, None, None, None, None, None, eqx.if_array(0)),
     out_axes=0,
 )
 def _compute_likelihood_matrix(
     ensemble_walkers: Float[Array, " n_atoms 3"],
-    relion_stack: Dict,
+    relion_stack: ParticleStackInfo,
     gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     image_to_walker_log_likelihood_fn: LossFn,
-    per_particle_args: PerParticleArgs,
+    dilated_mask: DilatedMask | None,
+    estimates_pose: bool,
+    constant_args: ConstantT,
+    per_particle_args: PerParticleT,
 ) -> Float[Array, "n_images n_walkers"]:
     """
     Compute the likelihood matrix for a set of walkers and a Relion stack.
@@ -117,24 +48,30 @@ def _compute_likelihood_matrix(
         and x_m is the m-th walker (atomic model).
     """
 
-    return _compute_likelihood_image_and_walker(
+    return image_to_walker_log_likelihood_fn(
         ensemble_walkers,
         relion_stack,
         gaussian_amplitudes,
         gaussian_variances,
-        image_to_walker_log_likelihood_fn,
-        per_particle_args,
+        dilated_mask,
+        estimates_pose,
+        constant_args=constant_args,
+        per_particle_args=per_particle_args,
     )
 
 
 @eqx.filter_jit
 def compute_likelihood_matrix(
     ensemble_walkers: Float[Array, "n_walkers n_atoms 3"],
-    relion_stack: Dict,
+    relion_stack: ParticleStackInfo,
     gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     image_to_walker_log_likelihood_fn: LossFn,
-    per_particle_args: PerParticleArgs,
+    dilated_mask: Optional[DilatedMask] = None,
+    estimates_pose: bool = False,
+    *,
+    constant_args: ConstantT,
+    per_particle_args: PerParticleT,
 ) -> Float[Array, "n_images n_walkers"]:
     """
     Compute the likelihood matrix for a set of walkers and a Relion stack.
@@ -161,6 +98,9 @@ def compute_likelihood_matrix(
         gaussian_amplitudes,
         gaussian_variances,
         image_to_walker_log_likelihood_fn,
+        dilated_mask,
+        estimates_pose,
+        constant_args,
         per_particle_args,
     ).T  # order of vmaps!
 
@@ -216,11 +156,15 @@ def compute_neg_log_likelihood_from_weights(
 def compute_neg_log_likelihood(
     walkers: Float[Array, "n_walkers n_atoms 3"],
     weights: Float[Array, " n_walkers"],
-    relion_stack: Dict,
+    relion_stack: ParticleStackInfo,
     gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     image_to_walker_log_likelihood_fn: LossFn,
-    per_particle_args: PerParticleArgs,
+    dilated_mask: Optional[DilatedMask] = None,
+    estimates_pose: bool = False,
+    *,
+    constant_args: ConstantT,
+    per_particle_args: PerParticleT,
 ) -> Float:
     """
     Compute the negative log likelihood from the walkers and weights. The likelihood is
@@ -247,6 +191,9 @@ def compute_neg_log_likelihood(
         gaussian_amplitudes,
         gaussian_variances,
         image_to_walker_log_likelihood_fn,
-        per_particle_args,
+        dilated_mask,
+        estimates_pose,
+        constant_args=constant_args,
+        per_particle_args=per_particle_args,
     )
     return compute_neg_log_likelihood_from_weights(weights, lklhood_matrix)

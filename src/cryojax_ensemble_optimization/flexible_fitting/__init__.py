@@ -1,4 +1,5 @@
 from ._cross_corelation import (
-    SteepestDescWalkerCrossCorrelation as SteepestDescWalkerCrossCorrelation,
+    ModelToVolumeLikelihoodFn as ModelToVolumeLikelihoodFn,
+    SteepestDescWalkerFlexibleFitting as SteepestDescWalkerFlexibleFitting,
 )
-from ._pipeline import FlexibleFittingPipelineOpenMM as FlexibleFittingPipelineOpenMM
+from ._pipeline import FlexibleFittingPipeline as FlexibleFittingPipeline

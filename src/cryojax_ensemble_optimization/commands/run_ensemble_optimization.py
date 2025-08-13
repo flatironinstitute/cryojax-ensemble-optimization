@@ -8,18 +8,19 @@ import jax
 import jax.numpy as jnp
 import mdtraj
 import yaml
-from cryojax.data import RelionParticleParameterFile, RelionParticleStackDataset
+from cryojax.dataset import RelionParticleParameterFile, RelionParticleStackDataset
 
 from ..data import create_dataloader
 from ..ensemble_optimization import (
     EnsembleOptimizationPipeline,
     EnsembleSteeredMDSimulator,
     IterativeEnsembleLikelihoodOptimizer,
+    LikelihoodOptimalWeightsFn,
     SteeredMDSimulator,
 )
-from ..internal import cryojaxERConfig
+from ..internal._config_validators import EnsOptMDConfig
 from ..io import read_atomic_models
-from ..utils import get_atom_indices_from_pdb
+from ..io.utils import get_atom_indices_from_pdb
 
 
 def add_args(parser):
@@ -78,14 +79,18 @@ def construct_md_projector(config, restrain_atom_list):
 
 
 def construct_likelihood_optimizer(config, gaussian_amplitudes, gaussian_variances):
+    likelihood_fn = LikelihoodOptimalWeightsFn(
+        gaussian_amplitudes,
+        gaussian_variances,
+        config["likelihood_optimizer_params"]["image_to_walker_log_likelihood_fn"],
+        dilated_mask=None,
+        estimates_pose=False,
+    )
     return IterativeEnsembleLikelihoodOptimizer(
         step_size=config["likelihood_optimizer_params"]["step_size"],
         n_steps=config["likelihood_optimizer_params"]["n_steps"],
-        gaussian_amplitudes=gaussian_amplitudes,
-        gaussian_variances=gaussian_variances,
-        image_to_walker_log_likelihood_fn=config["likelihood_optimizer_params"][
-            "image_to_walker_log_likelihood_fn"
-        ],
+        n_batches_per_step=config["likelihood_optimizer_params"]["n_batches_per_step"],
+        likelihood_fn=likelihood_fn,
     )
 
 
@@ -188,7 +193,7 @@ def main(args):
 
     with open(args.config, "r") as f:
         config_dict = yaml.safe_load(f)
-        config = dict(cryojaxERConfig(**config_dict).model_dump())
+        config = dict(EnsOptMDConfig(**config_dict).model_dump())
 
     if config["projector_params"]["platform"] == "CPU":
         if config["projector_params"]["platform_properties"]["Threads"] is None:
@@ -230,6 +235,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=yaml.dump(cryojaxERConfig.model_json_schema(), indent=4),
+        epilog=yaml.dump(EnsOptMDConfig.model_json_schema(), indent=4),
     )
     main(add_args(parser).parse_args())

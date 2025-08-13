@@ -8,22 +8,16 @@ from equinox import AbstractVar, Module
 from jax_dataloader import DataLoader
 from jaxtyping import Array, Float, Int
 
-from ..._custom_types import LossFn
+from ._loss_functions import AbstractLikelihoodFn
 
 
-class AbstractEnsembleParameterOptimizer(Module, strict=True):
+class AbstractEnsembleParameterOptimizer(Module):
     """Abstract interface for objects that optimize parameters
     of an ensemble of structures.
     """
 
-    gaussian_variances: AbstractVar[
-        Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]
-    ]
-    gaussian_amplitudes: AbstractVar[
-        Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]
-    ]
     n_steps: AbstractVar[Int]
-    image_to_walker_log_likelihood_fn: AbstractVar[LossFn]
+    likelihood_fn: AbstractVar[AbstractLikelihoodFn]
 
     @abstractmethod
     def __call__(
