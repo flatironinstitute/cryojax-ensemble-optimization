@@ -6,6 +6,7 @@ from typing_extensions import override
 import jax
 import jax.numpy as jnp
 import mdtraj
+import optax
 from jax_dataloader import DataLoader
 from jaxtyping import Array, Float, Int, PRNGKeyArray
 from mdtraj.formats import XTCTrajectoryFile
@@ -55,6 +56,7 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
         initial_walkers: Float[Array, "n_walkers n_atoms 3"],
         initial_weights: Float[Array, " n_walkers"],
         dataloader: DataLoader,
+        bias_constant_scheduler: optax.ScalarOrSchedule,
         *,
         output_directory: str | pathlib.Path,
         initial_state_for_projector: Any = None,
@@ -109,16 +111,21 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
             walkers = jax.device_get(walkers)
             # print("Likelihood Optimization done.")
 
+            # reference_structure = mdtraj.Trajectory(
+            #     walkers[0] / 10.0,
+            #     topology=reference_structure.topology,
+            # )
+
+            # print(walkers)
+
             # print("Prior Projection: ")
-            walkers, md_states = self.prior_projector(walkers, md_states)
+
+            walkers, md_states = self.prior_projector(
+                walkers, md_states, bias_constant_scheduler(i)
+            )
 
             walkers = _align_walkers_to_reference(
                 walkers, reference_structure, self.atom_indices_for_opt
-            )
-
-            reference_structure = mdtraj.Trajectory(
-                walkers[0] / 10.0,
-                topology=reference_structure.topology,
             )
 
             # print("Write trajectory to files...")
@@ -127,6 +134,12 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
 
         for writer in writers:
             writer.close()
+
+        for i, walker in enumerate(walkers):
+            mdtraj.Trajectory(
+                xyz=walker / 10.0,
+                topology=reference_structure.topology,
+            ).save_pdb(os.path.join(output_directory, f"final_walker_{i}.pdb"))
 
         if self.runs_postprocessing:
             # print("Running postprocessing...")

@@ -2,6 +2,7 @@ import pathlib
 from abc import abstractmethod
 from typing import Any, Tuple
 
+import optax
 from equinox import AbstractVar, Module
 from jax_dataloader import DataLoader
 from jaxtyping import Array, Float, Int, PRNGKeyArray
@@ -26,6 +27,7 @@ class AbstractEnsembleOptimizationPipeline(Module, strict=True):
         initial_walkers: Float[Array, "n_walkers n_atoms 3"],
         initial_weights: Float[Array, " n_walkers"],
         dataloader: DataLoader,
+        bias_constant_scheduler: optax.ScalarOrSchedule,
         *,
         output_directory: str | pathlib.Path,
         initial_state_for_projector: Any = None,

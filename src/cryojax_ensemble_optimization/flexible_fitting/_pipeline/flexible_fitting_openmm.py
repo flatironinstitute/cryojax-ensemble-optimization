@@ -3,9 +3,9 @@ import pathlib
 from typing import Any, Tuple
 
 import equinox as eqx
-import jax
 import jax.numpy as jnp
 import mdtraj
+import optax
 from jaxtyping import Array, Float, Int
 from mdtraj.formats import XTCTrajectoryFile
 from tqdm import tqdm
@@ -26,7 +26,6 @@ class FlexibleFittingPipeline(eqx.Module):
     n_steps: int
     reference_structure: mdtraj.Trajectory
     atom_indices_for_opt: Int[Array, " n_atoms_for_opt"]
-    runs_postprocessing: bool
 
     def __init__(
         self,
@@ -35,20 +34,18 @@ class FlexibleFittingPipeline(eqx.Module):
         n_steps: int,
         ref_structure_for_alignment: mdtraj.Trajectory,
         atom_indices_for_opt: Int[Array, " n_atoms_for_opt"],
-        *,
-        runs_postprocessing: bool = True,
     ):
         self.prior_projector = prior_projector
         self.likelihood_optimizer = likelihood_optimizer
         self.n_steps = n_steps
         self.reference_structure = ref_structure_for_alignment
         self.atom_indices_for_opt = atom_indices_for_opt
-        self.runs_postprocessing = runs_postprocessing
 
     def run(
         self,
         initial_walker: Float[Array, "n_atoms 3"],
         reference_volume: Float[Array, "n_pixels n_pixels n_pixels"],
+        bias_constant_scheduler: optax.ScalarOrSchedule,
         *,
         output_directory: str | pathlib.Path,
         initial_state_for_projector: Any = None,
@@ -57,6 +54,7 @@ class FlexibleFittingPipeline(eqx.Module):
         md_state = self.prior_projector.initialize(initial_state_for_projector)
         # print("Projector initialized.")
 
+        reference_structure = self.reference_structure
         walker = initial_walker.copy()
 
         # print("Preparing writers for output...")
@@ -65,7 +63,7 @@ class FlexibleFittingPipeline(eqx.Module):
 
         # print("Aligning walker to reference structure...")
         walker = _align_walkers_to_reference(
-            walker, self.reference_structure, self.atom_indices_for_opt
+            walker, reference_structure, self.atom_indices_for_opt
         )
         # print("Walkers aligned.")
 
@@ -83,16 +81,22 @@ class FlexibleFittingPipeline(eqx.Module):
                 reference_volume,
             )
 
-            walker = walker.at[self.atom_indices_for_opt, :].set(tmp_walker)
-            walker.block_until_ready()
-            walker = jax.device_get(walker)
+            ref_walker = walker.at[self.atom_indices_for_opt, :].set(tmp_walker)
+            ref_walker.block_until_ready()
             # print("Likelihood Optimization done.")
 
             # print("Prior Projection: ")
-            walker, md_state = self.prior_projector(walker, md_state)
+            walker, md_state = self.prior_projector(
+                ref_walker, md_state, bias_constant_scheduler(i)
+            )
 
             walker = _align_walkers_to_reference(
-                walker, self.reference_structure, self.atom_indices_for_opt
+                walker, reference_structure, self.atom_indices_for_opt
+            )
+
+            reference_structure = mdtraj.Trajectory(
+                ref_walker / 10.0,
+                topology=reference_structure.topology,
             )
 
             # print("Write trajectory to files...")
@@ -101,6 +105,10 @@ class FlexibleFittingPipeline(eqx.Module):
             progress_bar.set_description(f"Flexible Fitting (C.C: {1 - loss:.4f})")
 
         writer.close()
+        mdtraj.Trajectory(
+            xyz=walker / 10.0,
+            topology=self.reference_structure.topology,
+        ).save_pdb(os.path.join(output_directory, "final_walker.pdb"))
 
         return walker, md_state
 
