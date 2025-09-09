@@ -1,7 +1,7 @@
 data_params:
   path_to_relion_project: ../data_generation/tutorial_data/
   path_to_starfile: ../data_generation/tutorial_data/tutorial_alanine.star
-  data_sign: "light-on-dark" #"dark-on-light"
+  data_sign: "dark-on-light"
   loads_envelope: false # tutorial images do not have an envelope
   # path_to_volumetric_mask: ... # not used for tutorial
 

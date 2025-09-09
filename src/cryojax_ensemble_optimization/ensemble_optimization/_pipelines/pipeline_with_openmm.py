@@ -115,11 +115,6 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
             walkers = jax.device_get(walkers)
             # print("Likelihood Optimization done.")
 
-            reference_structure = mdtraj.Trajectory(
-                walkers[0] / 10.0,
-                topology=reference_structure.topology,
-            )
-
             # print(walkers)
 
             # print("Prior Projection: ")
@@ -141,6 +136,10 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
                     self.likelihood_optimizer.likelihood_fn.gaussian_variances,
                 )
 
+            reference_structure = mdtraj.Trajectory(
+                walkers[0] / 10.0,
+                topology=reference_structure.topology,
+            )
             # print("Write trajectory to files...")
             for j in range(walkers.shape[0]):
                 writers[j].write(walkers[j] / 10.0)

@@ -72,8 +72,6 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
         [model["gaussian_amplitudes"] for model in atomic_models.values()]
     )[:, atom_list]
 
-    print(initial_walkers.shape, gaussian_variances.shape, gaussian_amplitudes.shape)
-
     # Load experimental data: images, mask, and consensus volume
     stack_dataset = RelionParticleStackDataset(
         RelionParticleParameterFile(
@@ -106,8 +104,6 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
     else:
         dilated_mask = None
 
-    print("Dilated Mask is None?", dilated_mask is None)
-
     if config["alignment_params"]["path_to_consensus_volume"] is not None:
         volume_for_alignment, voxel_size = read_array_from_mrc(
             config["alignment_params"]["path_to_consensus_volume"],
@@ -128,8 +124,6 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
     else:
         model_aligner = None
 
-    print("Model aligner is None?", model_aligner is None)
-
     # Construct prior projector
     projector_list = []
 
@@ -148,14 +142,10 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
                 ),
             )
         )
-
-    print("Number of projectors:", len(projector_list))
     md_projector = cxopt.ensemble_optimization.EnsembleSteeredMDSimulator(projector_list)
 
     # Construct likelihood optimizer
     data_sign = -1.0 if config["data_params"]["data_sign"] == "dark-on-light" else 1.0
-    print("Data sign: ", data_sign)
-    print("Estimates pose? ", config["likelihood_optimizer_params"]["estimates_pose"])
     likelihood_fn = cxopt.ensemble_optimization.LikelihoodOptimalWeightsFn(
         gaussian_amplitudes,
         gaussian_variances,
@@ -208,8 +198,6 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
         raise ValueError(
             "bias_constant_in_kjpermol must be a float or a list of two floats."
         )
-
-    print("Bias constant scheduler:", bias_constant_scheduler)
 
     init_walkers = jnp.array(initial_walkers.copy())
     init_weights = jnp.array(config["likelihood_optimizer_params"]["init_weights"])
