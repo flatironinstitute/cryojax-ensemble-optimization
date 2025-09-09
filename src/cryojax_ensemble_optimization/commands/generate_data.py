@@ -68,6 +68,7 @@ def simulate_particle_stack_from_config(config: DatasetGeneratorConfig):
         ],
         mask=mask,
         noise_snr_range=config_dict["noise_snr"],
+        data_sign=config_dict["data_sign"],
         overwrite=config_dict["overwrite"],
         batch_size=config_dict["batch_size_for_generation"],
     )

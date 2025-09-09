@@ -1,6 +1,7 @@
 import warnings
 from pathlib import Path
 from typing import List, Optional, Union
+from typing_extensions import Literal
 
 import jax.numpy as jnp
 from pydantic import (
@@ -68,6 +69,14 @@ class DatasetGeneratorConfig(BaseModel, extra="forbid"):
     # Experiment setup
     number_of_images: PositiveInt = Field(description="Number of images to generate.")
 
+    data_sign: Literal["dark-on-light", "light-on-dark"] = Field(
+        default="dark-on-light",
+        description="Sign convention for the data. "
+        + "'dark-on-light' means that the particles "
+        + "are dark on a light background (default). "
+        + "'light-on-dark' means that the particles "
+        + "are light on a dark background.",
+    )
     # Instrument
     pixel_size: PositiveFloat = Field(description="Pixel size in Angstroms.")
     box_size: PositiveInt = Field(description="Size of the simulation box in pixels.")

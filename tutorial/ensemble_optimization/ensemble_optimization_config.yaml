@@ -1,4 +1,30 @@
-atom_selection: not element H
+data_params:
+  path_to_relion_project: ../data_generation/tutorial_data/
+  path_to_starfile: ../data_generation/tutorial_data/tutorial_alanine.star
+  data_sign: "light-on-dark" #"dark-on-light"
+  loads_envelope: false # tutorial images do not have an envelope
+  # path_to_volumetric_mask: ... # not used for tutorial
+
+alignment_params:
+  path_to_prealigned_atomic_model: ./atomic_models/ref_model.pdb
+  # path_to_consensus_volume: ... # not used for tutorial
+  # downsample_box_size: ... # not used for tutorial
+  # consensus_volume_voxel_size: ... # not used for tutorial
+
+projector_params:
+  bias_constant_in_kjpermol: 50000.0
+  n_steps: 200
+  platform: CUDA
+  platform_properties:
+    DeviceIndex: '0'
+  #platform: CPU
+  #platform_properties:
+  #  Threads: '32' # Number of threads to use!!!
+  # path_to_initial_states: ... # not used for tutorial
+  path_to_initial_states:
+    - ./atomic_models/initial_state_0.xml
+    - ./atomic_models/initial_state_1.xml
+
 likelihood_optimizer_params:
   batch_size: 100
   init_weights:
@@ -6,21 +32,15 @@ likelihood_optimizer_params:
   - 0.5
   n_steps: 5
   step_size: 0.25
+  n_batches_per_step: 1
+  estimates_pose: false
+
+atom_selection: not element H
 loads_b_factors: true
-loads_envelope: false
 n_steps: 200
 path_to_atomic_models:
 - ./atomic_models/initial_model_0.pdb
 - ./atomic_models/initial_model_1.pdb
-path_to_reference_model: ./atomic_models/ref_model.pdb
+
 path_to_output: ./outputs
-path_to_relion_project: ../data_generation/tutorial_data/
-path_to_starfile: ../data_generation/tutorial_data/tutorial_alanine.star
-projector_params:
-  bias_constant_in_units: 50000.0
-  n_steps: 200
-  platform: CPU
-  platform_properties:
-    Threads: '64' # Number of threads to use!!!
-  projector_mode: openmm # only method supported for now
 rng_seed: 0

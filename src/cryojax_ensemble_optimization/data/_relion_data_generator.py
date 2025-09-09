@@ -1,7 +1,7 @@
 import logging
 import os
 from functools import partial
-from typing import Dict, List, Tuple
+from typing import Dict, List, Literal, Tuple
 
 import cryojax.simulator as cxs
 import equinox as eqx
@@ -68,6 +68,7 @@ def simulate_relion_dataset(
     ensemble_probabilities: Float[Array, " n_potentials"],
     mask: AbstractMask,
     noise_snr_range: List[Float],
+    data_sign: Literal["dark-on-light", "light-on-dark"],
     *,
     overwrite: bool = False,
     batch_size: int = 1,
@@ -112,7 +113,8 @@ def simulate_relion_dataset(
     logging.info(f"  {os.path.join(path_to_relion_project, 'metadata.npz')}")
 
     # Bundle arguments and write images
-    constant_args = (potentials, mask)
+    data_sign_factor = -1.0 if data_sign == "dark-on-light" else 1.0
+    constant_args = (potentials, mask, data_sign_factor)
     per_particle_args = (
         keys_per_image,
         ensemble_indices_per_image,
@@ -125,6 +127,7 @@ def simulate_relion_dataset(
         mode="w",
         mrcfile_settings={"overwrite": overwrite},
     )
+
     simulate_particle_stack(
         dataset=relion_dataset,
         compute_image_fn=render_image_with_white_gaussian_noise,
