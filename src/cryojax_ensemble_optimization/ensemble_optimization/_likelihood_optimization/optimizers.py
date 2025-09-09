@@ -172,10 +172,10 @@ def _optimize_walkers_positions(
         relion_batch,
     )
 
-    norms = jnp.linalg.norm(gradients, axis=(2), keepdims=True)
-    # set small norms to 1 (avoid making small gradients large!)
-    norms = jnp.where(norms < 1e-12, 1.0, norms)
-    gradients /= norms
+    # norms = jnp.linalg.norm(gradients, axis=(2), keepdims=True)
+    # # set small norms to 1 (avoid making small gradients large!)
+    # norms = jnp.where(norms < 1e-12, 1.0, norms)
+    # gradients /= norms
 
     return walkers - step_size * gradients
 

@@ -25,6 +25,7 @@ class AbstractPriorProjector(eqx.Module, strict=True):
         self,
         ref_positions: Float[Array, "n_atoms 3"] | Float[Array, "n_walkers n_atoms 3"],
         state: Any,
+        bias_constant: Float,
     ) -> Tuple[Float[Array, "n_atoms 3"] | Float[Array, "n_walkers n_atoms 3"], Any]:
         raise NotImplementedError("Abstract method not implemented.")
 
@@ -52,5 +53,6 @@ class AbstractEnsemblePriorProjector(eqx.Module, strict=True):
         self,
         ref_positions: Float[Array, "n_walkers n_atoms 3"],
         states: List[Any],
+        bias_constant: Float,
     ) -> Tuple[Float[Array, "n_walkers n_atoms 3"], List[Any]]:
         raise NotImplementedError("Abstract method not implemented.")

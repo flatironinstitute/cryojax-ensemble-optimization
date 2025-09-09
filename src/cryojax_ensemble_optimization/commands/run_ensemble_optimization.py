@@ -111,6 +111,7 @@ def construct_ensemble_optimization_pipeline(
         config, gaussian_amplitudes, gaussian_variances
     )
     ref_structure = mdtraj.load(config["path_to_reference_model"])
+    ref_structure.center_coordinates()
 
     ensemble_optimization_pipeline = EnsembleOptimizationPipeline(
         prior_projector=projector_list,

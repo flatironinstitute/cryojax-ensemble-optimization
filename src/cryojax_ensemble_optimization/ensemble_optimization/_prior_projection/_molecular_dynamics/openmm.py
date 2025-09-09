@@ -43,7 +43,6 @@ DEFAULT_MD_PARAMS = {
 
 class SteeredMDSimulator(AbstractPriorProjector, strict=True):
     n_steps: Int
-    _bias_constant_in_kj_per_mol_angs: Float
     simulation: openmm_app.Simulation
     restrain_atom_list: List[Int]
     base_state_file_path: str
@@ -51,7 +50,6 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
     def __init__(
         self,
         path_to_initial_pdb: str | pathlib.Path,
-        bias_constant_in_kj_per_mol_angs: Float,
         n_steps: Int,
         restrain_atom_list: List[Int],
         parameters_for_md: Dict,
@@ -62,7 +60,6 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
         ] = None,
     ):
         pdb = openmm_app.PDBFile(str(path_to_initial_pdb))
-        self._bias_constant_in_kj_per_mol_angs = bias_constant_in_kj_per_mol_angs
         self.restrain_atom_list = restrain_atom_list
 
         self.base_state_file_path = _validate_base_state_file_path(base_state_file_path)
@@ -110,19 +107,9 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
 
         return path_to_state_file
 
-    @property
-    def bias_constant_in_kj_per_mol_angs(self) -> float:
-        return self._bias_constant_in_kj_per_mol_angs
-
-    @bias_constant_in_kj_per_mol_angs.setter
-    def bias_constant_in_kj_per_mol(self, value: Float):
-        self._bias_constant_in_kj_per_mol_angs = value
-
     @override
     def __call__(
-        self,
-        ref_walkers: Float[Array, "n_atoms 3"],
-        state: str,
+        self, ref_walkers: Float[Array, "n_atoms 3"], state: str, bias_constant: float
     ) -> Tuple[Float[Array, "n_atoms 3"], str]:
         _assert_is_valid_state_file(state, self.base_state_file_path)
 
@@ -132,7 +119,7 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
                 ref_walkers / 10.0, self.simulation.topology
             ).openmm_positions(0),
             self.restrain_atom_list,
-            self.bias_constant_in_kj_per_mol_angs,
+            bias_constant,
         )
 
         # print("Reinitialize")
@@ -176,10 +163,13 @@ class EnsembleSteeredMDSimulator(AbstractEnsemblePriorProjector, strict=True):
         self,
         ref_positions: Float[Array, "n_walkers n_atoms 3"],
         states: List[str],
+        bias_constant: float,
     ) -> Tuple[Float[Array, "n_walkers n_atoms 3"], List[str]]:
         projected_walkers = np.zeros_like(ref_positions)
         for i, projector in enumerate(self.projectors):
-            projected_walkers[i], states[i] = projector(ref_positions[i], states[i])
+            projected_walkers[i], states[i] = projector(
+                ref_positions[i], states[i], bias_constant
+            )
         return jnp.array(projected_walkers), states
 
 

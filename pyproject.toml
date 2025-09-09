@@ -35,6 +35,7 @@ dependencies = [
     "openmm",
     "dm-pix",
     "optax",
+    "optimistix"
 ]
 dynamic = ["version"]
 

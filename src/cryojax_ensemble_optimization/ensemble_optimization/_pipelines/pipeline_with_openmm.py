@@ -6,11 +6,13 @@ from typing_extensions import override
 import jax
 import jax.numpy as jnp
 import mdtraj
+import optax
 from jax_dataloader import DataLoader
 from jaxtyping import Array, Float, Int, PRNGKeyArray
 from mdtraj.formats import XTCTrajectoryFile
 from tqdm import tqdm
 
+from ...utils import ModelToVolumeAligner
 from .._likelihood_optimization.optimizers import (
     IterativeEnsembleLikelihoodOptimizer,
     ProjGradDescWeightOptimizer,
@@ -27,7 +29,8 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
     prior_projector: AbstractEnsemblePriorProjector
     likelihood_optimizer: IterativeEnsembleLikelihoodOptimizer
     n_steps: int
-    reference_structure: mdtraj.Trajectory
+    prealigned_structure: mdtraj.Trajectory
+    model_to_volume_aligner: ModelToVolumeAligner | None
     atom_indices_for_opt: Int[Array, " n_atoms_for_opt"]
     runs_postprocessing: bool
 
@@ -36,15 +39,17 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
         prior_projector: AbstractEnsemblePriorProjector,
         likelihood_optimizer: IterativeEnsembleLikelihoodOptimizer,
         n_steps: int,
-        ref_structure_for_alignment: mdtraj.Trajectory,
+        prealigned_structure: mdtraj.Trajectory,
         atom_indices_for_opt: Int[Array, " n_atoms_for_opt"],
+        model_to_volume_aligner: ModelToVolumeAligner | None = None,
         *,
         runs_postprocessing: bool = True,
     ):
         self.prior_projector = prior_projector
         self.likelihood_optimizer = likelihood_optimizer
         self.n_steps = n_steps
-        self.reference_structure = ref_structure_for_alignment
+        self.prealigned_structure = prealigned_structure
+        self.model_to_volume_aligner = model_to_volume_aligner
         self.atom_indices_for_opt = atom_indices_for_opt
         self.runs_postprocessing = runs_postprocessing
 
@@ -55,6 +60,7 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
         initial_walkers: Float[Array, "n_walkers n_atoms 3"],
         initial_weights: Float[Array, " n_walkers"],
         dataloader: DataLoader,
+        bias_constant_scheduler: optax.ScalarOrSchedule,
         *,
         output_directory: str | pathlib.Path,
         initial_state_for_projector: Any = None,
@@ -65,6 +71,8 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
         # print("Initializing projetor...")
         md_states = self.prior_projector.initialize(initial_state_for_projector)
         # print("Projector initialized.")
+
+        reference_structure = self.prealigned_structure
 
         walkers = initial_walkers.copy()
         weights = initial_weights.copy()
@@ -84,7 +92,7 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
 
         # print("Aligning walkers to reference structure...")
         walkers = _align_walkers_to_reference(
-            walkers, self.reference_structure, self.atom_indices_for_opt
+            walkers, reference_structure, self.atom_indices_for_opt
         )
         # print("Walkers aligned.")
 
@@ -107,12 +115,31 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
             walkers = jax.device_get(walkers)
             # print("Likelihood Optimization done.")
 
+            reference_structure = mdtraj.Trajectory(
+                walkers[0] / 10.0,
+                topology=reference_structure.topology,
+            )
+
+            # print(walkers)
+
             # print("Prior Projection: ")
-            walkers, md_states = self.prior_projector(walkers, md_states)
+
+            walkers, md_states = self.prior_projector(
+                walkers, md_states, bias_constant_scheduler(i)
+            )
 
             walkers = _align_walkers_to_reference(
-                walkers, self.reference_structure, self.atom_indices_for_opt
+                walkers, reference_structure, self.atom_indices_for_opt
             )
+
+            if self.model_to_volume_aligner is not None:
+                walkers = _align_walkers_to_volume(
+                    walkers,
+                    self.model_to_volume_aligner,
+                    self.atom_indices_for_opt,
+                    self.likelihood_optimizer.likelihood_fn.gaussian_amplitudes,
+                    self.likelihood_optimizer.likelihood_fn.gaussian_variances,
+                )
 
             # print("Write trajectory to files...")
             for j in range(walkers.shape[0]):
@@ -120,6 +147,12 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
 
         for writer in writers:
             writer.close()
+
+        for i, walker in enumerate(walkers):
+            mdtraj.Trajectory(
+                xyz=walker / 10.0,
+                topology=reference_structure.topology,
+            ).save_pdb(os.path.join(output_directory, f"final_walker_{i}.pdb"))
 
         if self.runs_postprocessing:
             # print("Running postprocessing...")
@@ -170,3 +203,27 @@ def _align_walkers_to_reference(
         atom_indices=atom_indices,
     )
     return jnp.array(walkers_mdtraj.xyz) * 10.0  # Convert back to Angstroms
+
+
+def _align_walkers_to_volume(
+    walkers: Float[Array, "n_walkers n_atoms 3"],
+    model_to_volume_aligner: ModelToVolumeAligner,
+    atom_indices: Int[Array, " n_atoms_for_opt"],
+    gaussian_amplitudes,
+    gaussian_variances,
+) -> Float[Array, "n_walkers n_atoms 3"]:
+    """
+    Align the walkers to the volume using the ModelToVolumeAligner.
+    """
+    for i in range(walkers.shape[0]):
+        atomic_positions = walkers[i, atom_indices, :]
+
+        _, solution = model_to_volume_aligner.align(
+            atomic_positions,
+            gaussian_amplitudes[i],
+            gaussian_variances[i],
+        )
+        aligned_positions = walkers[i] @ solution.rotation_matrix + solution.offset
+
+        walkers = walkers.at[i].set(aligned_positions)
+    return walkers
