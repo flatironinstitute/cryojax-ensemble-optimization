@@ -7,32 +7,26 @@ import os
 import jax
 import jax.numpy as jnp
 import mdtraj
+import mrcfile
+import optax
 import yaml
-from cryojax.dataset import RelionParticleParameterFile, RelionParticleStackDataset
-
-from ..data import create_dataloader
-from ..ensemble_optimization import (
-    EnsembleOptimizationPipeline,
-    EnsembleSteeredMDSimulator,
-    IterativeEnsembleLikelihoodOptimizer,
-    LikelihoodOptimalWeightsFn,
-    SteeredMDSimulator,
+from cryojax.dataset import (
+    RelionParticleParameterFile,
+    RelionParticleStackDataset,
 )
-from ..internal._config_validators import EnsOptMDConfig
-from ..io import read_atomic_models
-from ..io.utils import get_atom_indices_from_pdb
+from cryojax.io import read_array_from_mrc
+from cryojax.ndimage import downsample_to_shape_with_fourier_cropping
+
+import cryojax_ensemble_optimization as cxopt
+from cryojax_ensemble_optimization.internal import EnsOptMDConfig
+from cryojax_ensemble_optimization.io import read_atomic_models
+from cryojax_ensemble_optimization.simulator import DilatedMask
+from cryojax_ensemble_optimization.utils import ModelToVolumeAligner
 
 
 def add_args(parser):
     parser.add_argument(
         "--config", type=str, help="Path to the config (yaml) file", required=True
-    )
-    parser.add_argument(
-        "--nprocs",
-        type=int,
-        default=1,
-        required=False,
-        help="Number of processors (only if using CPU)",
     )
     return parser
 
@@ -49,21 +43,96 @@ def mkbasedir(out):
 def warnexists(out):
     if os.path.exists(out):
         Warning("Warning: {} already exists. Overwriting.".format(out))
+    return
 
 
-def construct_md_projector(config, restrain_atom_list):
+def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
+    config = dict(ensemble_opt_config.model_dump())
+
+    # Load the initial walkers and reference structure
+    atomic_models = read_atomic_models(
+        config["path_to_atomic_models"],
+        loads_b_factors=config["loads_b_factors"],
+    )
+
+    ref_structure = mdtraj.load(
+        config["alignment_params"]["path_to_prealigned_atomic_model"]
+    )
+    ref_structure = ref_structure.center_coordinates()
+
+    atom_list = ref_structure.topology.select(config["atom_selection"])
+
+    initial_walkers = jnp.array(
+        [model["atom_positions"] for model in atomic_models.values()]
+    )
+    gaussian_variances = jnp.array(
+        [model["gaussian_variances"] for model in atomic_models.values()]
+    )[:, atom_list]
+    gaussian_amplitudes = jnp.array(
+        [model["gaussian_amplitudes"] for model in atomic_models.values()]
+    )[:, atom_list]
+
+    # Load experimental data: images, mask, and consensus volume
+    stack_dataset = RelionParticleStackDataset(
+        RelionParticleParameterFile(
+            path_to_starfile=config["data_params"]["path_to_starfile"],
+            loads_envelope=config["data_params"]["loads_envelope"],
+        ),
+        path_to_relion_project=config["data_params"]["path_to_relion_project"],
+    )
+
+    key = jax.random.PRNGKey(config["rng_seed"])
+    key_data, key_pipeline = jax.random.split(key)
+
+    dataloader = cxopt.data.create_dataloader(
+        stack_dataset,
+        batch_size=config["likelihood_optimizer_params"]["batch_size"],
+        shuffle=True,
+        drop_last=False,
+        jax_prng_key=key_data,
+    )
+
+    if config["data_params"]["path_to_volumetric_mask"] is not None:
+        mask = jnp.asarray(
+            mrcfile.open(
+                config["data_params"]["path_to_volumetric_mask"],
+                mode="r",
+            ).data
+        ).copy()
+        dilated_mask = DilatedMask(mask, stack_dataset[0]["parameters"]["config"])
+
+    else:
+        dilated_mask = None
+
+    if config["alignment_params"]["path_to_consensus_volume"] is not None:
+        volume_for_alignment, voxel_size = read_array_from_mrc(
+            config["alignment_params"]["path_to_consensus_volume"],
+            loads_spacing=True,
+        )
+
+        if config["alignment_params"]["consensus_volume_voxel_size"] is not None:
+            voxel_size = config["alignment_params"]["consensus_volume_voxel_size"]
+
+        box_size_ds = int(config["alignment_params"]["downsampled_box_size"])
+
+        voxel_size = voxel_size * volume_for_alignment.shape[0] / box_size_ds
+        volume_for_alignment = downsample_to_shape_with_fourier_cropping(
+            volume_for_alignment, (box_size_ds, box_size_ds, box_size_ds)
+        )
+
+        model_aligner = ModelToVolumeAligner(volume_for_alignment, voxel_size)
+    else:
+        model_aligner = None
+
+    # Construct prior projector
     projector_list = []
 
-    for i in range(len(config["path_to_atomic_models"])):
-        mkbasedir(os.path.join(config["path_to_output"], f"states_proj_{i}/"))
+    for i in range(initial_walkers.shape[0]):
         projector_list.append(
-            SteeredMDSimulator(
+            cxopt.ensemble_optimization.SteeredMDSimulator(
                 path_to_initial_pdb=config["path_to_atomic_models"][i],
-                bias_constant_in_kj_per_mol_angs=config["projector_params"][
-                    "bias_constant_in_units"
-                ],
                 n_steps=config["projector_params"]["n_steps"],
-                restrain_atom_list=restrain_atom_list,
+                restrain_atom_list=atom_list,
                 parameters_for_md={
                     "platform": config["projector_params"]["platform"],
                     "properties": config["projector_params"]["platform_properties"],
@@ -73,140 +142,98 @@ def construct_md_projector(config, restrain_atom_list):
                 ),
             )
         )
-    return EnsembleSteeredMDSimulator(
-        projector_list,
-    )
+    md_projector = cxopt.ensemble_optimization.EnsembleSteeredMDSimulator(projector_list)
 
-
-def construct_likelihood_optimizer(config, gaussian_amplitudes, gaussian_variances):
-    likelihood_fn = LikelihoodOptimalWeightsFn(
+    # Construct likelihood optimizer
+    data_sign = -1.0 if config["data_params"]["data_sign"] == "dark-on-light" else 1.0
+    likelihood_fn = cxopt.ensemble_optimization.LikelihoodOptimalWeightsFn(
         gaussian_amplitudes,
         gaussian_variances,
-        config["likelihood_optimizer_params"]["image_to_walker_log_likelihood_fn"],
-        dilated_mask=None,
-        estimates_pose=False,
-    )
-    return IterativeEnsembleLikelihoodOptimizer(
-        step_size=config["likelihood_optimizer_params"]["step_size"],
-        n_steps=config["likelihood_optimizer_params"]["n_steps"],
-        n_batches_per_step=config["likelihood_optimizer_params"]["n_batches_per_step"],
-        likelihood_fn=likelihood_fn,
+        image_to_walker_log_likelihood_fn="iso_gaussian_var_marg",
+        loss_fn_constant_args=data_sign,
+        dilated_mask=dilated_mask,
+        estimates_pose=config["likelihood_optimizer_params"]["estimates_pose"],
     )
 
-
-def construct_ensemble_optimization_pipeline(
-    config, gaussian_amplitudes, gaussian_variances
-):
-    """
-    Generate the pipeline from the pipeline config
-    """
-
-    restrain_atom_list = get_atom_indices_from_pdb(
-        selection_string=config["atom_selection"],
-        pdb_file=config["path_to_reference_model"],
+    likelihood_optimizer = (
+        cxopt.ensemble_optimization.IterativeEnsembleLikelihoodOptimizer(
+            step_size=config["likelihood_optimizer_params"]["step_size"],
+            n_steps=config["likelihood_optimizer_params"]["n_steps"],
+            n_batches_per_step=config["likelihood_optimizer_params"][
+                "n_batches_per_step"
+            ],
+            likelihood_fn=likelihood_fn,
+        )
     )
 
-    projector_list = construct_md_projector(config, restrain_atom_list)
-    likelihood_optimizer = construct_likelihood_optimizer(
-        config, gaussian_amplitudes, gaussian_variances
-    )
-    ref_structure = mdtraj.load(config["path_to_reference_model"])
-    ref_structure.center_coordinates()
-
-    ensemble_optimization_pipeline = EnsembleOptimizationPipeline(
-        prior_projector=projector_list,
-        likelihood_optimizer=likelihood_optimizer,
-        n_steps=config["n_steps"],
-        ref_structure_for_alignment=ref_structure,
-        atom_indices_for_opt=restrain_atom_list,
-        runs_postprocessing=True,
-    )
-    return ensemble_optimization_pipeline
-
-
-def load_initial_walkers_and_scattering_params(config):
-    atomic_models = read_atomic_models(
-        config["path_to_atomic_models"],
-        loads_b_factors=config["loads_b_factors"],
+    # Construct the ensemble optimization pipeline
+    ensemble_refinement_pipeline = (
+        cxopt.ensemble_optimization.EnsembleOptimizationPipeline(
+            prior_projector=md_projector,
+            likelihood_optimizer=likelihood_optimizer,
+            n_steps=config["n_steps"],
+            prealigned_structure=ref_structure,
+            atom_indices_for_opt=atom_list,
+            model_to_volume_aligner=model_aligner,
+            runs_postprocessing=True,
+        )
     )
 
-    restrain_atom_list = get_atom_indices_from_pdb(
-        selection_string=config["atom_selection"],
-        pdb_file=config["path_to_reference_model"],
-    )
+    # Running the optimization
 
-    walkers = jnp.array([model["atom_positions"] for model in atomic_models.values()])
-    gaussian_variances = jnp.array(
-        [model["gaussian_variances"] for model in atomic_models.values()]
-    )[:, restrain_atom_list]
-    gaussian_amplitudes = jnp.array(
-        [model["gaussian_amplitudes"] for model in atomic_models.values()]
-    )[:, restrain_atom_list]
+    if isinstance(config["projector_params"]["bias_constant_in_kjpermol"], float):
+        bias_constant_scheduler = optax.constant_schedule(
+            config["projector_params"]["bias_constant_in_kjpermol"]
+        )
+    elif (
+        isinstance(config["projector_params"]["bias_constant_in_kjpermol"], list)
+        and len(config["projector_params"]["bias_constant_in_kjpermol"]) == 2
+    ):
+        bias_constant_scheduler = optax.linear_schedule(
+            init_value=config["projector_params"]["bias_constant_in_kjpermol"][0],
+            end_value=config["projector_params"]["bias_constant_in_kjpermol"][1],
+            transition_steps=config["n_steps"],
+        )
+    else:
+        raise ValueError(
+            "bias_constant_in_kjpermol must be a float or a list of two floats."
+        )
 
-    return walkers, gaussian_amplitudes, gaussian_variances
+    init_walkers = jnp.array(initial_walkers.copy())
+    init_weights = jnp.array(config["likelihood_optimizer_params"]["init_weights"])
 
-
-def run_ensemble_optimization(config):
-    key = jax.random.key(config["rng_seed"])
-    key_dataloader, key_pipeline = jax.random.split(key)
-    relion_stack_dataset = RelionParticleStackDataset(
-        RelionParticleParameterFile(
-            path_to_starfile=config["path_to_starfile"],
-            mode="r",
-            loads_envelope=config["loads_envelope"],
-        ),
-        path_to_relion_project=config["path_to_relion_project"],
-        mode="r",
-    )
-    dataloader = create_dataloader(
-        relion_stack_dataset,
-        batch_size=config["likelihood_optimizer_params"]["batch_size"],
-        shuffle=True,
-        jax_prng_key=key_dataloader,
-    )
-    init_walkers, gaussian_amplitudes, gaussian_variances = (
-        load_initial_walkers_and_scattering_params(config)
-    )
-    ensemble_optimization_pipeline = construct_ensemble_optimization_pipeline(
-        config, gaussian_amplitudes, gaussian_variances
-    )
-
-    walkers, weights = ensemble_optimization_pipeline.run(
+    walkers, weights = ensemble_refinement_pipeline.run(
         key=key_pipeline,
         initial_walkers=init_walkers,
-        initial_weights=config["likelihood_optimizer_params"]["init_weights"],
+        initial_weights=init_weights,
         dataloader=dataloader,
+        bias_constant_scheduler=bias_constant_scheduler,
         output_directory=config["path_to_output"],
         initial_state_for_projector=config["projector_params"]["path_to_initial_states"],
     )
 
     jnp.savez(
-        os.path.join(config["path_to_output"], "final_walkers_and_weights.npz"),
+        os.path.join(config["path_to_output"], "final_walkers.npz"),
         walkers=walkers,
         weights=weights,
     )
-    return
+
+    return walkers, weights
 
 
 def main(args):
-    nprocs = args.nprocs
-
     with open(args.config, "r") as f:
         config_dict = yaml.safe_load(f)
-        config = dict(EnsOptMDConfig(**config_dict).model_dump())
+        config = EnsOptMDConfig(**config_dict)
 
-    if config["projector_params"]["platform"] == "CPU":
-        if config["projector_params"]["platform_properties"]["Threads"] is None:
-            config["projector_params"]["platform_properties"]["Threads"] = str(nprocs)
-
-    warnexists(config["path_to_output"])
-    mkbasedir(config["path_to_output"])
+    warnexists(config.path_to_output)
+    mkbasedir(config.path_to_output)
 
     logger = logging.getLogger()
     logger.handlers.clear()
 
     logger_fname = datetime.datetime.now().strftime("%Y-%m-%d-%H")
-    logger_fname = os.path.join(config["path_to_output"], logger_fname + ".log")
+    logger_fname = os.path.join(config.path_to_output, logger_fname + ".log")
 
     fhandler = logging.FileHandler(filename=logger_fname, mode="a")
     formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -215,17 +242,17 @@ def main(args):
     logger.setLevel(logging.INFO)
 
     config_fname = os.path.basename(args.config)
-    with open(os.path.join(config["path_to_output"], config_fname), "w") as f:
+    with open(os.path.join(config.path_to_output, config_fname), "w") as f:
         yaml.dump(config_dict, f, default_flow_style=False)
 
     logging.info(
         "A copy of the used config file has been written to {}".format(
-            os.path.join(config["path_to_output"], config_fname)
+            os.path.join(config.path_to_output, config_fname)
         )
     )
 
     logging.info("Running ensemble optimization...")
-    run_ensemble_optimization(config)
+    _, _ = run_ensemble_optimization_with_md(config)
     logging.info("Ensemble optimization complete.")
 
     return

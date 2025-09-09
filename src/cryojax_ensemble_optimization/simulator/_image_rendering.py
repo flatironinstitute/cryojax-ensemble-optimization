@@ -17,6 +17,7 @@ def render_image_with_white_gaussian_noise(
     constant_args: Tuple[
         Tuple[cxs.AbstractPotentialRepresentation],
         AbstractMask,
+        float,
     ],
     per_particle_args: Tuple[PRNGKeyArray, Int, Float],
 ) -> Float[
@@ -28,16 +29,18 @@ def render_image_with_white_gaussian_noise(
     and noise variance. The noise is White Gaussian noise.
 
     **Arguments:**
-        particle_parameters: The particle parameters.
-        constant_args: A tuple with the potential and potential integrator.
-        per_particle_args: A containing a random jax key,
+        - `particle_parameters`: The particle parameters.
+        - `constant_args`: A tuple with the potentials, the mask, and the data_sign.
+          A data_sign of 1.0 means dark-on-light, -1.0 means light-on-dark.
+
+        - `per_particle_args`: A containing a random jax key,
             the potential_idx to use, and the noise variance.
     **Returns:**
         The rendered image.
 
     """
     key_noise, potential_idx, snr = per_particle_args
-    potentials, mask = constant_args
+    potentials, mask, data_sign = constant_args
     potential = _select_potential(potentials, potential_idx)
 
     image_model = cxs.make_image_model(
@@ -54,4 +57,4 @@ def render_image_with_white_gaussian_noise(
         variance=1.0,
         signal_scale_factor=jnp.sqrt(snr),
     )
-    return distribution.sample(key_noise)
+    return data_sign * distribution.sample(key_noise)
