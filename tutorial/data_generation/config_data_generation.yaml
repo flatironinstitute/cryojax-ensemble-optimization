@@ -5,28 +5,27 @@ data_sign: "dark-on-light" # Relion convention
 pixel_size: 0.2
 box_size: 128
 pad_scale: 1.0
-voltage_in_kilovolts: 10.0
+voltage_in_kilovolts: 300.0
+amplitude_contrast_ratio: 0.1
+spherical_aberration_in_mm: 2.7
 
-# Transfer Theory
+# Pose information
 offset_x_in_angstroms: 0.0
 offset_y_in_angstroms: 0.0
 
 # Transfer Function
-# lists represent a range
-# for uniform random sampling
-defocus_in_angstroms: 150
+# lists represent a range for uniform random sampling
+defocus_in_angstroms: [100.0, 500.0]
 astigmatism_in_angstroms: 0.0
 astigmatism_angle_in_degrees: 0.0
 phase_shift: 0.0
-amplitude_contrast_ratio: 0.1
-spherical_aberration_in_mm: 0.27
 ctf_scale_factor: 1.0
 envelope_b_factor: 0.0
 
-# Noise and randomness
+# Noise parameters
 noise_snr: 0.1 # high SNR so we can actually see something...
-mask_radius: 60
-mask_rolloff_width: 1.0
+mask_radius: 60 # mask to define signal region
+mask_rolloff_width: 1.0 # controls edge smoothness
 rng_seed: 0
 
 # Output parameters

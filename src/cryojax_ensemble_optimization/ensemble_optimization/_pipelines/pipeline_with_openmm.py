@@ -91,7 +91,7 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
         # print("Writers prepared.")
 
         # print("Aligning walkers to reference structure...")
-        walkers = _align_walkers_to_reference(
+        walkers = _align_walkers_to_references(
             walkers, reference_structure, self.atom_indices_for_opt
         )
         # print("Walkers aligned.")
@@ -123,7 +123,7 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
                 walkers, md_states, bias_constant_scheduler(i)
             )
 
-            walkers = _align_walkers_to_reference(
+            walkers = _align_walkers_to_references(
                 walkers, reference_structure, self.atom_indices_for_opt
             )
 
@@ -136,10 +136,12 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
                     self.likelihood_optimizer.likelihood_fn.gaussian_variances,
                 )
 
-            reference_structure = mdtraj.Trajectory(
-                walkers[0] / 10.0,
-                topology=reference_structure.topology,
-            )
+            # reference_structure = mdtraj.Trajectory(
+            #     walkers[0] / 10.0,
+            #     topology=reference_structure.topology,
+            # )
+            # reference_structures = walkers.copy()
+
             # print("Write trajectory to files...")
             for j in range(walkers.shape[0]):
                 writers[j].write(walkers[j] / 10.0)
@@ -184,7 +186,7 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
         return walkers, weights
 
 
-def _align_walkers_to_reference(
+def _align_walkers_to_references(
     walkers: Float[Array, "n_walkers n_atoms 3"],
     reference_structure: mdtraj.Trajectory,
     atom_indices: Int[Array, " n_atoms_for_opt"],
@@ -192,16 +194,20 @@ def _align_walkers_to_reference(
     """
     Align the walkers to the reference structure.
     """
-    # Convert walkers to mdtraj format
-    walkers_mdtraj = mdtraj.Trajectory(
-        xyz=walkers / 10.0,  # Convert to nm
-        topology=reference_structure.topology,
-    ).superpose(
-        reference_structure,
-        frame=0,
-        atom_indices=atom_indices,
-    )
-    return jnp.array(walkers_mdtraj.xyz) * 10.0  # Convert back to Angstroms
+
+    new_walkers = walkers.copy()
+    for i in range(walkers.shape[0]):
+        walker_mdtraj = mdtraj.Trajectory(
+            xyz=walkers[i] / 10.0,  # Convert to nm
+            topology=reference_structure.topology,
+        )
+        walker_mdtraj = walker_mdtraj.superpose(
+            reference_structure,
+            frame=0,
+            atom_indices=atom_indices,
+        )
+        new_walkers = new_walkers.at[i].set(walker_mdtraj.xyz[0] * 10.0)
+    return new_walkers
 
 
 def _align_walkers_to_volume(
