@@ -50,6 +50,7 @@ def render_image_with_white_gaussian_noise(
         particle_parameters["transfer_theory"],
         signal_region=(mask.array == 1),
         normalizes_signal=True,
+        physical_units=False,
     )
 
     distribution = cxs.IndependentGaussianPixels(
