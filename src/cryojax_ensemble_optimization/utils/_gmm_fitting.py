@@ -56,7 +56,7 @@ def generate_gmm_model_from_atomic_model(
     voxel_size,
     *,
     fit_selection_string='name "C2"',
-    init_log_amp=40.0,
+    init_log_amp=6.0,
     init_log_var=1.0,
     n_gaussians_per_bead=1,
     atol=1e-3,
