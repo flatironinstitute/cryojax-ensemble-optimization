@@ -113,7 +113,7 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
         if config["alignment_params"]["consensus_volume_voxel_size"] is not None:
             voxel_size = config["alignment_params"]["consensus_volume_voxel_size"]
 
-        box_size_ds = int(config["alignment_params"]["downsampled_box_size"])
+        box_size_ds = int(config["alignment_params"]["downsample_box_size"])
 
         voxel_size = voxel_size * volume_for_alignment.shape[0] / box_size_ds
         volume_for_alignment = downsample_to_shape_with_fourier_cropping(
