@@ -4,7 +4,7 @@ import pytest
 
 # from jaxtyping import install_import_hook
 # with install_import_hook("cryojax_ensemble_optimization", "typeguard.typechecked"):
-from cryojax_ensemble_optimization.io import (
+from cryojax_eo.io import (
     load_atomic_models_as_potentials,
     read_atomic_models,
     read_rna_pair_string,

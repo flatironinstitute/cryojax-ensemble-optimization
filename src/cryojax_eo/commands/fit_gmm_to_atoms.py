@@ -105,7 +105,7 @@ def main(args):
     return
 
 
-if __name__ == "__main__":
+def main_cli():
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -113,3 +113,7 @@ if __name__ == "__main__":
     )
 
     main(add_args(parser).parse_args())
+
+
+if __name__ == "__main__":
+    main_cli()

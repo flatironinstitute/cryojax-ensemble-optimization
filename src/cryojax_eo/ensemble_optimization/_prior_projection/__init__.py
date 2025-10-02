@@ -1,7 +1,6 @@
 from ._forcefields import (
     AbstractForceField as AbstractForceField,
     compute_harmonic_bias_potential_energy as compute_harmonic_bias_potential_energy,
-    RNAForceField as RNAForceField,
 )
 from ._langevin_dynamics import (
     OverdampedLangevinSampler as OverdampedLangevinSampler,

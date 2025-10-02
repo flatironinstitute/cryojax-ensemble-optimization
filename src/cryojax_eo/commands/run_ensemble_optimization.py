@@ -17,11 +17,11 @@ from cryojax.dataset import (
 from cryojax.io import read_array_from_mrc
 from cryojax.ndimage import downsample_to_shape_with_fourier_cropping
 
-import cryojax_ensemble_optimization as cxopt
-from cryojax_ensemble_optimization.internal import EnsOptMDConfig
-from cryojax_ensemble_optimization.io import read_atomic_models
-from cryojax_ensemble_optimization.simulator import DilatedMask
-from cryojax_ensemble_optimization.utils import ModelToVolumeAligner
+import cryojax_eo as cxeo
+from cryojax_eo.internal import EnsOptMDConfig
+from cryojax_eo.io import read_atomic_models
+from cryojax_eo.simulator import DilatedMask
+from cryojax_eo.utils import ModelToVolumeAligner
 
 
 def add_args(parser):
@@ -84,7 +84,7 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
     key = jax.random.PRNGKey(config["rng_seed"])
     key_data, key_pipeline = jax.random.split(key)
 
-    dataloader = cxopt.data.create_dataloader(
+    dataloader = cxeo.data.create_dataloader(
         stack_dataset,
         batch_size=config["likelihood_optimizer_params"]["batch_size"],
         shuffle=True,
@@ -129,7 +129,7 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
 
     for i in range(initial_walkers.shape[0]):
         projector_list.append(
-            cxopt.ensemble_optimization.SteeredMDSimulator(
+            cxeo.ensemble_optimization.SteeredMDSimulator(
                 path_to_initial_pdb=config["path_to_atomic_models"][i],
                 n_steps=config["projector_params"]["n_steps"],
                 restrain_atom_list=atom_list,
@@ -142,11 +142,11 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
                 ),
             )
         )
-    md_projector = cxopt.ensemble_optimization.EnsembleSteeredMDSimulator(projector_list)
+    md_projector = cxeo.ensemble_optimization.EnsembleSteeredMDSimulator(projector_list)
 
     # Construct likelihood optimizer
     data_sign = -1.0 if config["data_params"]["data_sign"] == "dark-on-light" else 1.0
-    likelihood_fn = cxopt.ensemble_optimization.LikelihoodOptimalWeightsFn(
+    likelihood_fn = cxeo.ensemble_optimization.LikelihoodOptimalWeightsFn(
         gaussian_amplitudes,
         gaussian_variances,
         image_to_walker_log_likelihood_fn="iso_gaussian_var_marg",
@@ -156,7 +156,7 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
     )
 
     likelihood_optimizer = (
-        cxopt.ensemble_optimization.IterativeEnsembleLikelihoodOptimizer(
+        cxeo.ensemble_optimization.IterativeEnsembleLikelihoodOptimizer(
             step_size=config["likelihood_optimizer_params"]["step_size"],
             n_steps=config["likelihood_optimizer_params"]["n_steps"],
             n_batches_per_step=config["likelihood_optimizer_params"][
@@ -168,7 +168,7 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
 
     # Construct the ensemble optimization pipeline
     ensemble_refinement_pipeline = (
-        cxopt.ensemble_optimization.EnsembleOptimizationPipeline(
+        cxeo.ensemble_optimization.EnsembleOptimizationPipeline(
             prior_projector=md_projector,
             likelihood_optimizer=likelihood_optimizer,
             n_steps=config["n_steps"],
@@ -258,10 +258,14 @@ def main(args):
     return
 
 
-if __name__ == "__main__":
+def main_cli():
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=yaml.dump(EnsOptMDConfig.model_json_schema(), indent=4),
     )
     main(add_args(parser).parse_args())
+
+
+if __name__ == "__main__":
+    main_cli()

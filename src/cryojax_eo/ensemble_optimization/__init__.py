@@ -28,7 +28,6 @@ from ._prior_projection import (
     EnsembleSteeredMDSimulator as EnsembleSteeredMDSimulator,
     OverdampedLangevinSampler as OverdampedLangevinSampler,
     ParallelSteeredOverdampedLangevinSampler as ParallelSteeredOverdampedLangevinSampler,
-    RNAForceField as RNAForceField,
     SteeredMDSimulator as SteeredMDSimulator,
     SteeredOverdampedLangevinSampler as SteeredOverdampedLangevinSampler,
 )
