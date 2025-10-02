@@ -8,9 +8,8 @@ from jaxopt import ProjectedGradient
 from jaxopt.projection import projection_simplex
 from jaxtyping import Array, Float, Int
 
-from cryojax_ensemble_optimization.simulator import DilatedMask
-
 from ...._custom_types import ConstantT, LossFn
+from ....simulator import DilatedMask
 from .ensemble_losses import (
     compute_likelihood_matrix,
     compute_neg_log_likelihood,

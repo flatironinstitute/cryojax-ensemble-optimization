@@ -2,12 +2,12 @@ import jax
 import yaml
 from cryojax.dataset import RelionParticleParameterFile, RelionParticleStackDataset
 
-from cryojax_ensemble_optimization.ensemble_optimization import (
+from cryojax_eo.ensemble_optimization import (
     compute_likelihood_matrix,
     likelihood_isotropic_gaussian,
     likelihood_sliced_wasserstein,
 )
-from cryojax_ensemble_optimization.internal import DatasetGeneratorConfig
+from cryojax_eo.internal import DatasetGeneratorConfig
 
 
 # def test_likelihood_isotropic_gaussian():

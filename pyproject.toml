@@ -1,5 +1,5 @@
 [project]
-name = "cryojax_ensemble_optimization"
+name = "cryojax_eo"
 authors = [
     {name = "David Silva Sanchez", email = "david.silva@yale.edu"},
     {name = "Erik Henning Thiede"},
@@ -61,7 +61,7 @@ build-backend = "hatchling.build"
 source = "vcs"
 
 [tool.hatch.build.hooks.vcs]
-version-file = "src/cryojax_ensemble_optimization/cryojax_ensemble_optimization_version.py"
+version-file = "src/cryojax_eo/cryojax_ensemble_optimization_version.py"
 
 [tool.ruff]
 extend-include = ["*.ipynb"]
@@ -83,7 +83,9 @@ line-length = 90
 [tool.pyright]
 reportIncompatibleMethodOverride = true
 reportIncompatibleVariableOverride = false  # Incompatible with eqx.AbstractVar
-include = ["cryojax_ensemble_optimization", "tests"]
+include = ["cryojax_eo", "tests"]
 
 [project.scripts]
-cryojax_ensemble_optimization = "cryojax_ensemble_optimization.command_line:main_commands"
+run_ensemble_optimization = "cryojax_eo.commands.run_ensemble_optimization:main_cli"
+generate_data = "cryojax_eo.commands.generate_data:main_cli"
+fit_gmm_to_atoms = "cryojax_eo.commands.fit_gmm_to_atoms:main_cli"

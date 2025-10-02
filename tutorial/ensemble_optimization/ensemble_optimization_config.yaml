@@ -14,13 +14,12 @@ alignment_params:
 projector_params:
   bias_constant_in_kjpermol: 100000.0
   n_steps: 400
-  platform: CUDA
+  # platform: CUDA
+  # platform_properties:
+  #   DeviceIndex: '0'
+  platform: CPU
   platform_properties:
-    DeviceIndex: '0'
-  #platform: CPU
-  #platform_properties:
-  #  Threads: '32' # Number of threads to use!!!
-  # path_to_initial_states: ... # not used for tutorial
+    Threads: '4' # Number of threads to use!!!
   path_to_initial_states:
     - ./atomic_models/initial_state_0.xml
     - ./atomic_models/initial_state_1.xml
