@@ -9,9 +9,9 @@ import jax
 import yaml
 from cryojax.ndimage.transforms import CircularCosineMask
 
-from ..data import generate_relion_parameter_file, simulate_relion_dataset
-from ..internal._config_validators import DatasetGeneratorConfig
-from ..io import load_atomic_models_as_potentials
+from ..data import make_relion_parameter_file, simulate_relion_dataset
+from ..internal._config_validators import DatasetSimulatorConfig
+from ..io import load_atomic_models_as_volumes
 
 
 def add_args(parser):
@@ -35,24 +35,24 @@ def warnexists(out):
         Warning("Warning: {} already exists. Overwriting.".format(out))
 
 
-def simulate_particle_stack_from_config(config: DatasetGeneratorConfig):
+def simulate_particle_stack_from_config(config: DatasetSimulatorConfig):
     seed = config.rng_seed
     key = jax.random.key(seed)
 
     key_param, key_stack = jax.random.split(key)
-    parameter_file = generate_relion_parameter_file(key_param, config)
+    parameter_file = make_relion_parameter_file(key_param, config)
 
     # dumping so serialization happens
     config_dict = dict(config.model_dump())
 
-    potentials = load_atomic_models_as_potentials(
+    volumes = load_atomic_models_as_volumes(
         config_dict["atomic_models_params"]["path_to_atomic_models"],
         selection_string=config_dict["atomic_models_params"]["atom_selection"],
         loads_b_factors=config_dict["atomic_models_params"]["loads_b_factors"],
     )
 
     mask = CircularCosineMask(
-        coordinate_grid=parameter_file[0]["config"].coordinate_grid_in_pixels,
+        coordinate_grid=parameter_file[0]["image_config"].coordinate_grid_in_pixels,
         radius=config_dict["mask_radius"],
         rolloff_width=config_dict["mask_rolloff_width"],
     )
@@ -62,7 +62,7 @@ def simulate_particle_stack_from_config(config: DatasetGeneratorConfig):
         parameter_file=parameter_file,
         path_to_relion_project=config_dict["path_to_relion_project"],
         images_per_file=config_dict["images_per_file"],
-        potentials=potentials,
+        volumes=volumes,
         ensemble_probabilities=config_dict["atomic_models_params"][
             "atomic_models_probabilities"
         ],
@@ -78,7 +78,7 @@ def simulate_particle_stack_from_config(config: DatasetGeneratorConfig):
 def main(args):
     with open(args.config, "r") as f:
         config_dict = yaml.safe_load(f)
-        config = DatasetGeneratorConfig(**config_dict)
+        config = DatasetSimulatorConfig(**config_dict)
 
     project_path = config.path_to_relion_project
     warnexists(project_path)
@@ -121,7 +121,7 @@ def main_cli():
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=yaml.dump(DatasetGeneratorConfig.model_json_schema(), indent=4),
+        epilog=yaml.dump(DatasetSimulatorConfig.model_json_schema(), indent=4),
     )
     main(add_args(parser).parse_args())
 

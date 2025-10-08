@@ -100,8 +100,8 @@ class PosteriorOptimizer(eqx.Module):
         dataloader: jdl.DataLoader,
         n_steps: int,
         n_batches_per_step: int,
-        step_size: optax.ScalarOrSchedule,
-        weight_likelihood_parameter: optax.ScalarOrSchedule,
+        step_size: optax.Schedule,
+        weight_likelihood_parameter: optax.Schedule,
         *,
         output_directory: str,
     ):

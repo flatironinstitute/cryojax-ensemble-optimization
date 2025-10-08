@@ -60,7 +60,7 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
         initial_walkers: Float[Array, "n_walkers n_atoms 3"],
         initial_weights: Float[Array, " n_walkers"],
         dataloader: DataLoader,
-        bias_constant_scheduler: optax.ScalarOrSchedule,
+        bias_constant_scheduler: optax.Schedule,
         *,
         output_directory: str | pathlib.Path,
         initial_state_for_projector: Any = None,
@@ -132,8 +132,8 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
                     walkers,
                     self.model_to_volume_aligner,
                     self.atom_indices_for_opt,
-                    self.likelihood_optimizer.likelihood_fn.gaussian_amplitudes,
-                    self.likelihood_optimizer.likelihood_fn.gaussian_variances,
+                    self.likelihood_optimizer.likelihood_fn.amplitudes,
+                    self.likelihood_optimizer.likelihood_fn.variances,
                 )
 
             # print("Write trajectory to files...")
@@ -208,8 +208,8 @@ def _align_walkers_to_volume(
     walkers: Float[Array, "n_walkers n_atoms 3"],
     model_to_volume_aligner: ModelToVolumeAligner,
     atom_indices: Int[Array, " n_atoms_for_opt"],
-    gaussian_amplitudes,
-    gaussian_variances,
+    amplitudes,
+    variances,
 ) -> Float[Array, "n_walkers n_atoms 3"]:
     """
     Align the walkers to the volume using the ModelToVolumeAligner.
@@ -219,8 +219,8 @@ def _align_walkers_to_volume(
 
         _, solution = model_to_volume_aligner.align(
             atomic_positions,
-            gaussian_amplitudes[i],
-            gaussian_variances[i],
+            amplitudes[i],
+            variances[i],
         )
         aligned_positions = walkers[i] @ solution.rotation_matrix + solution.offset
 

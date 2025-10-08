@@ -5,7 +5,7 @@ import pytest
 # from jaxtyping import install_import_hook
 # with install_import_hook("cryojax_ensemble_optimization", "typeguard.typechecked"):
 from cryojax_eo.io import (
-    load_atomic_models_as_potentials,
+    load_atomic_models_as_volumes,
     read_atomic_models,
     read_rna_pair_string,
 )
@@ -39,17 +39,12 @@ def test_load_atomic_models(path_to_atomic_models, selection_string):
 
     for model in atomic_models:
         assert atomic_models[model]["atom_positions"].shape == atom_positions.shape
-        assert (
-            atomic_models[model]["gaussian_amplitudes"].shape[0]
-            == atom_positions.shape[0]
-        )
-        assert (
-            atomic_models[model]["gaussian_variances"].shape[0] == atom_positions.shape[0]
-        )
+        assert atomic_models[model]["amplitudes"].shape[0] == atom_positions.shape[0]
+        assert atomic_models[model]["variances"].shape[0] == atom_positions.shape[0]
 
         assert atomic_models[model]["atom_positions"].shape[1] == 3
-        assert atomic_models[model]["gaussian_amplitudes"].shape[1] == 5
-        assert atomic_models[model]["gaussian_variances"].shape[1] == 5
+        assert atomic_models[model]["amplitudes"].shape[1] == 5
+        assert atomic_models[model]["variances"].shape[1] == 5
 
     assert len(atomic_models) == len(path_to_atomic_models)
 
@@ -61,11 +56,11 @@ def test_load_atomic_models(path_to_atomic_models, selection_string):
         "name CA",
     ],
 )
-def test_load_as_potentials(path_to_atomic_models, selection_string):
+def test_load_as_volumes(path_to_atomic_models, selection_string):
     """
     Test loading all atoms from the atomic models.
     """
-    potentials = load_atomic_models_as_potentials(
+    volumes = load_atomic_models_as_volumes(
         path_to_atomic_models, selection_string=selection_string, loads_b_factors=True
     )
 
@@ -75,17 +70,17 @@ def test_load_as_potentials(path_to_atomic_models, selection_string):
     atom_indices = atom_positions.topology.select(selection_string)
     atom_positions = atom_positions.xyz[0][atom_indices]
 
-    for i in range(len(potentials)):
-        potential = potentials[i]
-        assert potential.atom_positions.shape == atom_positions.shape
-        assert potential.gaussian_amplitudes.shape[0] == atom_positions.shape[0]
-        assert potential.gaussian_variances.shape[0] == atom_positions.shape[0]
+    for i in range(len(volumes)):
+        volume = volumes[i]
+        assert volume.positions.shape == atom_positions.shape
+        assert volume.amplitudes.shape[0] == atom_positions.shape[0]
+        assert volume.variances.shape[0] == atom_positions.shape[0]
 
-        assert potential.atom_positions.shape[1] == 3
-        assert potential.gaussian_amplitudes.shape[1] == 5
-        assert potential.gaussian_variances.shape[1] == 5
+        assert volume.positions.shape[1] == 3
+        assert volume.amplitudes.shape[1] == 5
+        assert volume.variances.shape[1] == 5
 
-    assert len(potentials) == len(path_to_atomic_models)
+    assert len(volumes) == len(path_to_atomic_models)
 
 
 def test_read_rna_pair_string():

@@ -7,7 +7,7 @@ from typing import Tuple
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from cryojax.internal import error_if_negative
+from cryojax.jax_util import error_if_negative
 from jaxtyping import Array, Float, Int
 
 from .model_to_volume_loss import ModelToVolumeLikelihoodFn
@@ -33,7 +33,8 @@ class SteepestDescWalkerFlexibleFitting(eqx.Module):
         self,
         walkers,
         reference_volume,
-    ):
+    ) -> Tuple[Float, Float[Array, "n_atoms 3"]]:
+        loss = jnp.inf
         for _ in range(self.n_steps):
             loss, walkers = _optimize_walkers_positions(
                 walkers,

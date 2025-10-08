@@ -87,5 +87,5 @@ include = ["cryojax_eo", "tests"]
 
 [project.scripts]
 run_ensemble_optimization = "cryojax_eo.commands.run_ensemble_optimization:main_cli"
-generate_data = "cryojax_eo.commands.generate_data:main_cli"
+simulate_data = "cryojax_eo.commands.simulate_data:main_cli"
 fit_gmm_to_atoms = "cryojax_eo.commands.fit_gmm_to_atoms:main_cli"

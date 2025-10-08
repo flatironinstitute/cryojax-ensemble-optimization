@@ -6,14 +6,14 @@ import cryojax.simulator as cxs
 from ..io._atomic_model_reader import read_atomic_models
 
 
-def load_atomic_models_as_potentials(
+def load_atomic_models_as_volumes(
     atomic_models_filenames: List[str],
     *,
     selection_string: str = "all",
     loads_b_factors: bool = False,
-) -> Tuple[cxs.GaussianMixtureAtomicPotential]:
+) -> Tuple[cxs.GaussianMixtureVolume]:
     """
-    Load atomic models from files and convert them to Gaussian mixture potentials.
+    Load atomic models from files and convert them to Gaussian mixture volumes.
 
     TODO: More general atomic model formats!
     **Arguments:**
@@ -22,9 +22,9 @@ def load_atomic_models_as_potentials(
         selection_string: Selection string for the atomic models in mdtraj format.
         loads_b_factors: If True, loads b factors from the atomic models.
     **Returns:**
-        A tuple of Gaussian mixture potentials.
+        A tuple of Gaussian mixture volumes.
     """
-    potentials = []
+    volumes = []
 
     logging.info("Reading atomic models")
     atomic_models_scattering_params = read_atomic_models(
@@ -33,13 +33,13 @@ def load_atomic_models_as_potentials(
         loads_b_factors=loads_b_factors,
     )
     for atomic_model in atomic_models_scattering_params.values():
-        potential = cxs.GaussianMixtureAtomicPotential(
-            atom_positions=atomic_model["atom_positions"],
-            gaussian_amplitudes=atomic_model["gaussian_amplitudes"],
-            gaussian_variances=atomic_model["gaussian_variances"],
+        volume = cxs.GaussianMixtureVolume(
+            positions=atomic_model["atom_positions"],
+            amplitudes=atomic_model["amplitudes"],
+            variances=atomic_model["variances"],
         )
-        potentials.append(potential)
+        volumes.append(volume)
 
-    potentials = tuple(potentials)
+    volumes = tuple(volumes)
     logging.info("Potentials generated.")
-    return potentials
+    return volumes

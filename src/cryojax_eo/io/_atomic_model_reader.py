@@ -4,10 +4,10 @@ from typing import Dict, List
 import jax.numpy as jnp
 import mdtraj
 from cryojax.constants import (
-    convert_b_factor_to_variance,
-    get_tabulated_scattering_factor_parameters,
+    b_factor_to_variance,
 )
 from cryojax.io import read_atoms_from_pdb
+from cryojax.simulator import PengScatteringFactorParameters
 from jaxtyping import Array, Float
 
 
@@ -28,12 +28,12 @@ def read_atomic_models(
         {
             i: {
                 "atom_positions": atom_positions,
-                "gaussian_amplitudes": gaussian_amplitudes,
-                "gaussian_variances": gaussian_variances,
+                "amplitudes": amplitudes,
+                "variances": variances,
             }
         }
-        where i is the index of the atomic model, and atom_positions, gaussian_amplitudes,
-        and gaussian_variances are numpy arrays of shape (n_atoms, 3),
+        where i is the index of the atomic model, and atom_positions, amplitudes,
+        and variances are numpy arrays of shape (n_atoms, 3),
         (n_atoms, n_gaussians_per_atom), and (n_atoms,), respectively.
     """
 
@@ -75,14 +75,14 @@ def _read_atomic_models_from_npz(
         try:
             atomic_models_scattering_params[i] = {
                 "atom_positions": data["bead_positions"],
-                "gaussian_amplitudes": data["gaussian_amplitudes"],
-                "gaussian_variances": data["gaussian_variances"],
+                "amplitudes": data["amplitudes"],
+                "variances": data["variances"],
             }
         except KeyError as e:
             raise ValueError(
                 f"Missing key in npz file {filename}: {e}. "
-                + "Keys should be 'bead_positions', 'gaussian_amplitudes', "
-                + "and 'gaussian_variances'."
+                + "Keys should be 'bead_positions', 'amplitudes', "
+                + "and 'variances'."
             )
 
     return atomic_models_scattering_params
@@ -101,34 +101,28 @@ def _read_atomic_models_from_pdb(
 
     for i in range(len(atomic_models_filenames)):
         if loads_b_factors:
-            _, atom_identities, b_factors = read_atoms_from_pdb(
+            _, atom_types, b_factors = read_atoms_from_pdb(
                 atomic_models_filenames[i],
                 center=True,
                 loads_b_factors=True,
                 selection_string=selection_string,
             )
 
-            scattering_factors = get_tabulated_scattering_factor_parameters(
-                atom_identities
-            )
-            gaussian_amplitudes = scattering_factors["a"]
-            gaussian_variances = convert_b_factor_to_variance(
-                scattering_factors["b"] + b_factors[:, None]
-            )
+            scattering_factors = PengScatteringFactorParameters(atom_types)
+            amplitudes = scattering_factors.a
+            variances = b_factor_to_variance(scattering_factors.b + b_factors[:, None])
 
         else:
-            _, atom_identities = read_atoms_from_pdb(
+            _, atom_types = read_atoms_from_pdb(
                 atomic_models_filenames[i],
                 center=True,
                 loads_b_factors=False,
                 selection_string=selection_string,
             )
 
-            scattering_factors = get_tabulated_scattering_factor_parameters(
-                atom_identities
-            )
-            gaussian_amplitudes = scattering_factors["a"]
-            gaussian_variances = convert_b_factor_to_variance(scattering_factors["b"])
+            scattering_factors = PengScatteringFactorParameters(atom_types)
+            amplitudes = scattering_factors.a
+            variances = b_factor_to_variance(scattering_factors.b)
 
         atom_positions = mdtraj.load(
             atomic_models_filenames[i],
@@ -142,8 +136,8 @@ def _read_atomic_models_from_pdb(
 
         atomic_models_scattering_params[i] = {
             "atom_positions": atom_positions.xyz[0][atom_indices] * 10.0,
-            "gaussian_amplitudes": gaussian_amplitudes,
-            "gaussian_variances": gaussian_variances,
+            "amplitudes": amplitudes,
+            "variances": variances,
         }
 
     return atomic_models_scattering_params

@@ -2,11 +2,12 @@ from typing import Dict, Optional
 
 import jax_dataloader as jdl
 from cryojax.dataset import (
+    ParticleStackInfo,
     RelionParticleStackDataset,
 )
 from jaxtyping import PRNGKeyArray
 
-from .._custom_types import ParticleStackInfo, PerParticleT
+from .._custom_types import PerParticleT
 
 
 class CustomJaxDataset(jdl.Dataset):

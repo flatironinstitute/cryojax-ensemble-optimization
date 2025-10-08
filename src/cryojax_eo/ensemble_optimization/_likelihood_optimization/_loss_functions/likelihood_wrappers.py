@@ -3,7 +3,7 @@ from typing_extensions import Literal
 
 import equinox as eqx
 import jax
-from cryojax.internal import error_if_not_positive
+from cryojax.jax_util import error_if_not_positive
 from jaxopt import ProjectedGradient
 from jaxopt.projection import projection_simplex
 from jaxtyping import Array, Float, Int
@@ -23,12 +23,8 @@ from .sliced_wasserstein import likelihood_sliced_wasserstein
 
 
 class AbstractLikelihoodFn(eqx.Module, strict=True):
-    gaussian_variances: eqx.AbstractVar[
-        Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]
-    ]
-    gaussian_amplitudes: eqx.AbstractVar[
-        Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]
-    ]
+    variances: eqx.AbstractVar[Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]]
+    amplitudes: eqx.AbstractVar[Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]]
     image_to_walker_log_likelihood_fn: eqx.AbstractVar[LossFn]
     loss_fn_constant_args: eqx.AbstractVar[ConstantT]
     dilated_mask: eqx.AbstractClassVar[Optional[DilatedMask]]
@@ -44,8 +40,8 @@ class AbstractLikelihoodFn(eqx.Module, strict=True):
 
 
 class LikelihoodFn(AbstractLikelihoodFn, strict=True):
-    gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]
-    gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]
+    variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]
+    amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]
     image_to_walker_log_likelihood_fn: LossFn
     loss_fn_constant_args: ConstantT
     dilated_mask: Optional[DilatedMask] = None
@@ -53,8 +49,8 @@ class LikelihoodFn(AbstractLikelihoodFn, strict=True):
 
     def __init__(
         self,
-        gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
-        gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
+        amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
+        variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
         image_to_walker_log_likelihood_fn: Literal[
             "iso_gaussian", "iso_gaussian_var_marg", "sliced_wasserstein"
         ]
@@ -63,8 +59,8 @@ class LikelihoodFn(AbstractLikelihoodFn, strict=True):
         dilated_mask: Optional[DilatedMask] = None,
         estimates_pose: bool = False,
     ):
-        self.gaussian_variances = error_if_not_positive(gaussian_variances)
-        self.gaussian_amplitudes = error_if_not_positive(gaussian_amplitudes)
+        self.variances = error_if_not_positive(variances)
+        self.amplitudes = error_if_not_positive(amplitudes)
         if image_to_walker_log_likelihood_fn == "iso_gaussian":
             self.image_to_walker_log_likelihood_fn = likelihood_isotropic_gaussian
             self.loss_fn_constant_args = (
@@ -103,8 +99,8 @@ class LikelihoodFn(AbstractLikelihoodFn, strict=True):
             walkers,
             weights,
             relion_batch["particle_stack"],
-            self.gaussian_amplitudes,
-            self.gaussian_variances,
+            self.amplitudes,
+            self.variances,
             self.image_to_walker_log_likelihood_fn,
             self.dilated_mask,
             self.estimates_pose,
@@ -114,8 +110,8 @@ class LikelihoodFn(AbstractLikelihoodFn, strict=True):
 
 
 class LikelihoodOptimalWeightsFn(AbstractLikelihoodFn, strict=True):
-    gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]
-    gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]
+    variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]
+    amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]
     image_to_walker_log_likelihood_fn: LossFn
     loss_fn_constant_args: ConstantT
     dilated_mask: Optional[DilatedMask] = None
@@ -123,8 +119,8 @@ class LikelihoodOptimalWeightsFn(AbstractLikelihoodFn, strict=True):
 
     def __init__(
         self,
-        gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
-        gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
+        amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
+        variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
         image_to_walker_log_likelihood_fn: Literal[
             "iso_gaussian", "iso_gaussian_var_marg"
         ]
@@ -133,8 +129,8 @@ class LikelihoodOptimalWeightsFn(AbstractLikelihoodFn, strict=True):
         dilated_mask: Optional[DilatedMask] = None,
         estimates_pose: bool = False,
     ):
-        self.gaussian_variances = error_if_not_positive(gaussian_variances)
-        self.gaussian_amplitudes = error_if_not_positive(gaussian_amplitudes)
+        self.variances = error_if_not_positive(variances)
+        self.amplitudes = error_if_not_positive(amplitudes)
         if image_to_walker_log_likelihood_fn == "iso_gaussian":
             self.image_to_walker_log_likelihood_fn = likelihood_isotropic_gaussian
             self.loss_fn_constant_args = (
@@ -172,8 +168,8 @@ class LikelihoodOptimalWeightsFn(AbstractLikelihoodFn, strict=True):
         likelihood_matrix = compute_likelihood_matrix(
             walkers,
             relion_batch["particle_stack"],
-            self.gaussian_amplitudes,
-            self.gaussian_variances,
+            self.amplitudes,
+            self.variances,
             self.image_to_walker_log_likelihood_fn,
             self.dilated_mask,
             self.estimates_pose,

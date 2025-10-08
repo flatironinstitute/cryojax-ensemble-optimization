@@ -27,7 +27,7 @@ class AbstractEnsembleOptimizationPipeline(Module, strict=True):
         initial_walkers: Float[Array, "n_walkers n_atoms 3"],
         initial_weights: Float[Array, " n_walkers"],
         dataloader: DataLoader,
-        bias_constant_scheduler: optax.ScalarOrSchedule,
+        bias_constant_scheduler: optax.Schedule,
         *,
         output_directory: str | pathlib.Path,
         initial_state_for_projector: Any = None,

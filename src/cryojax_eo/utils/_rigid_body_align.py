@@ -5,7 +5,7 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import optax
-from cryojax.internal import error_if_not_positive
+from cryojax.jax_util import error_if_not_positive
 from jaxtyping import Array, Bool, Float, Int, Scalar
 
 
@@ -18,8 +18,8 @@ class _OptimizerState(eqx.Module, strict=True):
 
 class _AtomicModel(eqx.Module):
     positions: Float[Array, "n_atoms 3"]
-    gaussian_amplitudes: Float[Array, "n_atoms n_gaussians"]
-    gaussian_variances: Float[Array, "n_atoms n_gaussians"]
+    amplitudes: Float[Array, "n_atoms n_gaussians"]
+    variances: Float[Array, "n_atoms n_gaussians"]
 
 
 class _Volume(eqx.Module):
@@ -81,7 +81,7 @@ class ModelToVolumeAligner(eqx.Module):
         self,
         val: Tuple[Float[Array, "4"], Float[Array, "3"], _OptimizerState],
         args: Tuple[_AtomicModel, _Volume],
-    ):
+    ) -> Tuple[Float[Array, "4"], Float[Array, "3"], _OptimizerState]:
         quat, offset, state = val
         q_opt_state, d_opt_state = state.opt_state
         optim_q, optim_d = self.optimizers
@@ -93,7 +93,7 @@ class ModelToVolumeAligner(eqx.Module):
 
         loss, grad_d = loss_and_grad_offset_fn(quat, offset, args)
         updates_d, d_opt_state = optim_d.update(grad_d, d_opt_state)
-        offset = optax.apply_updates(offset, updates_d)
+        offset = jnp.asarray(optax.apply_updates(offset, updates_d))
 
         step = state.step + 1
         new_state = _OptimizerState(
@@ -118,15 +118,15 @@ class ModelToVolumeAligner(eqx.Module):
     def align(
         self,
         atomic_positions_in_angstroms: Float[Array, "n_atoms 3"],
-        gaussian_amplitudes: Float[Array, "n_atoms n_gaussians"],
-        gaussian_variances: Float[Array, "n_atoms n_gaussians"],
+        amplitudes: Float[Array, "n_atoms n_gaussians"],
+        variances: Float[Array, "n_atoms n_gaussians"],
         quat_init: Float[Array, "4"] = jnp.array([1.0, 0.0, 0.0, 0.0]),
         offset_init: Float[Array, "3"] = jnp.array([0.0, 0.0, 0.0]),
     ) -> Tuple[Float[Array, "n_atoms 3"], Solution]:
         atomic_model = _AtomicModel(
             positions=atomic_positions_in_angstroms,
-            gaussian_amplitudes=gaussian_amplitudes,
-            gaussian_variances=gaussian_variances,
+            amplitudes=amplitudes,
+            variances=variances,
         )
 
         args = (atomic_model, self.volume)
@@ -138,6 +138,8 @@ class ModelToVolumeAligner(eqx.Module):
             body_fun=lambda val: self._step(val, args),
             init_val=init_val,
         )
+
+        offset_opt = jnp.asarray(offset_opt)
 
         rot_matrix = cxs.QuaternionPose(wxyz=quat_opt).rotation.as_matrix()
 
@@ -160,11 +162,9 @@ def _atom_potential_to_volume(
     shape: Tuple[int, int, int],
     voxel_size: float,
 ) -> Float[Array, "z x y"]:
-    atom_potential = cxs.GaussianMixtureAtomicPotential(
-        atom_positions, gaussian_amp, gaussian_var
-    )
+    atom_potential = cxs.GaussianMixtureVolume(atom_positions, gaussian_amp, gaussian_var)
 
-    volume = atom_potential.as_real_voxel_grid(shape=shape, voxel_size=voxel_size)
+    volume = atom_potential.to_real_voxel_grid(shape=shape, voxel_size=voxel_size)
     return volume
 
 
@@ -182,8 +182,8 @@ def loss_fn(
 
     v_rot = _atom_potential_to_volume(
         atomic_model.positions @ rot_matrix + offset,
-        atomic_model.gaussian_amplitudes,
-        atomic_model.gaussian_variances,
+        atomic_model.amplitudes,
+        atomic_model.variances,
         shape=volume.voxel_grid.shape,
         voxel_size=volume.voxel_size,
     )

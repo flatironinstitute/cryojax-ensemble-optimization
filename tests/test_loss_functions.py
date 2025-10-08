@@ -7,7 +7,7 @@ from cryojax_eo.ensemble_optimization import (
     likelihood_isotropic_gaussian,
     likelihood_sliced_wasserstein,
 )
-from cryojax_eo.internal import DatasetGeneratorConfig
+from cryojax_eo.internal import DatasetSimulatorConfig
 
 
 # def test_likelihood_isotropic_gaussian():
@@ -38,7 +38,7 @@ def test_compute_likelihood_matrix():
         config_json = yaml.safe_load(f)
 
     key = jax.random.PRNGKey(config_json["rng_seed"])
-    config = dict(DatasetGeneratorConfig(**config_json).model_dump())
+    config = dict(DatasetSimulatorConfig(**config_json).model_dump())
     relion_stack = RelionParticleStackDataset(
         RelionParticleParameterFile(
             path_to_starfile=config["path_to_starfile"],
@@ -50,15 +50,11 @@ def test_compute_likelihood_matrix():
     )
 
     n_walkers = 2
-    n_atoms = jax.random.randint(key, (1,), 10, 20)[0]
+    n_atoms = int(jax.random.randint(key, (1,), 10, 20)[0])
     n_gaussians_per_atom = 5
     ensemble_walkers = jax.random.normal(key, (n_walkers, n_atoms, 3))
-    gaussian_amplitudes = jax.random.normal(
-        key, (n_walkers, n_atoms, n_gaussians_per_atom)
-    )
-    gaussian_variances = (
-        jax.random.normal(key, (n_walkers, n_atoms, n_gaussians_per_atom)) ** 2
-    )
+    amplitudes = jax.random.normal(key, (n_walkers, n_atoms, n_gaussians_per_atom))
+    variances = jax.random.normal(key, (n_walkers, n_atoms, n_gaussians_per_atom)) ** 2
 
     # test of likelihood_isotropic_gaussian
     image_to_walker_log_likelihood_fn = likelihood_isotropic_gaussian
@@ -68,8 +64,8 @@ def test_compute_likelihood_matrix():
     likelihood_matrix = compute_likelihood_matrix(
         ensemble_walkers,
         relion_stack[:n_particles],
-        gaussian_amplitudes,
-        gaussian_variances,
+        amplitudes,
+        variances,
         image_to_walker_log_likelihood_fn,
         per_particle_args=per_particle_args_noise_variance,
         constant_args=1.0,
@@ -84,8 +80,8 @@ def test_compute_likelihood_matrix():
     likelihood_matrix = compute_likelihood_matrix(
         ensemble_walkers,
         relion_stack[:n_particles],
-        gaussian_amplitudes,
-        gaussian_variances,
+        amplitudes,
+        variances,
         image_to_walker_log_likelihood_fn,
         constant_args=(per_particle_args_n_projections, 2),
         per_particle_args=(),

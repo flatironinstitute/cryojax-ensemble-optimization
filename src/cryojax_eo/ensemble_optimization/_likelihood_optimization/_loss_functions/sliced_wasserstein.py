@@ -2,11 +2,11 @@ from typing import Optional, Tuple
 
 import jax
 import jax.numpy as jnp
+from cryojax.dataset import ParticleStackInfo
 from dm_pix import rotate
 from jax.nn import relu
 from jaxtyping import Array, Float, Int
 
-from ...._custom_types import ParticleStackInfo
 from ....simulator._dilated_mask import DilatedMask
 from .common_functions import compute_optimal_scale_and_offset
 from .make_model_utils import make_image_model_from_gmm
@@ -25,8 +25,8 @@ def _rotate_and_project(image, angles):
 def likelihood_sliced_wasserstein(
     walker: Float[Array, "n_atoms 3"],
     relion_stack: ParticleStackInfo,
-    gaussian_amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
-    gaussian_variances: Float[Array, "n_atoms n_gaussians_per_atom"],
+    amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
+    variances: Float[Array, "n_atoms n_gaussians_per_atom"],
     dilated_mask: Optional[DilatedMask] = None,
     estimates_pose: bool = False,
     *,
@@ -40,8 +40,8 @@ def likelihood_sliced_wasserstein(
     **Arguments:**
     - `walker`: A `walker` that is, a point cloud representing an atomic model.
     - `relion_stack`: A cryojax `ParticleStack` object.
-    - `gaussian_amplitudes`: The amplitudes for the GMM atom potential.
-    - `gaussian_variances`: The variances for the GMM atom potential.
+    - `amplitudes`: The amplitudes for the GMM atomic volume representation.
+    - `variances`: The variances for the GMM atomic volume representation.
     - `dilated_mask`: An optional dilated mask to apply to the computed image.
     - `constant_args`: A tuple containing constant arguments for the function.
         For this function these are the number of projections and the p-norm to use.
@@ -49,13 +49,16 @@ def likelihood_sliced_wasserstein(
         - p_norm: int, default 2
     - `per_particle_args`: Not used in this function.
     """
+    if relion_stack["parameters"] is None:
+        raise ValueError("relion_stack must have non None 'parameters' field.")
+
     n_projections, p_norm = constant_args
 
     image_model = make_image_model_from_gmm(
-        walker, relion_stack, gaussian_amplitudes, gaussian_variances, estimates_pose
+        walker, relion_stack, amplitudes, variances, estimates_pose
     )
     computed_image = image_model.simulate()
-    observed_image = relion_stack["images"]
+    observed_image = jnp.asarray(relion_stack["images"])
     # jax.debug.print("Variance: {variance}", variance=jnp.var(computed_image))
 
     if dilated_mask is not None:

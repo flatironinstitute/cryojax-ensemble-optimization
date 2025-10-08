@@ -9,7 +9,7 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax_dataloader as jdl
-from cryojax.internal import error_if_not_positive
+from cryojax.jax_util import error_if_not_positive
 from jaxtyping import Array, Float, Int
 
 from ._loss_functions.ensemble_losses import compute_likelihood_matrix
@@ -50,8 +50,8 @@ class ProjGradDescWeightOptimizer(AbstractEnsembleParameterOptimizer):
             dataloader: The dataloader for the data.
             args: Additional arguments for the likelihood function.
             This should be a tuple with the following elements:
-                - `gaussian_amplitudes`: The Gaussian amplitudes for each atom.
-                - `gaussian_variances`: The Gaussian variances for each atom.
+                - `amplitudes`: The Gaussian amplitudes for each atom.
+                - `variances`: The Gaussian variances for each atom.
                 - `noise_variance`: The noise variance for the data. If None, the
                     noise variance is marginalized.
 
@@ -229,8 +229,8 @@ def _compute_full_likelihood_matrix(
         lklhood_matrix = compute_likelihood_matrix(
             walkers,
             batch["particle_stack"],
-            likelihood_fn.gaussian_amplitudes,
-            likelihood_fn.gaussian_variances,
+            likelihood_fn.amplitudes,
+            likelihood_fn.variances,
             likelihood_fn.image_to_walker_log_likelihood_fn,
             likelihood_fn.dilated_mask,
             likelihood_fn.estimates_pose,

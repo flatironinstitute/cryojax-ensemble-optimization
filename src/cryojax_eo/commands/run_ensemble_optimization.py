@@ -65,12 +65,12 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
     initial_walkers = jnp.array(
         [model["atom_positions"] for model in atomic_models.values()]
     )
-    gaussian_variances = jnp.array(
-        [model["gaussian_variances"] for model in atomic_models.values()]
-    )[:, atom_list]
-    gaussian_amplitudes = jnp.array(
-        [model["gaussian_amplitudes"] for model in atomic_models.values()]
-    )[:, atom_list]
+    variances = jnp.array([model["variances"] for model in atomic_models.values()])[
+        :, atom_list
+    ]
+    amplitudes = jnp.array([model["amplitudes"] for model in atomic_models.values()])[
+        :, atom_list
+    ]
 
     # Load experimental data: images, mask, and consensus volume
     stack_dataset = RelionParticleStackDataset(
@@ -99,7 +99,7 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
                 mode="r",
             ).data
         ).copy()
-        dilated_mask = DilatedMask(mask, stack_dataset[0]["parameters"]["config"])
+        dilated_mask = DilatedMask(mask, stack_dataset[0]["parameters"]["image_config"])  # type: ignore
 
     else:
         dilated_mask = None
@@ -107,7 +107,7 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
     if config["alignment_params"]["path_to_consensus_volume"] is not None:
         volume_for_alignment, voxel_size = read_array_from_mrc(
             config["alignment_params"]["path_to_consensus_volume"],
-            loads_spacing=True,
+            loads_grid_spacing=True,
         )
 
         if config["alignment_params"]["consensus_volume_voxel_size"] is not None:
@@ -147,8 +147,8 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
     # Construct likelihood optimizer
     data_sign = -1.0 if config["data_params"]["data_sign"] == "dark-on-light" else 1.0
     likelihood_fn = cxeo.ensemble_optimization.LikelihoodOptimalWeightsFn(
-        gaussian_amplitudes,
-        gaussian_variances,
+        amplitudes,
+        variances,
         image_to_walker_log_likelihood_fn="iso_gaussian_var_marg",
         loss_fn_constant_args=data_sign,
         dilated_mask=dilated_mask,

@@ -119,7 +119,7 @@ class SteeredOverdampedLangevinSampler(AbstractPriorProjector):
         - `n_steps`: Number of steps to take.
         - `step_size`: Step size for Overdamped Langevin dynamics.
         - `forcefield`: Force field to use for Overdamped Langevin dynamics.
-        - `biasing_force_constant`: Force constant for the biasing potential.
+        - `biasing_force_constant`: Force constant for the biasing volume.
         """
         self.n_steps = n_steps
         self.step_size = step_size
