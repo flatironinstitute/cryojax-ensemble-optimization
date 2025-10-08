@@ -13,16 +13,16 @@ from cryojax.dataset import (
     simulate_particle_stack,
 )
 from cryojax.ndimage.operators import FourierGaussian
-from cryojax.ndimage.transforms import AbstractMask
+from cryojax.ndimage.transforms import CircularCosineMask
 from cryojax.rotations import SO3
 from jaxtyping import Array, Float, PRNGKeyArray
 
-from ..internal._config_validators import DatasetGeneratorConfig
+from ..internal._config_validators import DatasetSimulatorConfig
 from ..simulator._image_rendering import render_image_with_white_gaussian_noise
 
 
-def generate_relion_parameter_file(
-    key: PRNGKeyArray, config: DatasetGeneratorConfig
+def make_relion_parameter_file(
+    key: PRNGKeyArray, config: DatasetSimulatorConfig
 ) -> RelionParticleParameterFile:
     """
 
@@ -64,22 +64,22 @@ def simulate_relion_dataset(
     parameter_file: RelionParticleParameterFile,
     path_to_relion_project: str,
     images_per_file: int,
-    potentials: Tuple[cxs.AbstractPotentialRepresentation],
-    ensemble_probabilities: Float[Array, " n_potentials"],
-    mask: AbstractMask,
+    volumes: Tuple[cxs.AbstractVolumeRepresentation],
+    ensemble_probabilities: Float[Array, " n_volumes"],
+    mask: CircularCosineMask,
     noise_snr_range: List[Float],
     data_sign: Literal["dark-on-light", "light-on-dark"],
     *,
     overwrite: bool = False,
     batch_size: int = 1,
 ) -> RelionParticleStackDataset:
-    assert len(potentials) == len(ensemble_probabilities), (
-        "The number of potentials must be equal to the number of ensemble probabilities."
-        f" {len(potentials)} != {len(ensemble_probabilities)}"
+    assert len(volumes) == len(ensemble_probabilities), (
+        "The number of volumes must be equal to the number of ensemble probabilities."
+        f" {len(volumes)} != {len(ensemble_probabilities)}"
     )
 
     # generate random keys
-    key_snr, key_noise, key_potentials = jax.random.split(key, 3)
+    key_snr, key_noise, key_volumes = jax.random.split(key, 3)
 
     # Make sure the ensemble probabilities sum to 1
     ensemble_probabilities = jnp.array(ensemble_probabilities)
@@ -96,7 +96,7 @@ def simulate_relion_dataset(
     keys_per_image = jax.random.split(key_noise, len(parameter_file))
 
     ensemble_indices_per_image = jax.random.choice(
-        key_potentials,
+        key_volumes,
         a=len(ensemble_probabilities),
         shape=(len(parameter_file),),
         p=ensemble_probabilities,
@@ -114,7 +114,7 @@ def simulate_relion_dataset(
 
     # Bundle arguments and write images
     data_sign_factor = -1.0 if data_sign == "dark-on-light" else 1.0
-    constant_args = (potentials, mask, data_sign_factor)
+    constant_args = (volumes, mask, data_sign_factor)
     per_particle_args = (
         keys_per_image,
         ensemble_indices_per_image,
@@ -149,7 +149,7 @@ def _make_particle_parameters(key: PRNGKeyArray, config: dict) -> Dict:
     by `cryojax_ensemble_refinement.internal.GeneratorConfig`.
     Skipping this step could lead to unexpected behavior.
     """
-    instrument_config = cxs.BasicConfig(
+    instrument_config = cxs.BasicImageConfig(
         shape=(config["box_size"], config["box_size"]),
         pixel_size=config["pixel_size"],
         voltage_in_kilovolts=config["voltage_in_kilovolts"],
@@ -249,9 +249,9 @@ def _make_particle_parameters(key: PRNGKeyArray, config: dict) -> Dict:
         envelope=envelope,
     )
 
-    relion_particle_parameters = dict(
-        config=instrument_config,
-        pose=pose,
-        transfer_theory=transfer_theory,
-    )
+    relion_particle_parameters = {
+        "image_config": instrument_config,
+        "pose": pose,
+        "transfer_theory": transfer_theory,
+    }
     return relion_particle_parameters

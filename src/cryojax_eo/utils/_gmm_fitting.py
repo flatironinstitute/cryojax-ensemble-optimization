@@ -6,11 +6,8 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import optimistix as optx
-from cryojax.constants import (
-    get_tabulated_scattering_factor_parameters,
-)
 from cryojax.io import read_atoms_from_pdb
-from cryojax.jax_util import get_filter_spec
+from cryojax.jax_util import make_filter_spec
 from jaxtyping import Array, Float, Int
 
 
@@ -24,13 +21,13 @@ class Gaussian3D(eqx.Module, strict=True):  # todo: strict equal true
 
     def as_volume(self):
         ones = jnp.ones((self.bead_positions.shape[0], self.n_gaussians_per_bead))
-        gmm_potential = cxs.GaussianMixtureAtomicPotential(
+        gmm_potential = cxs.GaussianMixtureVolume(
             self.bead_positions,
-            gaussian_amplitudes=jnp.exp(self.log_amplitude) * ones,
-            gaussian_variances=jnp.exp(self.log_variance) * ones,
+            amplitudes=jnp.exp(self.log_amplitude) * ones,
+            variances=jnp.exp(self.log_variance) * ones,
         )
 
-        return gmm_potential.as_real_voxel_grid(
+        return gmm_potential.to_real_voxel_grid(
             self.shape,
             self.voxel_size,
         )
@@ -44,8 +41,8 @@ class Gaussian3D(eqx.Module, strict=True):  # todo: strict equal true
             jnp.savez(
                 filename,
                 bead_positions=self.bead_positions,
-                gaussian_amplitudes=jnp.exp(self.log_amplitude) * ones,
-                gaussian_variances=jnp.exp(self.log_variance) * ones,
+                amplitudes=jnp.exp(self.log_amplitude) * ones,
+                variances=jnp.exp(self.log_variance) * ones,
             )
         return
 
@@ -88,7 +85,7 @@ def fit_gmm_model_to_volume(
     rtol=1e-3,
     max_steps=500,
 ):
-    filter_spec = get_filter_spec(init_gmm_model, _where_gaussian3D_opt)
+    filter_spec = make_filter_spec(init_gmm_model, _where_gaussian3D_opt)
 
     gmm_model_opt, gmm_model_noopt = eqx.partition(init_gmm_model, filter_spec)
     y0, pytreedef = jax.tree.flatten(gmm_model_opt)
@@ -115,21 +112,17 @@ def _where_gaussian3D_opt(gaussian3d: Gaussian3D):
 
 def _generate_target_volume(reference_pdb_file, box_size, voxel_size):
     # read in atoms
-    atom_positions, atom_identities, _ = read_atoms_from_pdb(
+    atom_positions, atom_types, b_factors = read_atoms_from_pdb(
         reference_pdb_file, center=True, loads_b_factors=True
     )
-    scattering_factor_parameters = get_tabulated_scattering_factor_parameters(
-        atom_identities
+    scattering_factor_parameters = cxs.PengScatteringFactorParameters(atom_types)
+
+    # make target via peng volume
+    atomic_potential = cxs.PengAtomicVolume.from_tabulated_parameters(
+        atom_positions, scattering_factor_parameters, b_factors
     )
 
-    # make target via peng potential
-    atomic_potential = cxs.PengAtomicPotential(  # use gmm
-        atom_positions,
-        scattering_factor_a=scattering_factor_parameters["a"],
-        scattering_factor_b=scattering_factor_parameters["b"],
-    )
-
-    return atomic_potential.as_real_voxel_grid(
+    return atomic_potential.to_real_voxel_grid(
         (box_size, box_size, box_size),
         voxel_size,
     )
@@ -150,7 +143,7 @@ def _generate_initial_model(
     )
 
     return Gaussian3D(
-        bead_positions=atom_positions,
+        bead_positions=jnp.array(atom_positions),
         log_amplitude=init_log_amp,
         log_variance=init_log_var,
         shape=(box_size, box_size, box_size),
@@ -187,12 +180,12 @@ class Gaussian3D(eqx.Module):  # todo: strict equal true
         ones = jnp.ones((atom_positions.shape[0], n_gaussians_per_bead))
         coasegrained_potential = GaussianMixtureAtomicPotential(
             atom_positions,
-            gaussian_amplitudes=jnp.exp(self.log_weight) * ones,
-            gaussian_variances=jnp.exp(self.log_var) * ones,
+            amplitudes=jnp.exp(self.log_weight) * ones,
+            variances=jnp.exp(self.log_var) * ones,
         )
         n_voxels_per_side = (n_pix, n_pix, n_pix)
 
-        cgpotential_as_real_voxel_grid = coasegrained_potential.as_real_voxel_grid(
+        cgpotential_as_real_voxel_grid = coasegrained_potential.to_real_voxel_grid(
             n_voxels_per_side,
             voxel_size,
         )
@@ -230,14 +223,14 @@ def param_gaussian_3d(cfg: CoarseGrain):
 
     # read in atoms
     fname = args["pdb_fname"]
-    atom_positions, atom_identities, _ = read_atoms_from_pdb(
+    atom_positions, atom_types, _ = read_atoms_from_pdb(
         fname, center=True, loads_b_factors=True
     )
-    scattering_factor_parameters = get_tabulated_scattering_factor_parameters(
-        atom_identities, read_peng_element_scattering_factor_parameter_table()
+    scattering_factor_parameters = cxs.PengScatteringFactorParameters(
+        atom_types, read_peng_element_scattering_factor_parameter_table()
     )
 
-    # make target via peng potential
+    # make target via peng volume
     atomic_potential = PengAtomicPotential(  # use gmm
         atom_positions,
         scattering_factor_a=scattering_factor_parameters["a"],
@@ -246,13 +239,13 @@ def param_gaussian_3d(cfg: CoarseGrain):
     n_pix = args["n_pix"]
     n_voxels_per_side = (n_pix, n_pix, n_pix)
     voxel_size = args["voxel_size"]
-    target = potential_as_real_voxel_grid = atomic_potential.as_real_voxel_grid(
+    target = potential_as_real_voxel_grid = atomic_potential.to_real_voxel_grid(
         n_voxels_per_side,
         voxel_size,
     )
 
     # select centering atom for coarse grained model
-    atom_positions, atom_identities, _ = read_atoms_from_pdb(
+    atom_positions, atom_types, _ = read_atoms_from_pdb(
         fname, center=True, loads_b_factors=True, selection_string=args["mdtraj_select"]
     )
 
@@ -301,8 +294,8 @@ def param_gaussian_3d(cfg: CoarseGrain):
     n_gaussians_per_bead = 1  # generalize?
     gaussian_mixture_projection = projection_from_params(
         atom_positions,
-        gaussian_amplitudes=jnp.ones((n_beads, n_gaussians_per_bead)) * fitted_weight,
-        gaussian_variances=jnp.ones((n_beads, n_gaussians_per_bead)) * fitted_var,
+        amplitudes=jnp.ones((n_beads, n_gaussians_per_bead)) * fitted_weight,
+        variances=jnp.ones((n_beads, n_gaussians_per_bead)) * fitted_var,
         shape=n_voxels_per_side[:2],
         voxel_size=voxel_size,
     )
@@ -313,12 +306,12 @@ def param_gaussian_3d(cfg: CoarseGrain):
 
 
 def projection_from_params(
-    atom_positions, gaussian_amplitudes, gaussian_variances, shape, voxel_size
+    atom_positions, amplitudes, variances, shape, voxel_size
 ):
     fit_potential = GaussianMixtureAtomicPotential(
         atom_positions,
-        gaussian_amplitudes=gaussian_amplitudes,
-        gaussian_variances=gaussian_variances,
+        amplitudes=amplitudes,
+        variances=variances,
     )
 
     integrator = cxs.GaussianMixtureProjection(use_error_functions=True)

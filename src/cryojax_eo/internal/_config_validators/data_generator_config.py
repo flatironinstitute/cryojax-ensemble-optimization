@@ -17,7 +17,7 @@ from pydantic import (
 from .utils import _validate_files_with_type
 
 
-class DatasetGeneratorConfigAtomicModels(BaseModel, extra="forbid"):
+class DatasetSimulatorConfigAtomicModels(BaseModel, extra="forbid"):
     """
     Parameter for loading the atomic models parameters used
     in the data generation pipeline.
@@ -58,7 +58,7 @@ class DatasetGeneratorConfigAtomicModels(BaseModel, extra="forbid"):
         return _validate_files_with_type(v, file_types=[".pdb", ".npz"])
 
 
-class DatasetGeneratorConfig(BaseModel, extra="forbid"):
+class DatasetSimulatorConfig(BaseModel, extra="forbid"):
     """
     Parameters for the data generation pipeline.
 
@@ -139,7 +139,7 @@ class DatasetGeneratorConfig(BaseModel, extra="forbid"):
     # Atomic modelss
     atomic_models_params: dict = Field(
         description="Parameters for the atomic models. This is a dictionary "
-        + "formatted by the `DatasetGeneratorConfigAtomicModels` class."
+        + "formatted by the `DatasetSimulatorConfigAtomicModels` class."
     )
 
     # I/O
@@ -158,7 +158,7 @@ class DatasetGeneratorConfig(BaseModel, extra="forbid"):
     @field_validator("atomic_models_params")
     @classmethod
     def validate_atomic_models_params(cls, v):
-        return dict(DatasetGeneratorConfigAtomicModels(**v).model_dump())
+        return dict(DatasetSimulatorConfigAtomicModels(**v).model_dump())
 
     @field_serializer("offset_x_in_angstroms")
     def serialize_offset_x_in_angstroms(self, v):

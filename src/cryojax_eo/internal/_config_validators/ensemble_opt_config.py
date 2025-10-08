@@ -69,7 +69,7 @@ class EnsOptMDConfigProjector(BaseModel, extra="forbid"):
         description="Platform to use for the MD sampler. "
         + "Must be 'CPU', 'CUDA', or 'OpenCL'.",
     )
-    platform_properties: Dict[str, str | None] = Field(
+    platform_properties: Optional[Dict[str, str]] = Field(
         default=None,
         description="Platform properties for OpenMM. "
         + "For CPU the default is {'Threads': '1'}"

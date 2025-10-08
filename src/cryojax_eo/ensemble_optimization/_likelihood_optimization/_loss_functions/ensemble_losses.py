@@ -4,9 +4,10 @@ from typing import Optional
 import equinox as eqx
 import jax
 import jax.numpy as jnp
+from cryojax.dataset import ParticleStackInfo
 from jaxtyping import Array, Float
 
-from ...._custom_types import ConstantT, LossFn, ParticleStackInfo, PerParticleT
+from ...._custom_types import ConstantT, LossFn, PerParticleT
 from ....simulator._dilated_mask import DilatedMask
 
 
@@ -21,8 +22,8 @@ from ....simulator._dilated_mask import DilatedMask
 def _compute_likelihood_matrix(
     ensemble_walkers: Float[Array, " n_atoms 3"],
     relion_stack: ParticleStackInfo,
-    gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
-    gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
+    amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
+    variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     image_to_walker_log_likelihood_fn: LossFn,
     dilated_mask: DilatedMask | None,
     estimates_pose: bool,
@@ -37,8 +38,8 @@ def _compute_likelihood_matrix(
     - `ensemble_walkers`: The walkers of the ensemble. This is a 3D array
         with shape (n_walkers, n_atoms, 3).
     - `relion_stack`: A cryojax  Dict` object.
-    - `gaussian_amplitudes`: The amplitudes for the GMM atom potential.
-    - `gaussian_variances`: The variances for the GMM atom potential.
+    - `amplitudes`: The amplitudes for the GMM atomic volume representation.
+    - `variances`: The variances for the GMM atomic volume representation.
     - `image_to_walker_log_likelihood_fn`: The function to compute the likelihood
         between the computed image and the observed image.
     - `per_particle_args`: The arguments to pass to the likelihood function.
@@ -51,8 +52,8 @@ def _compute_likelihood_matrix(
     return image_to_walker_log_likelihood_fn(
         ensemble_walkers,
         relion_stack,
-        gaussian_amplitudes,
-        gaussian_variances,
+        amplitudes,
+        variances,
         dilated_mask,
         estimates_pose,
         constant_args=constant_args,
@@ -64,8 +65,8 @@ def _compute_likelihood_matrix(
 def compute_likelihood_matrix(
     ensemble_walkers: Float[Array, "n_walkers n_atoms 3"],
     relion_stack: ParticleStackInfo,
-    gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
-    gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
+    amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
+    variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     image_to_walker_log_likelihood_fn: LossFn,
     dilated_mask: Optional[DilatedMask] = None,
     estimates_pose: bool = False,
@@ -81,8 +82,8 @@ def compute_likelihood_matrix(
     - `ensemble_walkers`: The walkers of the ensemble. This is a 3D array
         with shape (n_walkers, n_atoms, 3).
     - `relion_stack`: A cryojax `ParticleStack` object.
-    - `gaussian_amplitudes`: The amplitudes for the GMM atom potential.
-    - `gaussian_variances`: The variances for the GMM atom potential.
+    - `amplitudes`: The amplitudes for the GMM atomic volume representation.
+    - `variances`: The variances for the GMM atomic volume representation.
     - `image_to_walker_log_likelihood_fn`: The function to compute the likelihood
         between the computed image and the observed image.
     - `per_particle_args`: The arguments to pass to the likelihood function.
@@ -95,35 +96,14 @@ def compute_likelihood_matrix(
     return _compute_likelihood_matrix(
         ensemble_walkers,
         relion_stack,
-        gaussian_amplitudes,
-        gaussian_variances,
+        amplitudes,
+        variances,
         image_to_walker_log_likelihood_fn,
         dilated_mask,
         estimates_pose,
         constant_args,
         per_particle_args,
-    ).T  # order of vmaps!
-
-    # map, nomap = eqx.partition(relion_stack, eqx.is_array)
-
-    # def map_over_images(walker, ga, gv):
-    #     return jax.lax.map(
-    #         lambda x: _compute_likelihood_image_and_walker(
-    #             walker,
-    #             eqx.combine(x[0], nomap),
-    #             ga,
-    #             gv,
-    #             image_to_walker_log_likelihood_fn,
-    #             x[1],
-    #         ),
-    #         xs=(map, per_particle_args),
-    #         batch_size=50
-    #     )
-
-    # return jax.lax.map(
-    #     lambda x: map_over_images(x[0], x[1], x[2]),
-    #     xs=(ensemble_walkers, gaussian_amplitudes, gaussian_variances),
-    # ).T
+    ).T
 
 
 @eqx.filter_jit
@@ -157,8 +137,8 @@ def compute_neg_log_likelihood(
     walkers: Float[Array, "n_walkers n_atoms 3"],
     weights: Float[Array, " n_walkers"],
     relion_stack: ParticleStackInfo,
-    gaussian_amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
-    gaussian_variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
+    amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
+    variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     image_to_walker_log_likelihood_fn: LossFn,
     dilated_mask: Optional[DilatedMask] = None,
     estimates_pose: bool = False,
@@ -177,8 +157,8 @@ def compute_neg_log_likelihood(
             with shape (n_walkers, n_atoms, 3).
         weights: The weights of the ensemble.
         relion_stack: A cryojax  Dict` object.
-        gaussian_amplitudes: The amplitudes for the GMM atom potential.
-        gaussian_variances: The variances for the GMM atom potential.
+        amplitudes: The amplitudes for the GMM atomic volume representation.
+        variances: The variances for the GMM atomic volume representation.
         image_to_walker_log_likelihood_fn: The function to compute the likelihood
             between the computed image and the observed image.
         per_particle_args: The arguments to pass to the likelihood function.
@@ -188,8 +168,8 @@ def compute_neg_log_likelihood(
     lklhood_matrix = compute_likelihood_matrix(
         walkers,
         relion_stack,
-        gaussian_amplitudes,
-        gaussian_variances,
+        amplitudes,
+        variances,
         image_to_walker_log_likelihood_fn,
         dilated_mask,
         estimates_pose,
