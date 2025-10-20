@@ -62,7 +62,7 @@ atomic_models_params:
   - 0.7
   - 0.3
   loads_b_factors: true
-  path_to_atomic_models: # use of wildcard is permited, e.g., `path/to/atomic_models/initial_model_*.pdb`
+  path_to_atomic_models: # use of wildcard is permitted, e.g., `path/to/atomic_models/initial_model_*.pdb`
     - path/to/atomic_models/initial_model_0.pdb
     - path/to/atomic_models/initial_model_1.pdb
     - path/to/atomic_models/initial_model_2.pdb
@@ -78,12 +78,12 @@ rng_seed: 0 # seed for the noise and parameter generation
 
 ## Comments on the input parameters
 
-If multiple models are provided, all the models will be aligned to the first model in the list (or the first model in alphabetic order if a wildcard is used). This is to ensure that no additional heterogeneity is created by misaligned models in the case the true poses are used for reconstruction. All models must have the same topology. Lastly, parameters given on a range will be sampled uniformly in the given range.
+If multiple models are provided, all the models will be aligned to the first model in the list (or the first model in alphabetic order if a wildcard is used). This is to ensure that no additional heterogeneity is created by misaligned models in the case the true poses are used for reconstruction. All models must have the same topology. Lastly, parameters given in a range will be sampled uniformly in the given range.
 
 ## Outputs
 
 - `*.mrcs`: particle images in .mrcs format.
-- A starfile containing the pose and CTF informaiton.
+- A starfile containing the pose and CTF information.
 - A copy of the config file used is provided inside the `path_to_relion_project` directory.
 
 ## Loading the data
@@ -110,4 +110,4 @@ relion_dataset[0:100]
 )
 
 ```
-where the inputs should for `RelionParticleStackDataset` should match the inputs in the config file. For more details we recommend reading the cryoJAX Tutorial on [Loading Cryo-EM Images](https://michael-0brien.github.io/cryojax/examples/read-dataset/).
+where the inputs for `RelionParticleStackDataset` should match the inputs in the config file. For more details, we recommend reading the cryoJAX Tutorial on [Loading Cryo-EM Images](https://michael-0brien.github.io/cryojax/examples/read-dataset/).
