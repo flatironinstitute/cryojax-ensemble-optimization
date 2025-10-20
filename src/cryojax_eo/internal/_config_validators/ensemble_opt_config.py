@@ -55,6 +55,16 @@ class EnsOptMDConfigOptimizationConfig(BaseModel, extra="forbid"):
 
         return v
 
+    @field_validator("estimates_pose")
+    @classmethod
+    def validate_estimates_pose(cls, v):
+        if v:
+            raise Warning(
+                "estimates_pose is set to True. This feature is still experimental, "
+                + "and may slow down the optimization process."
+            )
+        return v
+
 
 class EnsOptMDConfigProjector(BaseModel, extra="forbid"):
     n_steps: PositiveInt = Field(
@@ -196,11 +206,10 @@ class EnsOptMDConfig(BaseModel, extra="forbid"):
         description="Path to the output directory. "
         + "If it does not exist, it will be created.",
     )
-    atom_selection: str = Field(
+    atom_selection: str | FilePath = Field(
         default="all",
-        description="Selection string for the atoms to use. "
-        + "Only used if the atomic model is in PDB format. "
-        + "Otherwise it will be ignored.",
+        description="Selection string for atom selection, "
+        + "or a txt/npy file containing atom indices",
     )
 
     loads_b_factors: bool = Field(
@@ -241,22 +250,24 @@ class EnsOptMDConfig(BaseModel, extra="forbid"):
 
     @model_validator(mode="after")
     def validate_config(self):
-        if self.atom_selection is not None:
-            try:
-                mdtraj.load(
-                    self.alignment_params["path_to_prealigned_atomic_model"]
-                ).topology.select(self.atom_selection)
-            except Exception as e:
-                raise ValueError(
-                    f"Invalid atom list filter {self.atom_selection}. Error: {e}"
-                )
-
+        n_atomic_models = len(self.path_to_atomic_models)
         if self.projector_params["path_to_initial_states"] is not None:
             n_initial_states = len(self.projector_params["path_to_initial_states"])
-            n_atomic_models = len(self.path_to_atomic_models)
             assert n_atomic_models == n_initial_states, (
                 f"Number of initial states {n_initial_states} "
                 + f"does not match number of atomic models {n_atomic_models}."
+            )
+
+        if self.likelihood_optimizer_params["init_weights"] is not None:
+            n_init_weights = len(self.likelihood_optimizer_params["init_weights"])
+            if n_atomic_models != n_init_weights:
+                raise Warning(
+                    f"Number of initial weights {n_init_weights} "
+                    + f"does not match number of atomic models {n_atomic_models}."
+                    + " Setting initial weights to uniform distribution."
+                )
+            self.likelihood_optimizer_params["init_weights"] = jnp.asarray(
+                [1.0 / n_atomic_models for _ in range(n_atomic_models)]
             )
         return self
 
@@ -284,6 +295,23 @@ class EnsOptMDConfig(BaseModel, extra="forbid"):
     @classmethod
     def validate_data_config(cls, values):
         return dict(EnsOptDataConfig(**values).model_dump())
+
+    @field_validator("atom_selection")
+    @classmethod
+    def validate_atom_selection(cls, values):
+        suffix = Path(values).suffix
+        if suffix in [".txt", ".npy"]:
+            assert Path(values).exists(), f"Indices File: {values} does not exist."
+
+        elif suffix not in [".txt", ".npy", ""]:
+            raise ValueError("Invalid file type for atom selection.")
+
+        else:
+            try:
+                mdtraj.Topology().select(values)
+            except Exception as e:
+                raise ValueError(f"Invalid atom selection string: {values}. Error: {e}")
+        return values
 
 
 ### Keeping just in case we want to re-enable auto-incrementing output paths ###

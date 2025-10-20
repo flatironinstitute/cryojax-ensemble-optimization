@@ -96,7 +96,7 @@ def _read_atomic_models_from_pdb(
     atomic_models_scattering_params = {}
 
     atoms_for_alignment = mdtraj.load(atomic_models_filenames[0])
-    atoms_for_alignment = atoms_for_alignment.center_coordinates()
+    atoms_for_alignment = atoms_for_alignment.center_coordinates(mass_weighted=True)
     atom_indices = atoms_for_alignment.topology.select(selection_string)
 
     for i in range(len(atomic_models_filenames)):

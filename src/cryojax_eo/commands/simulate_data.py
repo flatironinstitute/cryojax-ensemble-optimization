@@ -100,8 +100,7 @@ def main(args):
     logger.setLevel(logging.INFO)
 
     config_fname = os.path.basename(args.config)
-    with open(os.path.join(project_path, config_fname), "w") as f:
-        yaml.dump(config_dict, f, default_flow_style=False)
+    os.system("cp {} {}".format(args.config, os.path.join(project_path, config_fname)))
 
     logging.info(
         "A copy of the used config file has been written to {}".format(

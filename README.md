@@ -1,34 +1,56 @@
-<h1 align='center'>Physics-Constrained Cryo-Electron Microscopy Ensemble Optimizaiton</h1>
+<h1 align='center'>Cryo-electron microscopy ensemble optimization using individual particles and physical constraints</h1>
 
 
-## Description
+## Summary
 
-TODO
+CryoJAX ensemble optimization is a module of the [cryoJAX](https://github.com/michael-0brien/cryojax) library, a [JAX](https://github.com/jax-ml/jax) and [Equinox](https://docs.kidger.site/equinox/)-based library for differentiable cryo-EM forward models. Its purpose is to optimize an structural ensemble, defined as a weighted discrete set of atomic structures, given a set of cryo-EM images. To do this, we implement an algorithm inspired by projected gradient descent, where the optimization step is performed by comparing the ensemble to the cryo-EM dataset, and the projection step is done through Steered Molecular Dynamics using the popular [OpenMM](https://openmm.org/) library. Details and results are available in our preprint: TODO. Instructions for reproducing the paper results are provided below.
 
 
 ## Installation
 
-Before installing, use your prefered virtual environment manager to initialize a virtual env. We recommend `uv`, although any manager should work.
+Our library has been tested on the latest Ubuntu version. Availability for other platforms is dependent on the availability of OpenMM and JAX.
+
+### CPU Installation
+
+Our library can be installed to be used with CPU via pip
 
 ```bash
-uv venv my-venv-name --python 3.11
+pip install git+git@github.com:flatironinstitute/cryojax-ensemble-optimization.git
 ```
-Don't forget to activate your environment!
+We recommend using a freshly created virtual environment to install our library. A CPU installation is only recommended for dataset simulation, as OpenMM is built for GPU and simulations will take a long time if run on CPU.
 
-Most dependencies are installed automatically when you install the package. However, although OpenMM is a required dependency, it is not installed automatically as its installation might require specific steps. If you are not worried about the OpenMM installation, you can install it directly from PyPI using pip:
+### GPU Installation
+
+We recommend installing our library using conda (or one of its variants), as matching JAX's and OpenMM's CUDA versions can be difficult otherwise. Here we show an example on how to install our library with [mamba](https://github.com/mamba-org/mamba):
+
 ```bash
-pip install openmm
+mamba create -n cryojax_eo_env python==3.11
+mamba activate cryojax_eo_env
+mamba install -c conda-forge openmm cuda-version==12.4 # Insert your cuda version!
+pip install --upgrade "jax[cuda12]"
+pip install git+git@github.com:flatironinstitute/cryojax-ensemble-optimization.git
 ```
-OpenMM can also be installed using conda, or from source. For more information, see the [OpenMM installation instructions](http://docs.openmm.org/development/userguide/application/01_getting_started.html#installing-openmm).
+To find your CUDA version, you can run `nvidia-smi` on a terminal, the CUDA version will appear on the top right corner of the output.
 
-Lastly, install cryoJAX Ensemble Optimization package by cloning this repo:
-```bash
-git clone git@github.com:DSilva27/cryojax-ensemble-optimization.git
-cd cryojax_ensemble_optimization
-pip install .
-```
 
-If you intent to use a GPU for JAX operations you might need to install a cuda supported version of JAX manually. We recommend following the official [install JAX](https://github.com/google/jax#installation) instructions.
+## Cryo-EM Ensemble Optimization Input
+
+See the [input documentation](docs/ensemble_optimization.md)
+
+
+## Cryo-EM heterogeneous dataset simulation
+
+See the [input documentation](docs/dataset_simulation.md)
+
+
+## Reproducing Paper Results (TODO)
+
+All the necessary data, atomic models, config files, and instructions to reproduce our results are available in Zenodo.
+
+## Contact
+
+Please submit any bug reports, feature requests, or general feedback as a github issue or discussion.
+
 
 ## Contributing
 
@@ -37,6 +59,7 @@ If you are contributing to this project please install the package with the foll
 ```bash
 pip install -e ".[dev]"
 ```
+
 
 This will install the required dependencies for development, the most important being `Ruff` and `pre-commit`. After installation activate your environment and install the `pre-commit` hooks by running
 
@@ -51,4 +74,4 @@ pre-commit run --all-files
 This will make sure the code is formatted correcly, fix whatever can be automatically fixed, and tell you if something else needs to be fixed.
 
 ## Acknowledgements
-TODO
+We thank Michael O'Brien, Miro Astore, Lars Dingeldein, Wai Shing Tang, Aaditya Rangan, and Sonya Hanson for helpful discussions.

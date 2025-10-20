@@ -74,13 +74,6 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
 
         self.simulation.context.setPositions(pdb.positions)
 
-        # self.simulation = _add_restraint_force_to_simulation(
-        #     self.simulation,
-        #     self.simulation.context.getState(getPositions=True).getPositions(),
-        #     self.restrain_atom_list,
-        #     1.0,
-        # )
-
     @override
     def initialize(self, init_state: Optional[str] = None) -> str:
         if init_state is not None:
@@ -102,6 +95,7 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
         else:
             path_to_state_file = f"{self.base_state_file_path}0.xml"
             self.simulation.minimizeEnergy()
+            self.simulation.step(100)
 
         self.simulation.saveState(path_to_state_file)
 

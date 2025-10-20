@@ -3,11 +3,13 @@ import argparse
 import datetime
 import logging
 import os
+from pathlib import Path
 
 import jax
 import jax.numpy as jnp
 import mdtraj
 import mrcfile
+import numpy as np
 import optax
 import yaml
 from cryojax.dataset import (
@@ -46,10 +48,21 @@ def warnexists(out):
     return
 
 
+def _make_atom_list(atom_selection, topology):
+    suffix = Path(atom_selection).suffix
+    if suffix in [".txt", ".npy"]:
+        atom_list = np.loadtxt(atom_selection, dtype=int)
+    else:
+        atom_list = topology.select(atom_selection)
+    return atom_list
+
+
 def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
     config = dict(ensemble_opt_config.model_dump())
 
     # Load the initial walkers and reference structure
+
+    logging.debug("Loading atomic models...")
     atomic_models = read_atomic_models(
         config["path_to_atomic_models"],
         loads_b_factors=config["loads_b_factors"],
@@ -58,9 +71,9 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
     ref_structure = mdtraj.load(
         config["alignment_params"]["path_to_prealigned_atomic_model"]
     )
-    ref_structure = ref_structure.center_coordinates()
+    ref_structure = ref_structure.center_coordinates(mass_weighted=True)
 
-    atom_list = ref_structure.topology.select(config["atom_selection"])
+    atom_list = _make_atom_list(config["atom_selection"], ref_structure.topology)
 
     initial_walkers = jnp.array(
         [model["atom_positions"] for model in atomic_models.values()]
@@ -71,7 +84,9 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
     amplitudes = jnp.array([model["amplitudes"] for model in atomic_models.values()])[
         :, atom_list
     ]
+    logging.debug("Atomic models loaded.")
 
+    logging.debug("Loading experimental data...")
     # Load experimental data: images, mask, and consensus volume
     stack_dataset = RelionParticleStackDataset(
         RelionParticleParameterFile(
@@ -91,8 +106,10 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
         drop_last=False,
         jax_prng_key=key_data,
     )
+    logging.debug("Experimental data loaded.")
 
     if config["data_params"]["path_to_volumetric_mask"] is not None:
+        logging.debug("Loading volumetric mask...")
         mask = jnp.asarray(
             mrcfile.open(
                 config["data_params"]["path_to_volumetric_mask"],
@@ -100,15 +117,21 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
             ).data
         ).copy()
         dilated_mask = DilatedMask(mask, stack_dataset[0]["parameters"]["image_config"])  # type: ignore
+        logging.debug("Volumetric mask loaded.")
 
     else:
+        mask = None
         dilated_mask = None
 
     if config["alignment_params"]["path_to_consensus_volume"] is not None:
+        logging.debug("Loading consensus volume for alignment...")
         volume_for_alignment, voxel_size = read_array_from_mrc(
             config["alignment_params"]["path_to_consensus_volume"],
             loads_grid_spacing=True,
         )
+
+        if mask is not None:
+            volume_for_alignment *= mask
 
         if config["alignment_params"]["consensus_volume_voxel_size"] is not None:
             voxel_size = config["alignment_params"]["consensus_volume_voxel_size"]
@@ -121,6 +144,7 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
         )
 
         model_aligner = ModelToVolumeAligner(volume_for_alignment, voxel_size)
+        logging.debug("Consensus volume loaded.")
     else:
         model_aligner = None
 
@@ -213,7 +237,7 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
     )
 
     jnp.savez(
-        os.path.join(config["path_to_output"], "final_walkers.npz"),
+        os.path.join(config["path_to_output"], "final_ensemble.npz"),
         walkers=walkers,
         weights=weights,
     )
@@ -232,7 +256,7 @@ def main(args):
     logger = logging.getLogger()
     logger.handlers.clear()
 
-    logger_fname = datetime.datetime.now().strftime("%Y-%m-%d-%H")
+    logger_fname = datetime.datetime.now().strftime("%Y-%m-%d")
     logger_fname = os.path.join(config.path_to_output, logger_fname + ".log")
 
     fhandler = logging.FileHandler(filename=logger_fname, mode="a")
