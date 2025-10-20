@@ -17,11 +17,11 @@ Our library can be installed to be used with a CPU via pip.
 ```bash
 pip install git+git@github.com:flatironinstitute/cryojax-ensemble-optimization.git
 ```
-We recommend using a freshly created virtual environment to install our library. A CPU installation is only recommended for dataset simulation, as OpenMM is built for GPU and simulations will take a long time if run on CPU.
+We recommend using a freshly created virtual environment to install our library. A CPU installation is only recommended for dataset simulation, as OpenMM is built for GPU, and simulations will take a long time if run on CPU.
 
 ### GPU Installation
 
-We recommend installing our library using conda (or one of its variants), as matching JAX's and OpenMM's CUDA versions can be difficult otherwise. Here we show an example on how to install our library with [mamba](https://github.com/mamba-org/mamba):
+We recommend installing our library using conda (or one of its variants), as matching JAX's and OpenMM's CUDA versions can be difficult otherwise. Here we show an example of how to install our library with [mamba](https://github.com/mamba-org/mamba):
 
 ```bash
 mamba create -n cryojax_eo_env python==3.11
