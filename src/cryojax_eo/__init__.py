@@ -1,5 +1,5 @@
 from . import (
-    data as data,
+    dataset as dataset,
     ensemble_optimization as ensemble_optimization,
     flexible_fitting as flexible_fitting,
     io as io,

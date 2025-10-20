@@ -7,7 +7,7 @@ data_params:
 
 alignment_params:
   path_to_prealigned_atomic_model: ./atomic_models/ref_model.pdb
-  # path_to_consensus_volume: ... # not used for tutorial
+  # path_to_reference_volume: ... # not used for tutorial
   # downsample_box_size: ... # not used for tutorial
   # consensus_volume_voxel_size: ... # not used for tutorial
 

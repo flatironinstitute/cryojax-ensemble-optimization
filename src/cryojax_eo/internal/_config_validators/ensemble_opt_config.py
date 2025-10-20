@@ -125,7 +125,7 @@ class EnsOptAlignConfig(BaseModel, extra="forbid"):
         + " and will be used for alignment of the walkers during optimization."
     )
 
-    path_to_consensus_volume: Optional[FilePath] = Field(
+    path_to_reference_volume: Optional[FilePath] = Field(
         default=None,
         description="Path to the consensus volume. "
         + "Used for rigid body alignment of walkers. "
@@ -150,7 +150,7 @@ class EnsOptAlignConfig(BaseModel, extra="forbid"):
     def validate_path_to_prealigned_atomic_model(cls, v):
         return _validate_file_with_type(v, file_type=".pdb")
 
-    @field_validator("path_to_consensus_volume")
+    @field_validator("path_to_reference_volume")
     @classmethod
     def validate_path_to_consensus_volume(cls, v):
         if v is not None:

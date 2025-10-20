@@ -48,13 +48,13 @@ def warnexists(out):
     return
 
 
-def _make_atom_list(atom_selection, topology):
+def _make_atom_list(atom_selection, topology) -> np.ndarray:
     suffix = Path(atom_selection).suffix
     if suffix in [".txt", ".npy"]:
         atom_list = np.loadtxt(atom_selection, dtype=int)
     else:
         atom_list = topology.select(atom_selection)
-    return atom_list
+    return np.array(atom_list)
 
 
 def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
@@ -99,7 +99,7 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
     key = jax.random.PRNGKey(config["rng_seed"])
     key_data, key_pipeline = jax.random.split(key)
 
-    dataloader = cxeo.data.create_dataloader(
+    dataloader = cxeo.dataset.create_dataloader(
         stack_dataset,
         batch_size=config["likelihood_optimizer_params"]["batch_size"],
         shuffle=True,
@@ -123,10 +123,10 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
         mask = None
         dilated_mask = None
 
-    if config["alignment_params"]["path_to_consensus_volume"] is not None:
+    if config["alignment_params"]["path_to_reference_volume"] is not None:
         logging.debug("Loading consensus volume for alignment...")
         volume_for_alignment, voxel_size = read_array_from_mrc(
-            config["alignment_params"]["path_to_consensus_volume"],
+            config["alignment_params"]["path_to_reference_volume"],
             loads_grid_spacing=True,
         )
 
@@ -156,7 +156,7 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
             cxeo.ensemble_optimization.SteeredMDSimulator(
                 path_to_initial_pdb=config["path_to_atomic_models"][i],
                 n_steps=config["projector_params"]["n_steps"],
-                restrain_atom_list=atom_list,
+                restrain_atom_list=atom_list.tolist(),
                 parameters_for_md={
                     "platform": config["projector_params"]["platform"],
                     "properties": config["projector_params"]["platform_properties"],
@@ -197,7 +197,7 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
             likelihood_optimizer=likelihood_optimizer,
             n_steps=config["n_steps"],
             prealigned_structure=ref_structure,
-            atom_indices_for_opt=atom_list,
+            atom_indices_for_opt=jnp.asarray(atom_list, dtype=int),
             model_to_volume_aligner=model_aligner,
             runs_postprocessing=True,
         )

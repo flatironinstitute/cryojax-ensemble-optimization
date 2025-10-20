@@ -9,7 +9,7 @@ import jax
 import yaml
 from cryojax.ndimage.transforms import CircularCosineMask
 
-from ..data import make_relion_parameter_file, simulate_relion_dataset
+from ..dataset import make_relion_parameter_file, simulate_relion_dataset
 from ..internal._config_validators import DatasetSimulatorConfig
 from ..io import load_atomic_models_as_volumes
 

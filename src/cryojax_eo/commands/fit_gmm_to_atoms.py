@@ -10,7 +10,7 @@ import yaml
 
 from ..internal._config_validators.gmm_fit_config import GMMFitConfig
 from ..internal._config_validators.utils import _validate_files_with_type
-from ..utils._gmm_fitting import generate_gmm_model_from_atomic_model
+from ..utils._gmm_fitting import make_gmm_model_from_atomic_model
 
 
 def add_args(parser):
@@ -85,7 +85,7 @@ def main(args):
 
     logging.info("Simulating particle stack...")
 
-    fitted_gmm = generate_gmm_model_from_atomic_model(
+    fitted_gmm = make_gmm_model_from_atomic_model(
         pdb_file=input_pdb,
         box_size=config.box_size,
         voxel_size=config.voxel_size,

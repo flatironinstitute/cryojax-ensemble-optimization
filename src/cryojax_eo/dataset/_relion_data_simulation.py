@@ -18,7 +18,7 @@ from cryojax.rotations import SO3
 from jaxtyping import Array, Float, PRNGKeyArray
 
 from ..internal._config_validators import DatasetSimulatorConfig
-from ..simulator._image_rendering import render_image_with_white_gaussian_noise
+from ..simulator._image_simulation import simulate_image_with_white_gaussian_noise
 
 
 def make_relion_parameter_file(
@@ -130,7 +130,7 @@ def simulate_relion_dataset(
 
     simulate_particle_stack(
         dataset=relion_dataset,
-        compute_image_fn=render_image_with_white_gaussian_noise,
+        compute_image_fn=simulate_image_with_white_gaussian_noise,
         constant_args=constant_args,
         per_particle_args=per_particle_args,
         images_per_file=images_per_file,
@@ -238,7 +238,7 @@ def _make_particle_parameters(key: PRNGKeyArray, config: dict) -> Dict:
 
     # ... build the CTF
     transfer_theory = cxs.ContrastTransferTheory(
-        ctf=cxs.AberratedAstigmaticCTF(
+        ctf=cxs.AstigmaticCTF(
             defocus_in_angstroms=defocus_in_angstroms,
             astigmatism_in_angstroms=astigmatism_in_angstroms,
             astigmatism_angle=astigmatism_angle,
