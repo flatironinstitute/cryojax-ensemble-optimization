@@ -12,7 +12,7 @@ Our library has been tested on the latest Ubuntu version. Availability for other
 
 ### CPU Installation
 
-Our library can be installed to be used with CPU via pip
+Our library can be installed to be used with a CPU via pip.
 
 ```bash
 pip install git+git@github.com:flatironinstitute/cryojax-ensemble-optimization.git
@@ -30,7 +30,7 @@ mamba install -c conda-forge openmm cuda-version==12.4 # Insert your cuda versio
 pip install --upgrade "jax[cuda12]"
 pip install git+git@github.com:flatironinstitute/cryojax-ensemble-optimization.git
 ```
-To find your CUDA version, you can run `nvidia-smi` on a terminal, the CUDA version will appear on the top right corner of the output.
+To find your CUDA version, you can run `nvidia-smi` in a terminal, and the CUDA version will appear in the top right corner of the output.
 
 
 ## Cryo-EM Ensemble Optimization Input
@@ -49,19 +49,19 @@ All the necessary data, atomic models, config files, and instructions to reprodu
 
 ## Contact
 
-Please submit any bug reports, feature requests, or general feedback as a github issue or discussion.
+Please submit any bug reports, feature requests, or general feedback as a GitHub issue or discussion.
 
 
 ## Contributing
 
-If you are contributing to this project please install the package with the following command
+If you are contributing to this project, please install the package with the following command:
 
 ```bash
 pip install -e ".[dev]"
 ```
 
 
-This will install the required dependencies for development, the most important being `Ruff` and `pre-commit`. After installation activate your environment and install the `pre-commit` hooks by running
+This will install the required dependencies for development, the most important being `Ruff` and `pre-commit`. After installation, activate your environment and install the `pre-commit` hooks by running
 
 `pre-commit install`
 
@@ -71,7 +71,7 @@ Make sure that your code is formatted according to our guidelines by running:
 pre-commit run --all-files
 ```
 
-This will make sure the code is formatted correcly, fix whatever can be automatically fixed, and tell you if something else needs to be fixed.
+This will make sure the code is formatted correctly, fix whatever can be automatically fixed, and tell you if something else needs to be fixed.
 
 ## Acknowledgements
 We thank Michael O'Brien, Miro Astore, Lars Dingeldein, Wai Shing Tang, Aaditya Rangan, and Sonya Hanson for helpful discussions.
