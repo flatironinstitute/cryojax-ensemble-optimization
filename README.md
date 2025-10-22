@@ -3,7 +3,7 @@
 
 ## Summary
 
-CryoJAX ensemble optimization is a module of the [cryoJAX](https://github.com/michael-0brien/cryojax) library, a [JAX](https://github.com/jax-ml/jax) and [Equinox](https://docs.kidger.site/equinox/)-based library for differentiable cryo-EM forward models. Its purpose is to optimize an structural ensemble, defined as a weighted discrete set of atomic structures, given a set of cryo-EM images. To do this, we implement an algorithm inspired by projected gradient descent, where the optimization step is performed by comparing the ensemble to the cryo-EM dataset, and the projection step is done through Steered Molecular Dynamics using the popular [OpenMM](https://openmm.org/) library. Details and results are available in our preprint: TODO. Instructions for reproducing the paper results are provided below.
+CryoJAX ensemble optimization is a module of the [cryoJAX](https://github.com/michael-0brien/cryojax) library, a [JAX](https://github.com/jax-ml/jax) and [Equinox](https://docs.kidger.site/equinox/)-based library for differentiable cryo-EM forward models. The purpose of this library is to provide a framework for optimizing structural ensembles, defined as a weighted discrete set of atomic structures, given a set of cryo-EM images. To do this, we implement an algorithm inspired by projected gradient descent, where the optimization step is performed by comparing the ensemble to the cryo-EM dataset, and the projection step is done through Steered Molecular Dynamics using the popular [OpenMM](https://openmm.org/) library. Details and results are available in our preprint: TODO. Instructions for reproducing the paper results are provided below.
 
 
 ## Installation
