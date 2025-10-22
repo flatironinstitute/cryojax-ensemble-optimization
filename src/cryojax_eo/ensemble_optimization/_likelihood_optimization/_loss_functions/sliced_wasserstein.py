@@ -68,7 +68,9 @@ def likelihood_sliced_wasserstein(
 
     computed_image = computed_image * mask2d
     observed_image = observed_image * mask2d
-    scale, offset = compute_optimal_scale_and_offset(computed_image, observed_image)
+    scale, offset = compute_optimal_scale_and_offset(
+        computed_image, observed_image, signal_region=(mask2d == 1)
+    )
     # jax.debug.print("Computed scale: {scale}, bias: {bias}", scale=scale, bias=offset)
     # scale = 1.0
     # offset = 0.0

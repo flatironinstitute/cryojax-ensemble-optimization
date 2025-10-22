@@ -59,7 +59,9 @@ def likelihood_isotropic_gaussian(
     computed_image = computed_image * mask2d
     observed_image = constant_args * observed_image * mask2d
 
-    scale, offset = compute_optimal_scale_and_offset(computed_image, observed_image)
+    scale, offset = compute_optimal_scale_and_offset(
+        computed_image, observed_image, signal_region=(mask2d == 1)
+    )
 
     return -jnp.sum((scale * computed_image - observed_image + offset) ** 2) / (
         2 * noise_variance
@@ -110,7 +112,9 @@ def likelihood_isotropic_gaussian_marginalized(
     computed_image = computed_image * mask2d
     observed_image = constant_args * observed_image * mask2d
 
-    scale, offset = compute_optimal_scale_and_offset(computed_image, observed_image)
+    scale, offset = compute_optimal_scale_and_offset(
+        computed_image, observed_image, signal_region=(mask2d == 1)
+    )
     n_pixels = computed_image.size
 
     return (2 - n_pixels) * jnp.log(

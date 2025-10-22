@@ -10,7 +10,7 @@ def compute_optimal_scale_and_offset(
     signal_region: Optional[Float[Array, "n_pixels n_pixels"]] = None,
 ) -> Tuple[Float, Float]:
     if signal_region is None:
-        signal_region = jnp.ones_like(target_image)
+        signal_region = jnp.ones_like(target_image, dtype=bool)
 
     cc = jnp.mean(target_image**2, where=signal_region)
     co = jnp.mean(ref_image * target_image, where=signal_region)
