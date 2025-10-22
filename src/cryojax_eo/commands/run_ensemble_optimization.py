@@ -190,6 +190,8 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
         )
     )
 
+    runs_postprocessing = True if initial_walkers.shape[0] > 1 else False
+
     # Construct the ensemble optimization pipeline
     ensemble_refinement_pipeline = (
         cxeo.ensemble_optimization.EnsembleOptimizationPipeline(
@@ -199,7 +201,7 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
             prealigned_structure=ref_structure,
             atom_indices_for_opt=jnp.asarray(atom_list, dtype=int),
             model_to_volume_aligner=model_aligner,
-            runs_postprocessing=True,
+            runs_postprocessing=runs_postprocessing,
         )
     )
 
@@ -223,13 +225,12 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
             "bias_constant_in_kjpermol must be a float or a list of two floats."
         )
 
-    init_walkers = jnp.array(initial_walkers.copy())
-    init_weights = jnp.array(config["likelihood_optimizer_params"]["init_weights"])
+    initial_weights = jnp.array(config["likelihood_optimizer_params"]["initial_weights"])
 
     walkers, weights = ensemble_refinement_pipeline.run(
         key=key_pipeline,
-        initial_walkers=init_walkers,
-        initial_weights=init_weights,
+        initial_walkers=initial_walkers,
+        initial_weights=initial_weights,
         dataloader=dataloader,
         bias_constant_scheduler=bias_constant_scheduler,
         output_directory=config["path_to_output"],

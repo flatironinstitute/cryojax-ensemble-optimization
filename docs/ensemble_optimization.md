@@ -40,7 +40,7 @@ projector_params:
 
 likelihood_optimizer_params:
   batch_size: 50 # Batch size used for computing the log-likelihood in parallel
-  init_weights: # (*) Initial weights, one for each replica. Default is 1/M, M = number of walkers
+  initial_weights: # (*) Initial weights, one for each replica. Default is 1/M, M = number of walkers
   - 0.33
   - 0.33
   - 0.33

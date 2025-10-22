@@ -35,7 +35,7 @@ class EnsOptMDConfigOptimizationConfig(BaseModel, extra="forbid"):
         default=1,
         description="Number of batches per step for the optimization process.",
     )
-    init_weights: Optional[List[float]] = Field(
+    initial_weights: Optional[List[float]] = Field(
         default=None,
         description="Initial weights for the models. "
         "If None, will be set to uniform distribution.",
@@ -47,8 +47,8 @@ class EnsOptMDConfigOptimizationConfig(BaseModel, extra="forbid"):
         + " If False, the pose will be estimated using uniform weights.",
     )
 
-    @field_serializer("init_weights")
-    def serialize_init_weights(self, v):
+    @field_serializer("initial_weights")
+    def serialize_initial_weights(self, v):
         if v is not None:
             v = jnp.array(v)
             v = v / jnp.sum(v)
@@ -258,15 +258,15 @@ class EnsOptMDConfig(BaseModel, extra="forbid"):
                 + f"does not match number of atomic models {n_atomic_models}."
             )
 
-        if self.likelihood_optimizer_params["init_weights"] is not None:
-            n_init_weights = len(self.likelihood_optimizer_params["init_weights"])
-            if n_atomic_models != n_init_weights:
+        if self.likelihood_optimizer_params["initial_weights"] is not None:
+            n_initial_weights = len(self.likelihood_optimizer_params["initial_weights"])
+            if n_atomic_models != n_initial_weights:
                 raise Warning(
-                    f"Number of initial weights {n_init_weights} "
+                    f"Number of initial weights {n_initial_weights} "
                     + f"does not match number of atomic models {n_atomic_models}."
                     + " Setting initial weights to uniform distribution."
                 )
-            self.likelihood_optimizer_params["init_weights"] = jnp.asarray(
+            self.likelihood_optimizer_params["initial_weights"] = jnp.asarray(
                 [1.0 / n_atomic_models for _ in range(n_atomic_models)]
             )
         return self
