@@ -10,6 +10,7 @@ run_md_openmm
 import os
 import pathlib
 import shutil
+import warnings
 from functools import partial
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
@@ -19,26 +20,41 @@ import jax
 import jax.numpy as jnp
 import mdtraj
 import numpy as np
-import openmm
-import openmm.app as openmm_app
-import openmm.unit as openmm_unit
 from jaxtyping import Array, Float, Int
+
+
+try:
+    import openmm
+    import openmm.app as openmm_app
+    import openmm.unit as openmm_unit
+
+    _HAS_OPENMM = True
+
+except ImportError:
+    _HAS_OPENMM = False
+    warnings.warn(
+        "OpenMM is not installed. Please install OpenMM if using any features "
+        + "that use molecular dynamics, e.g., ensemble optimization "
+        + "or flexible fitting."
+    )
+
 
 from ..base_prior_projector import AbstractEnsemblePriorProjector, AbstractPriorProjector
 
 
-DEFAULT_MD_PARAMS = {
-    "forcefield": "amber14-all.xml",
-    "water_model": "amber14/tip3p.xml",
-    "nonbondedMethod": openmm_app.PME,
-    "nonbondedCutoff": 1.0 * openmm_unit.nanometer,
-    "constraints": openmm_app.HBonds,
-    "temperature": 300.0 * openmm_unit.kelvin,
-    "friction": 1.0 / openmm_unit.picosecond,
-    "timestep": 0.002 * openmm_unit.picoseconds,
-    "platform": "CPU",
-    "properties": {"Threads": "1"},
-}
+def _get_default_md_params() -> Dict:
+    return {
+        "forcefield": "amber14-all.xml",
+        "water_model": "amber14/tip3p.xml",
+        "nonbondedMethod": openmm_app.PME,
+        "nonbondedCutoff": 1.0 * openmm_unit.nanometer,
+        "constraints": openmm_app.HBonds,
+        "temperature": 300.0 * openmm_unit.kelvin,
+        "friction": 1.0 / openmm_unit.picosecond,
+        "timestep": 0.002 * openmm_unit.picoseconds,
+        "platform": "CPU",
+        "properties": {"Threads": "1"},
+    }
 
 
 class SteeredMDSimulator(AbstractPriorProjector, strict=True):
@@ -59,6 +75,12 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
             Callable[[Dict, openmm_app.Topology], openmm_app.Simulation]
         ] = None,
     ):
+        if not _HAS_OPENMM:
+            raise ImportError(
+                "OpenMM is not installed. Please install OpenMM if using any features "
+                + "that use molecular dynamics, e.g., the ensemble optimization pipeline "
+                + "or flexible fitting."
+            )
         pdb = openmm_app.PDBFile(str(path_to_initial_pdb))
         self.restrain_atom_list = restrain_atom_list
 
@@ -150,6 +172,12 @@ class EnsembleSteeredMDSimulator(AbstractEnsemblePriorProjector, strict=True):
     projectors: List[SteeredMDSimulator]
 
     def __init__(self, md_simulators: List[SteeredMDSimulator]):
+        if not _HAS_OPENMM:
+            raise ImportError(
+                "OpenMM is not installed. Please install OpenMM if using any features "
+                + "that use molecular dynamics, e.g., the ensemble optimization pipeline "
+                + "or flexible fitting."
+            )
         self.projectors = md_simulators
 
     @override
@@ -180,6 +208,12 @@ def compute_biasing_constant(
     ] = None,
     parameters_for_md: Dict = {},
 ):
+    if not _HAS_OPENMM:
+        raise ImportError(
+            "OpenMM is not installed. Please install OpenMM if using any features "
+            + "that use molecular dynamics, e.g., the ensemble optimization pipeline "
+            + "or flexible fitting."
+        )
     if make_simulation_fn is None:
         parameters_for_md = _validate_and_set_params_for_md(parameters_for_md)
         make_simulation_fn = _default_make_sim_fn
@@ -407,8 +441,9 @@ def _create_platform(parameters_for_md: dict) -> openmm.Platform:
 def _validate_and_set_params_for_md(
     parameters_for_md: dict,
 ) -> dict:
-    assert set(parameters_for_md.keys()).issubset(DEFAULT_MD_PARAMS)
-    for key, value in DEFAULT_MD_PARAMS.items():
+    default_md_params = _get_default_md_params()
+    assert set(parameters_for_md.keys()).issubset(default_md_params)
+    for key, value in default_md_params.items():
         if key not in parameters_for_md:
             parameters_for_md[key] = value
 

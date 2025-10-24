@@ -6,14 +6,15 @@ import cryojax.simulator as cxs
 from ..io._atomic_model_reader import read_atomic_models
 
 
-def load_atomic_models_as_volumes(
+def load_gmm_volume_parametrization(
     atomic_models_filenames: List[str],
     *,
     selection_string: str = "all",
     loads_b_factors: bool = False,
 ) -> Tuple[cxs.GaussianMixtureVolume]:
     """
-    Load atomic models from files and convert them to Gaussian mixture volumes.
+    Loads a GMM volume parametrization. The input files should be either in pdb format, or
+    a `.npz` format with entries `positions`, `amplitudes` and `variances`.
 
     TODO: More general atomic model formats!
     **Arguments:**

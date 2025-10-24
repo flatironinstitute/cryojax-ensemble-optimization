@@ -18,6 +18,11 @@ def read_atomic_models(
     loads_b_factors: bool = False,
 ) -> Dict[int, Dict[str, Float[Array, ""]]]:
     """
+
+    Reads atomic models from files and extracts scattering parameters.
+    The input files should be either in pdb format, or a `.npz` format with entries
+    `positions`, `amplitudes` and `variances`.
+
     **Arguments:**
         atomic_models_filenames: List of filenames of the atomic models.
         selection_string: Selection string for the atomic models in mdtraj format.
@@ -74,14 +79,14 @@ def _read_atomic_models_from_npz(
 
         try:
             atomic_models_scattering_params[i] = {
-                "atom_positions": data["bead_positions"],
+                "atom_positions": data["positions"],
                 "amplitudes": data["amplitudes"],
                 "variances": data["variances"],
             }
         except KeyError as e:
             raise ValueError(
                 f"Missing key in npz file {filename}: {e}. "
-                + "Keys should be 'bead_positions', 'amplitudes', "
+                + "Keys should be 'positions', 'amplitudes', "
                 + "and 'variances'."
             )
 

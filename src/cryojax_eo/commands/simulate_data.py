@@ -11,7 +11,7 @@ from cryojax.ndimage.transforms import CircularCosineMask
 
 from ..dataset import make_relion_parameter_file, simulate_relion_dataset
 from ..internal._config_validators import DatasetSimulatorConfig
-from ..io import load_atomic_models_as_volumes
+from ..io import load_gmm_volume_parametrization
 
 
 def add_args(parser):
@@ -45,7 +45,7 @@ def simulate_particle_stack_from_config(config: DatasetSimulatorConfig):
     # dumping so serialization happens
     config_dict = dict(config.model_dump())
 
-    volumes = load_atomic_models_as_volumes(
+    volumes = load_gmm_volume_parametrization(
         config_dict["atomic_models_params"]["path_to_atomic_models"],
         selection_string=config_dict["atomic_models_params"]["atom_selection"],
         loads_b_factors=config_dict["atomic_models_params"]["loads_b_factors"],
