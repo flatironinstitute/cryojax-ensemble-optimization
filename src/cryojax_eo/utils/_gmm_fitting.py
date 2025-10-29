@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Tuple
+from typing import List, Tuple
 
 import cryojax.simulator as cxs
 import equinox as eqx
@@ -8,83 +8,89 @@ import jax.numpy as jnp
 import optimistix as optx
 from cryojax.io import read_atoms_from_pdb
 from cryojax.jax_util import make_filter_spec
-from jaxtyping import Array, Float, Int
+from jaxtyping import Array, Float, Int, PyTree
 
 
-class Gaussian3D(eqx.Module, strict=True):  # todo: strict equal true
-    bead_positions: Float[Array, "n_beads 3"]
-    log_amplitude: Float
-    log_variance: Float
+class Gaussian3D(eqx.Module, strict=True):
+    positions: Float[Array, "n_beads 3"]
+    amplitude: Float
+    variance: Float
     shape: Tuple[Int, Int, Int]
     voxel_size: Int
     n_gaussians_per_bead: Int
 
-    def as_volume(self):
-        ones = jnp.ones((self.bead_positions.shape[0], self.n_gaussians_per_bead))
-        gmm_potential = cxs.GaussianMixtureVolume(
-            self.bead_positions,
-            amplitudes=jnp.exp(self.log_amplitude) * ones,
-            variances=jnp.exp(self.log_variance) * ones,
-        )
+    def to_real_voxel_grid(
+        self,
+    ) -> Float[Array, "{self.shape[0]} {self.shape[1]} {self.shape[2]}"]:
+        gmm_volume = self.to_gmm_volume()
 
-        return gmm_potential.to_real_voxel_grid(
+        return gmm_volume.to_real_voxel_grid(
             self.shape,
             self.voxel_size,
         )
 
+    def to_gmm_volume(self) -> cxs.GaussianMixtureVolume:
+        ones = jnp.ones((self.positions.shape[0], self.n_gaussians_per_bead))
+        gmm_volume = cxs.GaussianMixtureVolume(
+            self.positions,
+            amplitudes=self.amplitude * ones,
+            variances=self.variance * ones,
+        )
+        return gmm_volume
+
     def save(self, filename: str | Path, overwrite: bool = False):
-        ones = jnp.ones((self.bead_positions.shape[0], self.n_gaussians_per_bead))
+        ones = jnp.ones((self.positions.shape[0], self.n_gaussians_per_bead))
 
         if Path(filename).exists() and not overwrite:
             raise FileExistsError(f"Filename {filename} exists, but overwrite is False")
         else:
             jnp.savez(
                 filename,
-                bead_positions=self.bead_positions,
-                amplitudes=jnp.exp(self.log_amplitude) * ones,
-                variances=jnp.exp(self.log_variance) * ones,
+                positions=self.positions,
+                amplitudes=jnp.exp(self.amplitude) * ones,
+                variances=jnp.exp(self.variance) * ones,
             )
         return
 
 
 def make_gmm_model_from_atomic_model(
-    pdb_file,
-    box_size,
-    voxel_size,
+    pdb_file: str | Path,
+    box_size: int,
+    voxel_size: float,
     *,
-    fit_selection_string='name "C2"',
-    init_log_amp=6.0,
-    init_log_var=1.0,
-    n_gaussians_per_bead=1,
-    atol=1e-3,
-    rtol=1e-3,
-    max_steps=500,
-):
-    target_volume = _generate_target_volume(pdb_file, box_size, voxel_size)
+    fit_selection_string: str = 'name "C2"',
+    init_amp: float = 6.0,
+    init_var: float = 1.0,
+    n_gaussians_per_bead: int = 1,
+    atol: float = 1e-3,
+    rtol: float = 1e-3,
+    max_steps: int = 500,
+) -> cxs.GaussianMixtureVolume:
+    target_volume = _make_target_voxel_grid(pdb_file, box_size, voxel_size)
 
-    init_gmm_model = _generate_initial_model(
+    init_gmm_model = _make_initial_gmm(
         pdb_file,
         box_size,
         voxel_size,
         selection_string=fit_selection_string,
-        init_log_amp=init_log_amp,
-        init_log_var=init_log_var,
+        init_amp=init_amp,
+        init_var=init_var,
         n_gaussians_per_bead=n_gaussians_per_bead,
     )
 
-    return fit_gmm_model_to_volume(
+    return fit_gmm_model_to_voxel_grid(
         init_gmm_model, target_volume, atol=atol, rtol=rtol, max_steps=max_steps
     )
 
 
-def fit_gmm_model_to_volume(
-    init_gmm_model,
-    target_volume,
+def fit_gmm_model_to_voxel_grid(
+    init_gmm_model: Gaussian3D,
+    target_volume: Float[Array, "z y x"],
     *,
     atol=1e-3,
     rtol=1e-3,
     max_steps=500,
-):
+) -> cxs.GaussianMixtureVolume:
     filter_spec = make_filter_spec(init_gmm_model, _where_gaussian3D_opt)
 
     gmm_model_opt, gmm_model_noopt = eqx.partition(init_gmm_model, filter_spec)
@@ -100,20 +106,27 @@ def fit_gmm_model_to_volume(
     )
 
     final_y = sol.value
-    return eqx.combine(jax.tree.unflatten(pytreedef, final_y), gmm_model_noopt)
+    return eqx.combine(
+        jax.tree.unflatten(pytreedef, final_y), gmm_model_noopt
+    ).to_gmm_volume()
 
 
 def _where_gaussian3D_opt(gaussian3d: Gaussian3D):
     return (
-        gaussian3d.log_amplitude,
-        gaussian3d.log_variance,
+        gaussian3d.amplitude,
+        gaussian3d.variance,
     )
 
 
-def _generate_target_volume(reference_pdb_file, box_size, voxel_size):
+def _make_target_voxel_grid(
+    reference_pdb_file: str | Path, box_size: int, voxel_size: float
+) -> Float[Array, "{box_size} {box_size} {box_size}"]:
     # read in atoms
     atom_positions, atom_types, b_factors = read_atoms_from_pdb(
-        reference_pdb_file, center=True, loads_b_factors=True
+        reference_pdb_file,
+        center=True,
+        loads_b_factors=True,
+        selection_string="not element H",
     )
     scattering_factor_parameters = cxs.PengScatteringFactorParameters(atom_types)
 
@@ -128,24 +141,24 @@ def _generate_target_volume(reference_pdb_file, box_size, voxel_size):
     )
 
 
-def _generate_initial_model(
-    reference_pdb_file,
-    box_size,
-    voxel_size,
+def _make_initial_gmm(
+    reference_pdb_file: str | Path,
+    box_size: int,
+    voxel_size: float,
     *,
-    selection_string='name "C2"',
-    init_log_amp=40.0,
-    init_log_var=1.0,
-    n_gaussians_per_bead=1,
-):
+    selection_string: str = 'name "C2"',
+    init_amp: float = 40.0,
+    init_var: float = 1.0,
+    n_gaussians_per_bead: int = 1,
+) -> Gaussian3D:
     atom_positions, _ = read_atoms_from_pdb(
         reference_pdb_file, center=True, selection_string=selection_string
     )
 
     return Gaussian3D(
-        bead_positions=jnp.array(atom_positions),
-        log_amplitude=init_log_amp,
-        log_variance=init_log_var,
+        positions=jnp.array(atom_positions),
+        amplitude=init_amp,
+        variance=init_var,
         shape=(box_size, box_size, box_size),
         voxel_size=voxel_size,
         n_gaussians_per_bead=n_gaussians_per_bead,
@@ -153,9 +166,11 @@ def _generate_initial_model(
 
 
 @eqx.filter_jit
-def _compute_residues(y, args):
+def _compute_residues(
+    y: List[float], args: Tuple[PyTree, Gaussian3D, Float[Array, "z y x"]]
+) -> Float[Array, "z y x"]:
     pytreedef, gmm_model_noopt, target_volume = args
     gmm_volume = eqx.combine(
         jax.tree.unflatten(pytreedef, y), gmm_model_noopt
-    ).as_volume()
+    ).to_real_voxel_grid()
     return gmm_volume - target_volume
