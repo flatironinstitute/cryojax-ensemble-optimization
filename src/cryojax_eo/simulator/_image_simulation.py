@@ -30,12 +30,12 @@ def simulate_image_with_white_gaussian_noise(
 
     **Arguments:**
         - `particle_parameters`: The particle parameters.
-        - `constant_args`: A tuple with the volume parametrization,
+        - `constant_args`: A tuple containing: a tuple of volume parametrizations,
            a mask defining the signal region, and the data_sign.
            A data_sign of 1.0 means dark-on-light, -1.0 means light-on-dark.
 
         - `per_particle_args`: A containing a random jax key,
-            the potential_idx to use, and the noise variance.
+            the potential_idx to use, and the signal-to-noise ratio
     **Returns:**
         The simulated image.
 
