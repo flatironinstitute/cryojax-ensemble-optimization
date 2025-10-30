@@ -30,3 +30,15 @@ def sample_path_mrc_file():
 @pytest.fixture
 def sample_path_groel_pdb():
     return os.path.join(os.path.dirname(__file__), "data", "apo_groel.pdb")
+
+
+@pytest.fixture
+def sample_path_to_starfile():
+    return os.path.join(
+        os.path.dirname(__file__), "data", "particle_stack/test_starfile.star"
+    )
+
+
+@pytest.fixture
+def sample_path_to_relion_project():
+    return os.path.join(os.path.dirname(__file__), "data", "particle_stack/")

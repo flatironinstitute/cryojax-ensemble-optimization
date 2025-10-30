@@ -18,6 +18,7 @@ from cryojax.rotations import SO3
 from jaxtyping import Array, Float, PRNGKeyArray
 
 from ..internal._config_validators import DatasetSimulatorConfig
+from ..io import load_gmm_volume_parametrization
 from ..simulator._image_simulation import simulate_image_with_white_gaussian_noise
 
 
@@ -59,7 +60,48 @@ def make_relion_parameter_file(
     return parameter_file
 
 
-def simulate_relion_dataset(
+def simulate_relion_dataset(config: DatasetSimulatorConfig) -> RelionParticleStackDataset:
+    os.makedirs(config.path_to_relion_project, exist_ok=True)
+
+    seed = config.rng_seed
+    key = jax.random.key(seed)
+
+    key_param, key_stack = jax.random.split(key)
+    parameter_file = make_relion_parameter_file(key_param, config)
+
+    # dumping so serialization happens
+    config_dict = dict(config.model_dump())
+
+    volumes = load_gmm_volume_parametrization(
+        config_dict["atomic_models_params"]["path_to_atomic_models"],
+        selection_string=config_dict["atomic_models_params"]["atom_selection"],
+        loads_b_factors=config_dict["atomic_models_params"]["loads_b_factors"],
+    )
+
+    mask = CircularCosineMask(
+        coordinate_grid=parameter_file[0]["image_config"].coordinate_grid_in_pixels,
+        radius=config_dict["mask_radius"],
+        rolloff_width=config_dict["mask_rolloff_width"],
+    )
+
+    return _simulate_relion_dataset(
+        key=key_stack,
+        parameter_file=parameter_file,
+        path_to_relion_project=config_dict["path_to_relion_project"],
+        images_per_file=config_dict["images_per_file"],
+        volumes=volumes,
+        ensemble_probabilities=config_dict["atomic_models_params"][
+            "atomic_models_probabilities"
+        ],
+        mask=mask,
+        noise_snr_range=config_dict["noise_snr"],
+        data_sign=config_dict["data_sign"],
+        overwrite=config_dict["overwrite"],
+        batch_size=config_dict["batch_size_for_generation"],
+    )
+
+
+def _simulate_relion_dataset(
     key: PRNGKeyArray,
     parameter_file: RelionParticleParameterFile,
     path_to_relion_project: str,
