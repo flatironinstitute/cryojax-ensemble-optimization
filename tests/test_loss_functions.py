@@ -1,5 +1,4 @@
 import jax
-import yaml
 from cryojax.dataset import RelionParticleParameterFile, RelionParticleStackDataset
 
 from cryojax_eo.ensemble_optimization import (
@@ -7,7 +6,6 @@ from cryojax_eo.ensemble_optimization import (
     likelihood_isotropic_gaussian,
     likelihood_sliced_wasserstein,
 )
-from cryojax_eo.internal import DatasetSimulatorConfig
 
 
 # def test_likelihood_isotropic_gaussian():
@@ -33,19 +31,15 @@ from cryojax_eo.internal import DatasetSimulatorConfig
 #     )
 
 
-def test_compute_likelihood_matrix():
-    with open("tests/data/particle_stack/config_data_generation.yaml", "r") as f:
-        config_json = yaml.safe_load(f)
-
-    key = jax.random.PRNGKey(config_json["rng_seed"])
-    config = dict(DatasetSimulatorConfig(**config_json).model_dump())
+def test_compute_likelihood_matrix(
+    sample_path_to_starfile, sample_path_to_relion_project
+):
+    key = jax.random.key(0)
     relion_stack = RelionParticleStackDataset(
         RelionParticleParameterFile(
-            path_to_starfile=config["path_to_starfile"],
-            mode="r",
-            loads_envelope=False,
+            path_to_starfile=sample_path_to_starfile,
         ),
-        path_to_relion_project=config["path_to_relion_project"],
+        path_to_relion_project=sample_path_to_relion_project,
         mode="r",
     )
 
