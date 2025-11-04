@@ -38,20 +38,6 @@ class Gaussian3D(eqx.Module, strict=True):
         )
         return gmm_volume
 
-    def save(self, filename: str | Path, overwrite: bool = False):
-        ones = jnp.ones((self.positions.shape[0], self.n_gaussians_per_bead))
-
-        if Path(filename).exists() and not overwrite:
-            raise FileExistsError(f"Filename {filename} exists, but overwrite is False")
-        else:
-            jnp.savez(
-                filename,
-                positions=self.positions,
-                amplitudes=jnp.exp(self.amplitude) * ones,
-                variances=jnp.exp(self.variance) * ones,
-            )
-        return
-
 
 def make_gmm_model_from_atomic_model(
     pdb_file: str | Path,

@@ -4,6 +4,7 @@ from ._likelihood_optimization import (
     compute_likelihood_matrix as compute_likelihood_matrix,
     compute_neg_log_likelihood as compute_neg_log_likelihood,
     compute_neg_log_likelihood_from_weights as compute_neg_log_likelihood_from_weights,
+    compute_optimal_scale_and_offset as compute_optimal_scale_and_offset,
     IterativeEnsembleLikelihoodOptimizer as IterativeEnsembleLikelihoodOptimizer,
     likelihood_isotropic_gaussian as likelihood_isotropic_gaussian,
     likelihood_isotropic_gaussian_marginalized as likelihood_isotropic_gaussian_marginalized,  # noqa: E501

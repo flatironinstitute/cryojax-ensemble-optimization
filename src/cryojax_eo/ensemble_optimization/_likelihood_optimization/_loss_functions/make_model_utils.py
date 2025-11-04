@@ -13,8 +13,9 @@ def _make_image_model_with_stack_poses(
     Create an image model using the poses from the Relion stack.
     This is a helper function to avoid passing poses explicitly.
     """
-    if relion_stack["parameters"] is None:
-        raise ValueError("relion_stack must have non None 'parameters' field.")
+    assert (
+        relion_stack["parameters"] is not None
+    ), "relion_stack must have non None 'parameters' field."
 
     return cxs.make_image_model(
         volume,

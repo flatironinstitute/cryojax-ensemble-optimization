@@ -40,8 +40,9 @@ def likelihood_isotropic_gaussian(
     - The log likelihood of the walker given the Relion stack.
 
     """
-    if relion_stack["parameters"] is None:
-        raise ValueError("relion_stack must have non None 'parameters' field.")
+    assert (
+        relion_stack["parameters"] is not None
+    ), "relion_stack must have non None 'parameters' field."
 
     noise_variance = per_particle_args
 
@@ -95,8 +96,9 @@ def likelihood_isotropic_gaussian_marginalized(
         For data generated with cryoJAX this is 1.0.
     - `per_particle_args`: not used in this function.
     """
-    if relion_stack["parameters"] is None:
-        raise ValueError("relion_stack must have non None 'parameters' field.")
+    assert (
+        relion_stack["parameters"] is not None
+    ), "relion_stack must have non None 'parameters' field."
 
     image_model = make_image_model_from_gmm(
         walker, relion_stack, amplitudes, variances, estimates_pose

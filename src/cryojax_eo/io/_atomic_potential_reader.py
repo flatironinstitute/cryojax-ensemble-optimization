@@ -35,7 +35,7 @@ def load_gmm_volume_parametrization(
     )
     for atomic_model in atomic_models_scattering_params.values():
         volume = cxs.GaussianMixtureVolume(
-            positions=atomic_model["atom_positions"],
+            positions=atomic_model["positions"],
             amplitudes=atomic_model["amplitudes"],
             variances=atomic_model["variances"],
         )

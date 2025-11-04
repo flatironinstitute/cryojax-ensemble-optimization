@@ -32,7 +32,7 @@ def read_atomic_models(
         The dictionary has the following structure:
         {
             i: {
-                "atom_positions": atom_positions,
+                "positions": atom_positions,
                 "amplitudes": amplitudes,
                 "variances": variances,
             }
@@ -79,7 +79,7 @@ def _read_atomic_models_from_npz(
 
         try:
             atomic_models_scattering_params[i] = {
-                "atom_positions": data["positions"],
+                "positions": data["positions"],
                 "amplitudes": data["amplitudes"],
                 "variances": data["variances"],
             }
@@ -140,7 +140,7 @@ def _read_atomic_models_from_pdb(
         )
 
         atomic_models_scattering_params[i] = {
-            "atom_positions": atom_positions.xyz[0][atom_indices] * 10.0,
+            "positions": atom_positions.xyz[0][atom_indices] * 10.0,
             "amplitudes": amplitudes,
             "variances": variances,
         }

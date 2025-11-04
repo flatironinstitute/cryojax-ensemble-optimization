@@ -49,8 +49,9 @@ def likelihood_sliced_wasserstein(
         - p_norm: int, default 2
     - `per_particle_args`: Not used in this function.
     """
-    if relion_stack["parameters"] is None:
-        raise ValueError("relion_stack must have non None 'parameters' field.")
+    assert (
+        relion_stack["parameters"] is not None
+    ), "relion_stack must have non None 'parameters' field."
 
     n_projections, p_norm = constant_args
 

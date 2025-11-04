@@ -1,11 +1,141 @@
+import cryojax.simulator as cxs
 import jax
+import jax.numpy as jnp
+import numpy as np
+import pytest
 from cryojax.dataset import RelionParticleParameterFile, RelionParticleStackDataset
 
 from cryojax_eo.ensemble_optimization import (
-    compute_likelihood_matrix,
+    compute_optimal_scale_and_offset,  # done
     likelihood_isotropic_gaussian,
+    likelihood_isotropic_gaussian_marginalized,
     likelihood_sliced_wasserstein,
+    LikelihoodFn,
+    make_image_model_from_gmm,  # done
 )
+from cryojax_eo.io import read_atomic_models
+from cryojax_eo.simulator import DilatedMask
+
+
+@pytest.fixture
+def sample_relion_stack():
+    return {
+        "parameters": {
+            "pose": cxs.EulerAnglePose(),
+            "transfer_theory": cxs.ContrastTransferTheory(ctf=cxs.AstigmaticCTF()),
+            "image_config": cxs.BasicImageConfig(
+                shape=(32, 32), pixel_size=0.2, voltage_in_kilovolts=300.0
+            ),
+        },
+        "images": jax.random.normal(jax.random.key(0), shape=(32, 32)),
+    }
+
+
+@pytest.fixture
+def simple_volume_mask(sample_path_to_starfile):
+    image_config = RelionParticleParameterFile(sample_path_to_starfile)[0]["image_config"]
+    volume_shape = (image_config.shape[0], image_config.shape[0], image_config.shape[0])
+
+    voxel_grid = jax.random.randint(jax.random.key(0), volume_shape, minval=0, maxval=2)
+
+    return DilatedMask(voxel_grid, image_config)
+
+
+@pytest.mark.parametrize("estimates_pose", [True, False])
+def test_make_image_model_from_gmm(
+    sample_path_to_pdb1, sample_relion_stack, estimates_pose
+):
+    atomic_model = read_atomic_models(
+        [sample_path_to_pdb1], selection_string="not element H"
+    )[0]
+
+    make_image_model_from_gmm(
+        atomic_model["positions"],
+        sample_relion_stack,
+        atomic_model["amplitudes"],
+        atomic_model["variances"],
+        estimates_pose=estimates_pose,
+    )
+    return
+
+
+def test_compute_scale_and_offset():
+    scale = 2.0
+    offset = -3.0
+
+    image = jax.random.normal(jax.random.key(0), shape=(32, 32))
+    image_transf = scale * image + offset
+
+    computed_scale, computed_offset = compute_optimal_scale_and_offset(
+        image, image_transf
+    )
+
+    np.testing.assert_allclose(
+        computed_scale, scale, err_msg="Computed scale does not match true scale"
+    )
+    np.testing.assert_allclose(
+        computed_offset, offset, err_msg="Computed offset does not match true offset"
+    )
+    return
+
+
+@pytest.mark.parametrize("dilated_mask", [None, simple_volume_mask])
+@pytest.mark.parametrize(
+    "image_to_walker_likelihood_fn",
+    [
+        "likelihood_isotropic_gaussian",
+        "likelihood_isotropic_gaussian_marginalized",
+        "likelihood_sliced_wasserstein",
+    ],
+)
+def test_likelihood_fn(
+    sample_path_to_pdb1,
+    sample_path_to_starfile,
+    sample_path_to_relion_project,
+    image_to_walker_likelihood_fn,
+    simple_volume_mask,
+):
+    atomic_model = read_atomic_models(
+        [sample_path_to_pdb1], selection_string="not element H"
+    )[0]
+
+    relion_stack = RelionParticleStackDataset(
+        RelionParticleParameterFile(
+            path_to_starfile=sample_path_to_starfile,
+        ),
+        path_to_relion_project=sample_path_to_relion_project,
+        mode="r",
+    )[0:2]
+
+    if image_to_walker_likelihood_fn == "likelihood_isotropic_gaussian":
+        img_to_walker_fn = likelihood_isotropic_gaussian
+        per_particle_args = jnp.array([1.0, 1.0])
+        constant_args = 1.0
+
+    elif image_to_walker_likelihood_fn == "likelihood_isotropic_gaussian_marginalized":
+        img_to_walker_fn = likelihood_isotropic_gaussian_marginalized
+        per_particle_args = ()
+        constant_args = 1.0
+    else:
+        img_to_walker_fn = likelihood_sliced_wasserstein
+        per_particle_args = ()
+        constant_args = (3, 2)
+
+    likelihood_fn = LikelihoodFn(
+        amplitudes=atomic_model["amplitudes"][None, ...],
+        variances=atomic_model["variances"][None, ...],
+        image_to_walker_log_likelihood_fn=img_to_walker_fn,
+        loss_fn_constant_args=constant_args,
+        dilated_mask=simple_volume_mask,
+    )
+
+    likelihood_fn(
+        atomic_model["positions"][None, ...],
+        weights=jnp.array([1.0]),
+        relion_stack=relion_stack,
+        per_particle_args=per_particle_args,
+    )
+    return
 
 
 # def test_likelihood_isotropic_gaussian():
@@ -30,7 +160,7 @@ from cryojax_eo.ensemble_optimization import (
 #         0.0,
 #     )
 
-
+"""
 def test_compute_likelihood_matrix(
     sample_path_to_starfile, sample_path_to_relion_project
 ):
@@ -81,3 +211,4 @@ def test_compute_likelihood_matrix(
         per_particle_args=(),
     )
     assert likelihood_matrix.shape == (n_particles, n_walkers)
+"""

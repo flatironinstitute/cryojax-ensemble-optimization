@@ -75,9 +75,7 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
 
     atom_list = _make_atom_list(config["atom_selection"], ref_structure.topology)
 
-    initial_walkers = jnp.array(
-        [model["atom_positions"] for model in atomic_models.values()]
-    )
+    initial_walkers = jnp.array([model["positions"] for model in atomic_models.values()])
     variances = jnp.array([model["variances"] for model in atomic_models.values()])[
         :, atom_list
     ]
