@@ -79,7 +79,7 @@ def test_compute_scale_and_offset():
     return
 
 
-@pytest.mark.parametrize("dilated_mask", [None, simple_volume_mask])
+@pytest.mark.parametrize("use_dilated_mask", [True, False])
 @pytest.mark.parametrize(
     "image_to_walker_likelihood_fn",
     [
@@ -93,6 +93,7 @@ def test_likelihood_fn(
     sample_path_to_starfile,
     sample_path_to_relion_project,
     image_to_walker_likelihood_fn,
+    use_dilated_mask,
     simple_volume_mask,
 ):
     atomic_model = read_atomic_models(
@@ -121,12 +122,17 @@ def test_likelihood_fn(
         per_particle_args = ()
         constant_args = (3, 2)
 
+    if use_dilated_mask:
+        dilated_mask = simple_volume_mask
+    else:
+        dilated_mask = None
+
     likelihood_fn = LikelihoodFn(
         amplitudes=atomic_model["amplitudes"][None, ...],
         variances=atomic_model["variances"][None, ...],
         image_to_walker_log_likelihood_fn=img_to_walker_fn,
         loss_fn_constant_args=constant_args,
-        dilated_mask=simple_volume_mask,
+        dilated_mask=dilated_mask,
     )
 
     likelihood_fn(
