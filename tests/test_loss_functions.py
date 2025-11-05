@@ -7,10 +7,8 @@ from cryojax.dataset import RelionParticleParameterFile, RelionParticleStackData
 
 from cryojax_eo.ensemble_optimization import (
     compute_optimal_scale_and_offset,  # done
-    likelihood_isotropic_gaussian,
-    likelihood_isotropic_gaussian_marginalized,
-    likelihood_sliced_wasserstein,
     LikelihoodFn,
+    LikelihoodOptimalWeightsFn,
     make_image_model_from_gmm,  # done
 )
 from cryojax_eo.io import read_atomic_models
@@ -79,19 +77,17 @@ def test_compute_scale_and_offset():
     return
 
 
+@pytest.mark.parametrize("likelihood_wrapper", [LikelihoodFn, LikelihoodOptimalWeightsFn])
 @pytest.mark.parametrize("use_dilated_mask", [True, False])
 @pytest.mark.parametrize(
     "image_to_walker_likelihood_fn",
-    [
-        "likelihood_isotropic_gaussian",
-        "likelihood_isotropic_gaussian_marginalized",
-        "likelihood_sliced_wasserstein",
-    ],
+    ["iso_gaussian", "iso_gaussian_var_marg", "sliced_wasserstein", "dummy"],
 )
 def test_likelihood_fn(
     sample_path_to_pdb1,
     sample_path_to_starfile,
     sample_path_to_relion_project,
+    likelihood_wrapper,
     image_to_walker_likelihood_fn,
     use_dilated_mask,
     simple_volume_mask,
@@ -108,32 +104,39 @@ def test_likelihood_fn(
         mode="r",
     )[0:2]
 
-    if image_to_walker_likelihood_fn == "likelihood_isotropic_gaussian":
-        img_to_walker_fn = likelihood_isotropic_gaussian
-        per_particle_args = jnp.array([1.0, 1.0])
-        constant_args = 1.0
-
-    elif image_to_walker_likelihood_fn == "likelihood_isotropic_gaussian_marginalized":
-        img_to_walker_fn = likelihood_isotropic_gaussian_marginalized
-        per_particle_args = ()
-        constant_args = 1.0
-    else:
-        img_to_walker_fn = likelihood_sliced_wasserstein
-        per_particle_args = ()
-        constant_args = (3, 2)
-
     if use_dilated_mask:
         dilated_mask = simple_volume_mask
     else:
         dilated_mask = None
 
-    likelihood_fn = LikelihoodFn(
-        amplitudes=atomic_model["amplitudes"][None, ...],
-        variances=atomic_model["variances"][None, ...],
-        image_to_walker_log_likelihood_fn=img_to_walker_fn,
-        loss_fn_constant_args=constant_args,
-        dilated_mask=dilated_mask,
-    )
+    if image_to_walker_likelihood_fn == "iso_gaussian":
+        per_particle_args = jnp.array([1.0, 1.0])
+        constant_args = 1.0
+
+    elif image_to_walker_likelihood_fn == "iso_gaussian_var_marg":
+        per_particle_args = ()
+        constant_args = 1.0
+    elif image_to_walker_likelihood_fn == "sliced_wasserstein":
+        per_particle_args = ()
+        constant_args = (3, 2)
+    else:
+        per_particle_args = None
+        constant_args = None
+
+    try:
+        likelihood_fn = likelihood_wrapper(
+            amplitudes=atomic_model["amplitudes"][None, ...],
+            variances=atomic_model["variances"][None, ...],
+            image_to_walker_log_likelihood_fn=image_to_walker_likelihood_fn,
+            loss_fn_constant_args=constant_args,
+            dilated_mask=dilated_mask,
+        )
+    except Exception as e:
+        if image_to_walker_likelihood_fn == "dummy":
+            assert isinstance(e, ValueError)
+            return
+        else:
+            raise e
 
     likelihood_fn(
         atomic_model["positions"][None, ...],

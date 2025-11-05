@@ -13,7 +13,6 @@ from ._likelihood_optimization import (
     LikelihoodOptimalWeightsFn as LikelihoodOptimalWeightsFn,
     make_image_model_from_gmm as make_image_model_from_gmm,
     ProjGradDescWeightOptimizer as ProjGradDescWeightOptimizer,
-    SteepestDescWalkerPositionsOptimizer as SteepestDescWalkerPositionsOptimizer,
 )
 from ._pipelines import (
     AbstractEnsembleOptimizationPipeline as AbstractEnsembleOptimizationPipeline,

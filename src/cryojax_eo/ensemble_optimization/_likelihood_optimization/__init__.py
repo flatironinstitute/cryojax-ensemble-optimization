@@ -17,5 +17,4 @@ from .base_optimizer import (
 from .optimizers import (
     IterativeEnsembleLikelihoodOptimizer as IterativeEnsembleLikelihoodOptimizer,
     ProjGradDescWeightOptimizer as ProjGradDescWeightOptimizer,
-    SteepestDescWalkerPositionsOptimizer as SteepestDescWalkerPositionsOptimizer,
 )

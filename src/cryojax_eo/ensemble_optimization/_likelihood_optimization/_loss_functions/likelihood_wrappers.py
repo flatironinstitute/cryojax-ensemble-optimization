@@ -81,10 +81,11 @@ class LikelihoodFn(AbstractLikelihoodFn, strict=True):
                 (18, 2) if loss_fn_constant_args is None else loss_fn_constant_args
             )
         else:
-            assert callable(image_to_walker_log_likelihood_fn), (
-                "If `image_to_walker_log_likelihood_fn` is not 'iso_gaussian' or "
-                + "'iso_gaussian_var_marg', it must be a callable function."
-            )
+            if not callable(image_to_walker_log_likelihood_fn):
+                raise ValueError(
+                    "If `image_to_walker_log_likelihood_fn` is not 'iso_gaussian' or "
+                    + "'iso_gaussian_var_marg', it must be a callable function."
+                )
             self.image_to_walker_log_likelihood_fn = image_to_walker_log_likelihood_fn
             self.loss_fn_constant_args = loss_fn_constant_args
 
@@ -152,10 +153,11 @@ class LikelihoodOptimalWeightsFn(AbstractLikelihoodFn, strict=True):
                 (18, 2) if loss_fn_constant_args is None else loss_fn_constant_args
             )
         else:
-            assert callable(image_to_walker_log_likelihood_fn), (
-                "If `image_to_walker_log_likelihood_fn` is not 'iso_gaussian' or "
-                + "'iso_gaussian_var_marg', it must be a callable function."
-            )
+            if not callable(image_to_walker_log_likelihood_fn):
+                raise ValueError(
+                    "If `image_to_walker_log_likelihood_fn` is not 'iso_gaussian' or "
+                    + "'iso_gaussian_var_marg', it must be a callable function."
+                )
             self.image_to_walker_log_likelihood_fn = image_to_walker_log_likelihood_fn
             self.loss_fn_constant_args = loss_fn_constant_args
 
