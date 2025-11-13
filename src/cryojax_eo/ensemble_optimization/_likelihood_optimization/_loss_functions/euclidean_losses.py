@@ -83,7 +83,8 @@ def likelihood_isotropic_gaussian_marginalized(
     """
     Compute the marginalized likelihood of a walker given a Relion stack using an
     isotropic Gaussian likelihood function where the variance has been marginalized.
-    This is useful when the variance is not known or is not fixed.
+    This is useful when the variance is not known or is not fixed. The marginalization
+    is done analytically using a Jeffreys prior.
 
     **Arguments:**
     - `walker`: A `walker` that is, a point cloud representing an atomic model.
@@ -119,6 +120,6 @@ def likelihood_isotropic_gaussian_marginalized(
     )
     n_pixels = computed_image.size
 
-    return (2 - n_pixels) * jnp.log(
+    return (-n_pixels) * jnp.log(
         jnp.linalg.norm(scale * computed_image - observed_image + offset)
     )
