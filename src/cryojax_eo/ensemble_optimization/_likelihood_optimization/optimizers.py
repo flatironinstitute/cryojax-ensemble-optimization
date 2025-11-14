@@ -110,8 +110,13 @@ class IterativeEnsembleLikelihoodOptimizer(AbstractEnsembleParameterOptimizer):
             gradients /= self.n_batches_per_step
             weights /= self.n_batches_per_step
 
-            norms = jnp.linalg.norm(gradients, axis=(2), keepdims=True)
-            norms = jnp.where(norms < 1e-12, 1.0, norms)
+            # norms = jnp.linalg.norm(gradients, axis=(2), keepdims=True)
+            # norms = jnp.where(norms < 1e-12, 1.0, norms)
+
+            norms = (
+                jnp.linalg.norm(gradients, axis=(1, 2), keepdims=True)
+                / gradients.shape[1]
+            )
             gradients /= norms
 
             walkers = walkers - self.step_size * gradients
