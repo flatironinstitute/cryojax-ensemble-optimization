@@ -5,13 +5,10 @@ import logging
 import os
 import sys
 
-import jax
 import yaml
-from cryojax.ndimage.transforms import CircularCosineMask
 
-from ..data import make_relion_parameter_file, simulate_relion_dataset
-from ..internal._config_validators import DatasetSimulatorConfig
-from ..io import load_atomic_models_as_volumes
+from ..dataset import simulate_relion_dataset
+from ..internal import DatasetSimulatorConfig
 
 
 def add_args(parser):
@@ -33,46 +30,6 @@ def mkbasedir(out):
 def warnexists(out):
     if os.path.exists(out):
         Warning("Warning: {} already exists. Overwriting.".format(out))
-
-
-def simulate_particle_stack_from_config(config: DatasetSimulatorConfig):
-    seed = config.rng_seed
-    key = jax.random.key(seed)
-
-    key_param, key_stack = jax.random.split(key)
-    parameter_file = make_relion_parameter_file(key_param, config)
-
-    # dumping so serialization happens
-    config_dict = dict(config.model_dump())
-
-    volumes = load_atomic_models_as_volumes(
-        config_dict["atomic_models_params"]["path_to_atomic_models"],
-        selection_string=config_dict["atomic_models_params"]["atom_selection"],
-        loads_b_factors=config_dict["atomic_models_params"]["loads_b_factors"],
-    )
-
-    mask = CircularCosineMask(
-        coordinate_grid=parameter_file[0]["image_config"].coordinate_grid_in_pixels,
-        radius=config_dict["mask_radius"],
-        rolloff_width=config_dict["mask_rolloff_width"],
-    )
-
-    simulate_relion_dataset(
-        key=key_stack,
-        parameter_file=parameter_file,
-        path_to_relion_project=config_dict["path_to_relion_project"],
-        images_per_file=config_dict["images_per_file"],
-        volumes=volumes,
-        ensemble_probabilities=config_dict["atomic_models_params"][
-            "atomic_models_probabilities"
-        ],
-        mask=mask,
-        noise_snr_range=config_dict["noise_snr"],
-        data_sign=config_dict["data_sign"],
-        overwrite=config_dict["overwrite"],
-        batch_size=config_dict["batch_size_for_generation"],
-    )
-    return
 
 
 def main(args):
@@ -100,8 +57,7 @@ def main(args):
     logger.setLevel(logging.INFO)
 
     config_fname = os.path.basename(args.config)
-    with open(os.path.join(project_path, config_fname), "w") as f:
-        yaml.dump(config_dict, f, default_flow_style=False)
+    os.system("cp {} {}".format(args.config, os.path.join(project_path, config_fname)))
 
     logging.info(
         "A copy of the used config file has been written to {}".format(
@@ -110,7 +66,7 @@ def main(args):
     )
 
     logging.info("Simulating particle stack...")
-    simulate_particle_stack_from_config(config)
+    simulate_relion_dataset(config)
     logging.info("Simulation complete.")
     logging.info("Output written to {}".format(project_path))
 

@@ -6,11 +6,12 @@ import os
 import sys
 from pathlib import Path
 
+import jax.numpy as jnp
 import yaml
 
 from ..internal._config_validators.gmm_fit_config import GMMFitConfig
 from ..internal._config_validators.utils import _validate_files_with_type
-from ..utils._gmm_fitting import generate_gmm_model_from_atomic_model
+from ..utils._gmm_fitting import make_gmm_model_from_atomic_model
 
 
 def add_args(parser):
@@ -85,19 +86,25 @@ def main(args):
 
     logging.info("Simulating particle stack...")
 
-    fitted_gmm = generate_gmm_model_from_atomic_model(
+    fitted_gmm = make_gmm_model_from_atomic_model(
         pdb_file=input_pdb,
         box_size=config.box_size,
         voxel_size=config.voxel_size,
         fit_selection_string=config.fit_selection_string,
-        init_log_amp=config.init_log_amp,
-        init_log_var=config.init_log_var,
+        init_amp=config.init_log_amp,
+        init_var=config.init_log_var,
         n_gaussians_per_bead=config.n_gaussians_per_bead,
         atol=config.atol,
         rtol=config.rtol,
         max_steps=config.max_steps,
     )
-    fitted_gmm.save(output_file, overwrite=True)
+
+    jnp.savez(
+        output_file,
+        positions=fitted_gmm.positions,
+        amplitudes=fitted_gmm.amplitudes,
+        variances=fitted_gmm.variances,
+    )
 
     logging.info("Simulation complete.")
     logging.info("Output written to {}".format(basedir))

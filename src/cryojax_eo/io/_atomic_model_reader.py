@@ -5,9 +5,9 @@ import jax.numpy as jnp
 import mdtraj
 from cryojax.constants import (
     b_factor_to_variance,
+    PengScatteringFactorParameters,
 )
 from cryojax.io import read_atoms_from_pdb
-from cryojax.simulator import PengScatteringFactorParameters
 from jaxtyping import Array, Float
 
 
@@ -18,6 +18,11 @@ def read_atomic_models(
     loads_b_factors: bool = False,
 ) -> Dict[int, Dict[str, Float[Array, ""]]]:
     """
+
+    Reads atomic models from files and extracts scattering parameters.
+    The input files should be either in pdb format, or a `.npz` format with entries
+    `positions`, `amplitudes` and `variances`.
+
     **Arguments:**
         atomic_models_filenames: List of filenames of the atomic models.
         selection_string: Selection string for the atomic models in mdtraj format.
@@ -27,7 +32,7 @@ def read_atomic_models(
         The dictionary has the following structure:
         {
             i: {
-                "atom_positions": atom_positions,
+                "positions": atom_positions,
                 "amplitudes": amplitudes,
                 "variances": variances,
             }
@@ -74,14 +79,14 @@ def _read_atomic_models_from_npz(
 
         try:
             atomic_models_scattering_params[i] = {
-                "atom_positions": data["bead_positions"],
+                "positions": data["positions"],
                 "amplitudes": data["amplitudes"],
                 "variances": data["variances"],
             }
         except KeyError as e:
             raise ValueError(
                 f"Missing key in npz file {filename}: {e}. "
-                + "Keys should be 'bead_positions', 'amplitudes', "
+                + "Keys should be 'positions', 'amplitudes', "
                 + "and 'variances'."
             )
 
@@ -96,31 +101,33 @@ def _read_atomic_models_from_pdb(
     atomic_models_scattering_params = {}
 
     atoms_for_alignment = mdtraj.load(atomic_models_filenames[0])
-    atoms_for_alignment = atoms_for_alignment.center_coordinates()
+    atoms_for_alignment = atoms_for_alignment.center_coordinates(mass_weighted=True)
     atom_indices = atoms_for_alignment.topology.select(selection_string)
 
     for i in range(len(atomic_models_filenames)):
         if loads_b_factors:
-            _, atom_types, b_factors = read_atoms_from_pdb(
+            _, atomic_numbers, atomic_properties = read_atoms_from_pdb(
                 atomic_models_filenames[i],
                 center=True,
-                loads_b_factors=True,
+                loads_properties=True,
                 selection_string=selection_string,
             )
 
-            scattering_factors = PengScatteringFactorParameters(atom_types)
+            scattering_factors = PengScatteringFactorParameters(atomic_numbers)
             amplitudes = scattering_factors.a
-            variances = b_factor_to_variance(scattering_factors.b + b_factors[:, None])
+            variances = b_factor_to_variance(
+                scattering_factors.b + atomic_properties["b_factors"][:, None]
+            )
 
         else:
-            _, atom_types = read_atoms_from_pdb(
+            _, atomic_numbers = read_atoms_from_pdb(
                 atomic_models_filenames[i],
                 center=True,
-                loads_b_factors=False,
+                loads_properties=False,
                 selection_string=selection_string,
             )
 
-            scattering_factors = PengScatteringFactorParameters(atom_types)
+            scattering_factors = PengScatteringFactorParameters(atomic_numbers)
             amplitudes = scattering_factors.a
             variances = b_factor_to_variance(scattering_factors.b)
 
@@ -135,7 +142,7 @@ def _read_atomic_models_from_pdb(
         )
 
         atomic_models_scattering_params[i] = {
-            "atom_positions": atom_positions.xyz[0][atom_indices] * 10.0,
+            "positions": atom_positions.xyz[0][atom_indices] * 10.0,
             "amplitudes": amplitudes,
             "variances": variances,
         }

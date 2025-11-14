@@ -40,8 +40,9 @@ def likelihood_isotropic_gaussian(
     - The log likelihood of the walker given the Relion stack.
 
     """
-    if relion_stack["parameters"] is None:
-        raise ValueError("relion_stack must have non None 'parameters' field.")
+    assert (
+        relion_stack["parameters"] is not None
+    ), "relion_stack must have non None 'parameters' field."
 
     noise_variance = per_particle_args
 
@@ -59,7 +60,9 @@ def likelihood_isotropic_gaussian(
     computed_image = computed_image * mask2d
     observed_image = constant_args * observed_image * mask2d
 
-    scale, offset = compute_optimal_scale_and_offset(computed_image, observed_image)
+    scale, offset = compute_optimal_scale_and_offset(
+        computed_image, observed_image, signal_region=(mask2d == 1)
+    )
 
     return -jnp.sum((scale * computed_image - observed_image + offset) ** 2) / (
         2 * noise_variance
@@ -80,7 +83,8 @@ def likelihood_isotropic_gaussian_marginalized(
     """
     Compute the marginalized likelihood of a walker given a Relion stack using an
     isotropic Gaussian likelihood function where the variance has been marginalized.
-    This is useful when the variance is not known or is not fixed.
+    This is useful when the variance is not known or is not fixed. The marginalization
+    is done analytically using a Jeffreys prior.
 
     **Arguments:**
     - `walker`: A `walker` that is, a point cloud representing an atomic model.
@@ -93,8 +97,9 @@ def likelihood_isotropic_gaussian_marginalized(
         For data generated with cryoJAX this is 1.0.
     - `per_particle_args`: not used in this function.
     """
-    if relion_stack["parameters"] is None:
-        raise ValueError("relion_stack must have non None 'parameters' field.")
+    assert (
+        relion_stack["parameters"] is not None
+    ), "relion_stack must have non None 'parameters' field."
 
     image_model = make_image_model_from_gmm(
         walker, relion_stack, amplitudes, variances, estimates_pose
@@ -110,9 +115,11 @@ def likelihood_isotropic_gaussian_marginalized(
     computed_image = computed_image * mask2d
     observed_image = constant_args * observed_image * mask2d
 
-    scale, offset = compute_optimal_scale_and_offset(computed_image, observed_image)
+    scale, offset = compute_optimal_scale_and_offset(
+        computed_image, observed_image, signal_region=(mask2d == 1)
+    )
     n_pixels = computed_image.size
 
-    return (2 - n_pixels) * jnp.log(
+    return (-n_pixels) * jnp.log(
         jnp.linalg.norm(scale * computed_image - observed_image + offset)
     )

@@ -46,16 +46,21 @@ def create_dataloader(
     *,
     per_particle_args: Optional[PerParticleT] = None,
     jax_prng_key: Optional[PRNGKeyArray] = None,
-):
+) -> jdl.DataLoader:
     """
     Create a Jax DataLoader for a RelionParticleStackDataset.
+
     **Arguments:**
-        relion_stack_dataset: A RelionParticleStackDataset object.
-        batch_size: The size of each batch.
-        shuffle: Whether to shuffle the dataset.
-        drop_last: Whether to drop the last batch if it is smaller than batch_size.
-        per_particle_args: Optional per-particle arguments to be passed to the dataset.
-        jax_prng_key: JAX PRNG key for shuffling. Required if shuffle is True.
+        - relion_stack_dataset: A RelionParticleStackDataset object.
+        - batch_size: The size of each batch.
+        - shuffle: Whether to shuffle the dataset.
+        - drop_last: Whether to drop the last batch if it is smaller than batch_size.
+        - per_particle_args: Optional per-particle arguments to be passed to the dataset.
+        - jax_prng_key: JAX PRNG key for shuffling. Required if shuffle is True.
+
+    **Returns:**
+        - A `jax_dataloader.DataLoader` instance. Where the dataset is a
+          `cryoJAX` `RelionParticleStackDataset`.
     """
 
     if shuffle is True:

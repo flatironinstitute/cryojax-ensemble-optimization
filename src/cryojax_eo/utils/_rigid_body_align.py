@@ -71,7 +71,7 @@ class ModelToVolumeAligner(eqx.Module):
             self.optimizers[0].init(quat_init),
             self.optimizers[1].init(offset_init),
         )
-        maxval = jnp.array(jnp.finfo(jnp.float32).max, jnp.float32)
+        maxval = jnp.array(jnp.finfo(quat_init.dtype).max, quat_init.dtype)
         return _OptimizerState(
             step=jnp.array(0), old_loss=maxval, curr_loss=maxval, opt_state=opt_state
         )
@@ -86,12 +86,12 @@ class ModelToVolumeAligner(eqx.Module):
         q_opt_state, d_opt_state = state.opt_state
         optim_q, optim_d = self.optimizers
 
-        loss, grad_q = loss_and_grad_quat_fn(quat, offset, args)
+        loss, grad_q = _loss_and_grad_quat_fn(quat, offset, args)
         updates_q, q_opt_state = optim_q.update(grad_q, q_opt_state)
         quat = optax.apply_updates(quat, updates_q)
         quat /= jnp.linalg.norm(quat, keepdims=True)
 
-        loss, grad_d = loss_and_grad_offset_fn(quat, offset, args)
+        loss, grad_d = _loss_and_grad_offset_fn(quat, offset, args)
         updates_d, d_opt_state = optim_d.update(grad_d, d_opt_state)
         offset = jnp.asarray(optax.apply_updates(offset, updates_d))
 
@@ -163,13 +163,14 @@ def _atom_potential_to_volume(
     voxel_size: float,
 ) -> Float[Array, "z x y"]:
     atom_potential = cxs.GaussianMixtureVolume(atom_positions, gaussian_amp, gaussian_var)
+    render_fn = cxs.GaussianMixtureRenderFn(shape, voxel_size)
 
-    volume = atom_potential.to_real_voxel_grid(shape=shape, voxel_size=voxel_size)
+    volume = render_fn(atom_potential)
     return volume
 
 
 @eqx.filter_jit
-def loss_fn(
+def _loss_fn(
     quat: Float[Array, " 4"],
     offset: Float[Array, "3"],
     args: Tuple[_AtomicModel, _Volume],
@@ -195,20 +196,20 @@ def loss_fn(
 
 
 @eqx.filter_jit
-def loss_and_grad_quat_fn(
+def _loss_and_grad_quat_fn(
     quat: Float[Array, " 4"],
     offset: Float[Array, "3"],
     args: Tuple[_AtomicModel, _Volume],
 ) -> Tuple[Float[Array, ""], Float[Array, " 4"]]:
     # print("compiling!")
-    return jax.value_and_grad(loss_fn, argnums=0)(quat, offset, args)
+    return jax.value_and_grad(_loss_fn, argnums=0)(quat, offset, args)
 
 
 @eqx.filter_jit
-def loss_and_grad_offset_fn(
+def _loss_and_grad_offset_fn(
     quat: Float[Array, " 4"],
     offset: Float[Array, "3"],
     args: Tuple[_AtomicModel, _Volume],
 ) -> Tuple[Float[Array, ""], Float[Array, " 3"]]:
     # print("compiling!")
-    return jax.value_and_grad(loss_fn, argnums=1)(quat, offset, args)
+    return jax.value_and_grad(_loss_fn, argnums=1)(quat, offset, args)

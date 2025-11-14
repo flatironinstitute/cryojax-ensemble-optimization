@@ -9,13 +9,15 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax_dataloader as jdl
-from cryojax.jax_util import error_if_not_positive
+from cryojax.dataset import ParticleStackInfo
 from jaxtyping import Array, Float, Int
 
+from ..._custom_types import PerParticleT
 from ._loss_functions.ensemble_losses import compute_likelihood_matrix
 from ._loss_functions.likelihood_wrappers import (
     _optimize_weights,
     AbstractLikelihoodFn,
+    LikelihoodFn,
     LikelihoodOptimalWeightsFn,
 )
 from .base_optimizer import AbstractEnsembleParameterOptimizer
@@ -23,12 +25,12 @@ from .base_optimizer import AbstractEnsembleParameterOptimizer
 
 class ProjGradDescWeightOptimizer(AbstractEnsembleParameterOptimizer):
     n_steps: Int
-    likelihood_fn: AbstractLikelihoodFn
+    likelihood_fn: LikelihoodFn
 
     def __init__(
         self,
         n_steps: Int,
-        likelihood_fn: AbstractLikelihoodFn,
+        likelihood_fn: LikelihoodFn,
     ):
         self.n_steps = n_steps
         self.likelihood_fn = likelihood_fn
@@ -65,39 +67,6 @@ class ProjGradDescWeightOptimizer(AbstractEnsembleParameterOptimizer):
         return weights
 
 
-class SteepestDescWalkerPositionsOptimizer(
-    AbstractEnsembleParameterOptimizer, strict=True
-):
-    step_size: Float
-    n_steps: Int
-    likelihood_fn: AbstractLikelihoodFn
-
-    def __init__(
-        self,
-        n_steps: Int,
-        step_size: Float,
-        likelihood_fn: AbstractLikelihoodFn,
-    ):
-        assert n_steps > 0, "n_steps must be positive"
-        self.n_steps = n_steps
-        self.step_size = error_if_not_positive(step_size)
-        self.likelihood_fn = likelihood_fn
-
-    @override
-    def __call__(self, walkers, weights, dataloader):
-        for _ in range(self.n_steps):
-            batch = next(iter(dataloader))
-            walkers = _optimize_walkers_positions(
-                walkers,
-                weights,
-                batch,
-                self.step_size,
-                self.likelihood_fn,
-            )
-
-        return walkers
-
-
 class IterativeEnsembleLikelihoodOptimizer(AbstractEnsembleParameterOptimizer):
     step_size: Float
     n_steps: Int
@@ -132,7 +101,8 @@ class IterativeEnsembleLikelihoodOptimizer(AbstractEnsembleParameterOptimizer):
                 tmp_grads, tmp_weights = _compute_ensemble_gradients(
                     walkers,
                     weights,
-                    batch,
+                    batch["particle_stack"],
+                    batch["per_particle_args"],
                     self.likelihood_fn,
                 )
                 gradients += tmp_grads
@@ -142,6 +112,11 @@ class IterativeEnsembleLikelihoodOptimizer(AbstractEnsembleParameterOptimizer):
 
             norms = jnp.linalg.norm(gradients, axis=(2), keepdims=True)
             norms = jnp.where(norms < 1e-12, 1.0, norms)
+
+            # norms = (
+            #     jnp.linalg.norm(gradients, axis=(1, 2), keepdims=True)
+            #     / gradients.shape[1]
+            # )
             gradients /= norms
 
             walkers = walkers - self.step_size * gradients
@@ -149,42 +124,11 @@ class IterativeEnsembleLikelihoodOptimizer(AbstractEnsembleParameterOptimizer):
 
 
 @eqx.filter_jit
-def _optimize_walkers_positions(
-    walkers: Float[Array, "n_walkers n_atoms 3"],
-    weights: Float[Array, " n_walkers"],
-    relion_batch,
-    step_size: Float,
-    likelihood_fn: AbstractLikelihoodFn,
-) -> Float[Array, "n_walkers n_atoms 3"]:
-    def _compute_neg_log_likelihood(
-        walkers,
-        weights,
-        relion_batch,
-    ):
-        return likelihood_fn(walkers, weights, relion_batch)
-
-    gradients = jax.grad(
-        _compute_neg_log_likelihood,
-        argnums=0,
-    )(
-        walkers,
-        weights,
-        relion_batch,
-    )
-
-    # norms = jnp.linalg.norm(gradients, axis=(2), keepdims=True)
-    # # set small norms to 1 (avoid making small gradients large!)
-    # norms = jnp.where(norms < 1e-12, 1.0, norms)
-    # gradients /= norms
-
-    return walkers - step_size * gradients
-
-
-@eqx.filter_jit
 def _compute_ensemble_gradients(
     walkers: Float[Array, "n_walkers n_atoms 3"],
     weights: Float[Array, " n_walkers"],
-    relion_batch,
+    relion_stack: ParticleStackInfo,
+    per_particle_args: PerParticleT,
     likelihood_fn: LikelihoodOptimalWeightsFn,
 ) -> Tuple[
     Float[Array, "n_walkers n_atoms 3"],
@@ -206,10 +150,12 @@ def _compute_ensemble_gradients(
         The optimized walkers and weights of the ensemble.
     """
 
-    def _loss_fn(walkers, weights, relion_batch):
-        return likelihood_fn(walkers, weights, relion_batch)
+    def _loss_fn(walkers, weights, relion_stack, per_particle_args):
+        return likelihood_fn(walkers, weights, relion_stack, per_particle_args)
 
-    return jax.grad(_loss_fn, argnums=0, has_aux=True)(walkers, weights, relion_batch)
+    return jax.grad(_loss_fn, argnums=0, has_aux=True)(
+        walkers, weights, relion_stack, per_particle_args
+    )
 
 
 def _compute_full_likelihood_matrix(

@@ -7,7 +7,7 @@ import jax.numpy as jnp
 from jaxtyping import Array, Float, Int, PRNGKeyArray
 
 from .._forcefields.base_forcefield import AbstractForceField
-from .._forcefields.biasing_forces import compute_harmonic_bias_potential_energy
+from .._forcefields.biasing_forces import compute_harmonic_steering_force
 from ..base_prior_projector import AbstractPriorProjector
 
 
@@ -387,9 +387,9 @@ def _take_steered_overdamped_langevin_step(
 ) -> Float[Array, "n_atoms 3"]:
     energy_gradient = jax.grad(lambda x: forcefield(x))(atom_positions)
 
-    biasing_gradient = jax.grad(compute_harmonic_bias_potential_energy)(
+    biasing_gradient = -compute_harmonic_steering_force(
         atom_positions, ref_walkers, biasing_force_constant
-    )
+    )  # it's negative since it's a force F = -grad E
 
     gradient = energy_gradient + biasing_gradient
     # jax.debug.print("{gradient}", gradient=gradient)
@@ -506,9 +506,9 @@ def _take_steered_overdamped_langevin_step_parallel(
 ) -> Float[Array, "n_walkers n_atoms 3"]:
     energy_gradient = eqx.filter_vmap(jax.grad(lambda x: forcefield(x)))(atom_positions)
 
-    biasing_gradient = eqx.filter_vmap(
-        jax.grad(compute_harmonic_bias_potential_energy), in_axes=(0, 0, None)
-    )(atom_positions, ref_walkers, biasing_force_constant)
+    biasing_gradient = -compute_harmonic_steering_force(
+        atom_positions, ref_walkers, biasing_force_constant
+    )
 
     gradient = energy_gradient + biasing_gradient
 

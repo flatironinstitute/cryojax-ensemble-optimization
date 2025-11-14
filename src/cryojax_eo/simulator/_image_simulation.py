@@ -12,7 +12,7 @@ def _select_potential(volumes, idx):
     return jax.lax.switch(idx, funcs)
 
 
-def render_image_with_white_gaussian_noise(
+def simulate_image_with_white_gaussian_noise(
     particle_parameters: Dict,
     constant_args: Tuple[
         Tuple[cxs.AbstractVolumeRepresentation],
@@ -25,18 +25,19 @@ def render_image_with_white_gaussian_noise(
     "{relion_particle_stack.config.y_dim} {relion_particle_stack.config.x_dim}",  # noqa
 ]:
     """
-    Renders an image given the particle parameters, volume,
+    Simulates an image given the particle parameters, volume,
     and noise variance. The noise is White Gaussian noise.
 
     **Arguments:**
         - `particle_parameters`: The particle parameters.
-        - `constant_args`: A tuple with the volumes, the mask, and the data_sign.
-          A data_sign of 1.0 means dark-on-light, -1.0 means light-on-dark.
+        - `constant_args`: A tuple containing: a tuple of volume parametrizations,
+           a mask defining the signal region, and the data_sign.
+           A data_sign of 1.0 means dark-on-light, -1.0 means light-on-dark.
 
         - `per_particle_args`: A containing a random jax key,
-            the potential_idx to use, and the noise variance.
+            the potential_idx to use, and the signal-to-noise ratio
     **Returns:**
-        The rendered image.
+        The simulated image.
 
     """
     key_noise, potential_idx, snr = per_particle_args
@@ -53,7 +54,7 @@ def render_image_with_white_gaussian_noise(
         simulates_quantity=False,
     )
 
-    distribution = cxs.UncorrelatedGaussianNoiseModel(
+    distribution = cxs.GaussianWhiteNoiseModel(
         image_model,
         variance=1.0,
         signal_scale_factor=jnp.sqrt(snr),

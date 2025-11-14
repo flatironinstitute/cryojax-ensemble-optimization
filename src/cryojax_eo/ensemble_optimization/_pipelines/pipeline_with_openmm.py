@@ -1,3 +1,4 @@
+import logging
 import os
 import pathlib
 from typing import Any, Tuple
@@ -68,9 +69,9 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
         Float[Array, "n_steps n_walkers n_atoms 3"],
         Float[Array, "n_steps n_walkers"],
     ]:
-        # print("Initializing projetor...")
+        logging.info("Initializing projector...")
         md_states = self.prior_projector.initialize(initial_state_for_projector)
-        # print("Projector initialized.")
+        logging.info("Projector initialized.")
 
         reference_structure = self.prealigned_structure
 
@@ -83,27 +84,22 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
         if weights.ndim == 0:
             weights = jnp.expand_dims(weights, axis=0)
 
-        # print("Preparing writers for output...")
+        logging.info("Preparing writers for output...")
         writers = [
             XTCTrajectoryFile(os.path.join(output_directory, f"traj_walker_{i}.xtc"), "w")
             for i in range(walkers.shape[0])
         ]
-        # print("Writers prepared.")
+        logging.info("Writers prepared.")
 
-        # print("Aligning walkers to reference structure...")
+        logging.info("Aligning walkers to reference structure...")
         walkers = _align_walkers_to_reference(
             walkers, reference_structure, self.atom_indices_for_opt
         )
-        # print("Walkers aligned.")
-
+        logging.info("Walkers aligned.")
         for i in tqdm(range(self.n_steps)):
-            """
-            if stride_for_pose is True:
-                new_dataset = pose_estimation(walkers)
-                dataloader = create_dataloader...
-            """
+            logging.info(f"Starting optimization step {i+1}/{self.n_steps}...")
 
-            # print("Likelihood Optimization: ")
+            logging.info("   Likelihood Optimization: ")
             tmp_walkers, weights = self.likelihood_optimizer(
                 walkers[:, self.atom_indices_for_opt, :],
                 weights,
@@ -113,21 +109,22 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
             walkers = walkers.at[:, self.atom_indices_for_opt, :].set(tmp_walkers)
             walkers.block_until_ready()
             walkers = jax.device_get(walkers)
-            # print("Likelihood Optimization done.")
+            logging.info("   Likelihood Optimization done.")
 
-            # print(walkers)
-
-            # print("Prior Projection: ")
-
+            logging.info("   Prior Projection: ")
             walkers, md_states = self.prior_projector(
                 walkers, md_states, bias_constant_scheduler(i)
             )
+            logging.info("   Prior Projection done.")
 
+            logging.info("   Aligning walkers to reference structure...")
             walkers = _align_walkers_to_reference(
                 walkers, reference_structure, self.atom_indices_for_opt
             )
+            logging.info("   Walkers aligned.")
 
             if self.model_to_volume_aligner is not None:
+                logging.info("   Aligning walkers to volume...")
                 walkers = _align_walkers_to_volume(
                     walkers,
                     self.model_to_volume_aligner,
@@ -135,10 +132,13 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
                     self.likelihood_optimizer.likelihood_fn.amplitudes,
                     self.likelihood_optimizer.likelihood_fn.variances,
                 )
+                logging.info("   Walkers aligned to volume.")
 
-            # print("Write trajectory to files...")
+            logging.info("   Writing trajectory to files...")
             for j in range(walkers.shape[0]):
                 writers[j].write(walkers[j] / 10.0)
+
+        logging.info("Optimization complete.")
 
         for writer in writers:
             writer.close()
@@ -150,7 +150,7 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
             ).save_pdb(os.path.join(output_directory, f"final_walker_{i}.pdb"))
 
         if self.runs_postprocessing:
-            # print("Running postprocessing...")
+            logging.info("Running postprocessing...")
             weight_optimizer = ProjGradDescWeightOptimizer(
                 n_steps=500,
                 likelihood_fn=self.likelihood_optimizer.likelihood_fn,
@@ -158,6 +158,7 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
             walkers, weights = self.postprocess(
                 walkers, weights, dataloader, weight_optimizer
             )
+            logging.info("Postprocessing complete.")
         return walkers, weights
 
     def postprocess(
@@ -189,7 +190,7 @@ def _align_walkers_to_reference(
     Align the walkers to the reference structure.
     """
 
-    new_walkers = walkers.copy()
+    new_walkers = jnp.asarray(walkers.copy())
     for i in range(walkers.shape[0]):
         walker_mdtraj = mdtraj.Trajectory(
             xyz=walkers[i] / 10.0,  # Convert to nm
