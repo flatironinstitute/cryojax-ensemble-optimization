@@ -28,7 +28,7 @@ mamba create -n cryojax_eo_env python==3.11
 mamba activate cryojax_eo_env
 mamba install -c conda-forge openmm cuda-version==12.4 # Insert your cuda version!
 pip install --upgrade "jax[cuda12]"
-pip install git+git@github.com:flatironinstitute/cryojax-ensemble-optimization.git
+pip install git+https://github.com/flatironinstitute/cryojax-ensemble-optimization.git
 ```
 To find your CUDA version, you can run `nvidia-smi` in a terminal, and the CUDA version will appear in the top right corner of the output.
 
