@@ -138,7 +138,7 @@ class EnsOptAlignConfig(BaseModel, extra="forbid"):
         + "The box size must be a positive integer.",
     )
 
-    consensus_volume_voxel_size: Optional[PositiveFloat] = Field(
+    reference_volume_voxel_size: Optional[PositiveFloat] = Field(
         default=None,
         description="Overrides the voxel size stored in the MRC header "
         + "of the consensus volume."

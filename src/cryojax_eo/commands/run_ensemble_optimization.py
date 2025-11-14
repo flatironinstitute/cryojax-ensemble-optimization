@@ -131,8 +131,8 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
         if mask is not None:
             volume_for_alignment *= mask
 
-        if config["alignment_params"]["consensus_volume_voxel_size"] is not None:
-            voxel_size = config["alignment_params"]["consensus_volume_voxel_size"]
+        if config["alignment_params"]["reference_volume_voxel_size"] is not None:
+            voxel_size = config["alignment_params"]["reference_volume_voxel_size"]
 
         box_size_ds = int(config["alignment_params"]["downsample_box_size"])
 

@@ -24,7 +24,7 @@ from ._prior_projection import (
     AbstractEnsemblePriorProjector as AbstractEnsemblePriorProjector,
     AbstractForceField as AbstractForceField,
     AbstractPriorProjector as AbstractPriorProjector,
-    compute_harmonic_bias_potential_energy as compute_harmonic_bias_potential_energy,
+    compute_harmonic_steering_force as compute_harmonic_steering_force,
     EnsembleSteeredMDSimulator as EnsembleSteeredMDSimulator,
     OverdampedLangevinSampler as OverdampedLangevinSampler,
     ParallelSteeredOverdampedLangevinSampler as ParallelSteeredOverdampedLangevinSampler,
