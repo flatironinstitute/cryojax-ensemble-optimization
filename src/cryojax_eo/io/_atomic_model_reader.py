@@ -5,9 +5,9 @@ import jax.numpy as jnp
 import mdtraj
 from cryojax.constants import (
     b_factor_to_variance,
+    PengScatteringFactorParameters,
 )
 from cryojax.io import read_atoms_from_pdb
-from cryojax.simulator import PengScatteringFactorParameters
 from jaxtyping import Array, Float
 
 
@@ -106,26 +106,28 @@ def _read_atomic_models_from_pdb(
 
     for i in range(len(atomic_models_filenames)):
         if loads_b_factors:
-            _, atom_types, b_factors = read_atoms_from_pdb(
+            _, atomic_numbers, atomic_properties = read_atoms_from_pdb(
                 atomic_models_filenames[i],
                 center=True,
-                loads_b_factors=True,
+                loads_properties=True,
                 selection_string=selection_string,
             )
 
-            scattering_factors = PengScatteringFactorParameters(atom_types)
+            scattering_factors = PengScatteringFactorParameters(atomic_numbers)
             amplitudes = scattering_factors.a
-            variances = b_factor_to_variance(scattering_factors.b + b_factors[:, None])
+            variances = b_factor_to_variance(
+                scattering_factors.b + atomic_properties["b_factors"][:, None]
+            )
 
         else:
-            _, atom_types = read_atoms_from_pdb(
+            _, atomic_numbers = read_atoms_from_pdb(
                 atomic_models_filenames[i],
                 center=True,
-                loads_b_factors=False,
+                loads_properties=False,
                 selection_string=selection_string,
             )
 
-            scattering_factors = PengScatteringFactorParameters(atom_types)
+            scattering_factors = PengScatteringFactorParameters(atomic_numbers)
             amplitudes = scattering_factors.a
             variances = b_factor_to_variance(scattering_factors.b)
 

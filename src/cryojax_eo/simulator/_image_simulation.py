@@ -54,7 +54,7 @@ def simulate_image_with_white_gaussian_noise(
         simulates_quantity=False,
     )
 
-    distribution = cxs.UncorrelatedGaussianNoiseModel(
+    distribution = cxs.GaussianWhiteNoiseModel(
         image_model,
         variance=1.0,
         signal_scale_factor=jnp.sqrt(snr),

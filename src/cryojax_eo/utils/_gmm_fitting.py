@@ -6,6 +6,7 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import optimistix as optx
+from cryojax.constants import PengScatteringFactorParameters
 from cryojax.io import read_atoms_from_pdb
 from cryojax.jax_util import make_filter_spec
 from jaxtyping import Array, Float, Int, PyTree
@@ -23,14 +24,13 @@ class Gaussian3D(eqx.Module, strict=True):
         self,
     ) -> Float[Array, "{self.shape[0]} {self.shape[1]} {self.shape[2]}"]:
         gmm_volume = self.to_gmm_volume()
+        render_fn = cxs.GaussianMixtureRenderFn(self.shape, self.voxel_size)
 
-        return gmm_volume.to_real_voxel_grid(
-            self.shape,
-            self.voxel_size,
-        )
+        return render_fn(gmm_volume)
 
     def to_gmm_volume(self) -> cxs.GaussianMixtureVolume:
         ones = jnp.ones((self.positions.shape[0], self.n_gaussians_per_bead))
+
         gmm_volume = cxs.GaussianMixtureVolume(
             self.positions,
             amplitudes=self.amplitude * ones,
@@ -108,23 +108,19 @@ def _make_target_voxel_grid(
     reference_pdb_file: str | Path, box_size: int, voxel_size: float
 ) -> Float[Array, "{box_size} {box_size} {box_size}"]:
     # read in atoms
-    atom_positions, atom_types, b_factors = read_atoms_from_pdb(
+    atom_positions, atomic_numbers, atomic_properties = read_atoms_from_pdb(
         reference_pdb_file,
         center=True,
-        loads_b_factors=True,
+        loads_properties=True,
         selection_string="not element H",
     )
-    scattering_factor_parameters = cxs.PengScatteringFactorParameters(atom_types)
+    scattering_factor_parameters = PengScatteringFactorParameters(atomic_numbers)
 
-    # make target via peng volume
-    atomic_potential = cxs.PengAtomicVolume.from_tabulated_parameters(
-        atom_positions, scattering_factor_parameters, b_factors
+    render_fn = cxs.GaussianMixtureRenderFn((box_size, box_size, box_size), voxel_size)
+    gmm_volume = cxs.GaussianMixtureVolume.from_tabulated_parameters(
+        atom_positions, scattering_factor_parameters, atomic_properties["b_factors"]
     )
-
-    return atomic_potential.to_real_voxel_grid(
-        (box_size, box_size, box_size),
-        voxel_size,
-    )
+    return render_fn(gmm_volume)
 
 
 def _make_initial_gmm(

@@ -6,6 +6,7 @@ import jax.numpy as jnp
 import mdtraj
 import pytest
 from cryojax.dataset import RelionParticleParameterFile, RelionParticleStackDataset
+from cryojax.simulator import GaussianMixtureRenderFn
 from optax import constant_schedule
 
 from cryojax_eo.dataset import create_dataloader
@@ -28,9 +29,8 @@ def sample_model_aligner(sample_path_to_pdb1):
     )[0]
 
     voxel_size = 0.2 * 128 / 32
-    real_voxel_grid = gmm_volume.to_real_voxel_grid(
-        shape=(32, 32, 32), voxel_size=voxel_size
-    )
+    render_fn = GaussianMixtureRenderFn((32, 32, 32), voxel_size)
+    real_voxel_grid = render_fn(gmm_volume)
     return ModelToVolumeAligner(real_voxel_grid, voxel_size)
 
 

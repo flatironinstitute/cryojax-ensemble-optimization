@@ -163,8 +163,9 @@ def _atom_potential_to_volume(
     voxel_size: float,
 ) -> Float[Array, "z x y"]:
     atom_potential = cxs.GaussianMixtureVolume(atom_positions, gaussian_amp, gaussian_var)
+    render_fn = cxs.GaussianMixtureRenderFn(shape, voxel_size)
 
-    volume = atom_potential.to_real_voxel_grid(shape=shape, voxel_size=voxel_size)
+    volume = render_fn(atom_potential)
     return volume
 
 
