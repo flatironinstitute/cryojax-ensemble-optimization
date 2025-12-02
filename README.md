@@ -30,7 +30,7 @@ mamba install -c conda-forge openmm cuda-version==12.4 # Insert your cuda versio
 pip install --upgrade "jax[cuda12]"
 pip install git+https://github.com/flatironinstitute/cryojax-ensemble-optimization.git
 ```
-To find your CUDA version, you can run `nvidia-smi` in a terminal, and the CUDA version will appear in the top right corner of the output.
+To find your CUDA version, you can run `nvidia-smi` in a terminal. The CUDA version will appear in the top right corner of the output.
 
 
 ## Cryo-EM Ensemble Optimization Input
@@ -43,9 +43,9 @@ See the [input documentation](docs/ensemble_optimization.md)
 See the [input documentation](docs/dataset_simulation.md)
 
 
-## Reproducing Paper Results (TODO)
+## Reproducing Paper Results
 
-All the necessary data, atomic models, config files, and instructions to reproduce our results are available in Zenodo.
+All the necessary data, atomic models, config files, and instructions to reproduce our results are available in [Zenodo](https://doi.org/10.5281/zenodo.17420048).
 
 ## Contact
 
