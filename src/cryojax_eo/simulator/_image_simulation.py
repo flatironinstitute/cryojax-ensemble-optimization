@@ -1,8 +1,9 @@
-from typing import Dict, Tuple
+from typing import Tuple
 
 import cryojax.simulator as cxs
 import jax
 import jax.numpy as jnp
+from cryojax.dataset import ParticleParameterInfo
 from cryojax.ndimage.transforms import CircularCosineMask
 from jaxtyping import Array, Float, Int, PRNGKeyArray
 
@@ -13,7 +14,7 @@ def _select_potential(volumes, idx):
 
 
 def simulate_image_with_white_gaussian_noise(
-    particle_parameters: Dict,
+    particle_parameters: ParticleParameterInfo,
     constant_args: Tuple[
         Tuple[cxs.AbstractVolumeRepresentation],
         CircularCosineMask,
@@ -44,10 +45,16 @@ def simulate_image_with_white_gaussian_noise(
     volumes, mask, data_sign = constant_args
     volume = _select_potential(volumes, potential_idx)
 
+    pose = jax.lax.cond(
+        isinstance(volume, cxs.FourierVoxelGridVolume),
+        lambda p: p.to_inverse_rotation(),
+        lambda p: p,
+        particle_parameters["pose"],
+    )
     image_model = cxs.make_image_model(
         volume,
         particle_parameters["image_config"],
-        particle_parameters["pose"],
+        pose,
         particle_parameters["transfer_theory"],
         signal_region=(mask.array == 1),
         normalizes_signal=True,
