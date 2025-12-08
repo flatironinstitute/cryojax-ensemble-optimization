@@ -37,8 +37,8 @@ overwrite: True
 
 atomic_models_params:
   path_to_atomic_models:
-    - ./atomic_models/ala_model_0.pdb
-    - ./atomic_models/ala_model_1.pdb
+    - ../atomic_models/ala_A.pdb
+    - ../atomic_models/ala_B.pdb
   atomic_models_probabilities:
     - 0.7
     - 0.3
