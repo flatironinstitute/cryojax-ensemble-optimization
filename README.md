@@ -3,7 +3,7 @@
 
 ## Summary
 
-CryoJAX ensemble optimization is a module of the [cryoJAX](https://github.com/michael-0brien/cryojax) library, a [JAX](https://github.com/jax-ml/jax) and [Equinox](https://docs.kidger.site/equinox/)-based library for differentiable cryo-EM forward models. The purpose of this library is to provide a framework for optimizing structural ensembles, defined as a weighted discrete set of atomic structures, given a set of cryo-EM images. To do this, we implement an algorithm inspired by projected gradient descent, where the optimization step is performed by comparing the ensemble to the cryo-EM dataset, and the projection step is done through Steered Molecular Dynamics using the popular [OpenMM](https://openmm.org/) library. Details and results are available in our preprint: TODO. Instructions for reproducing the paper results are provided below.
+CryoJAX ensemble optimization is a module of the [cryoJAX](https://github.com/michael-0brien/cryojax) library, a [JAX](https://github.com/jax-ml/jax) and [Equinox](https://docs.kidger.site/equinox/)-based library for differentiable cryo-EM forward models. The purpose of this library is to provide a framework for optimizing structural ensembles, defined as a weighted discrete set of atomic structures, given a set of cryo-EM images. To do this, we implement an algorithm inspired by projected gradient descent, where the optimization step is performed by comparing the ensemble to the cryo-EM dataset, and the projection step is done through Steered Molecular Dynamics using the popular [OpenMM](https://openmm.org/) library. Details and results are available in our [preprint](https://www.biorxiv.org/content/10.64898/2025.12.02.691891v1). Instructions for reproducing the paper results are provided below.
 
 
 ## Installation
@@ -30,7 +30,7 @@ mamba install -c conda-forge openmm cuda-version==12.4 # Insert your cuda versio
 pip install --upgrade "jax[cuda12]"
 pip install git+https://github.com/flatironinstitute/cryojax-ensemble-optimization.git
 ```
-To find your CUDA version, you can run `nvidia-smi` in a terminal, and the CUDA version will appear in the top right corner of the output.
+To find your CUDA version, you can run `nvidia-smi` in a terminal. The CUDA version will appear in the top right corner of the output.
 
 
 ## Cryo-EM Ensemble Optimization Input
@@ -43,9 +43,9 @@ See the [input documentation](docs/ensemble_optimization.md)
 See the [input documentation](docs/dataset_simulation.md)
 
 
-## Reproducing Paper Results (TODO)
+## Reproducing Paper Results
 
-All the necessary data, atomic models, config files, and instructions to reproduce our results are available in Zenodo.
+All the necessary data, atomic models, config files, and instructions to reproduce our results are available in [Zenodo](https://doi.org/10.5281/zenodo.17420048).
 
 ## Contact
 
