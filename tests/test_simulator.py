@@ -2,7 +2,7 @@ import cryojax.simulator as cxs
 import jax
 import jax.numpy as jnp
 from cryojax.io import read_array_from_mrc
-from cryojax.ndimage.transforms import CircularCosineMask
+from cryojax.ndimage import CircularCosineMask
 
 from cryojax_eo.io import load_gmm_volume_parametrization
 from cryojax_eo.simulator import DilatedMask, simulate_image_with_white_gaussian_noise

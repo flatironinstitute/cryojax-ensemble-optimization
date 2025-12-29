@@ -12,8 +12,7 @@ from cryojax.dataset import (
     RelionParticleStackDataset,
     simulate_particle_stack,
 )
-from cryojax.ndimage.operators import FourierGaussian
-from cryojax.ndimage.transforms import CircularCosineMask
+from cryojax.ndimage import CircularCosineMask, FourierGaussian
 from cryojax.rotations import SO3
 from jaxtyping import Array, Float, PRNGKeyArray
 
