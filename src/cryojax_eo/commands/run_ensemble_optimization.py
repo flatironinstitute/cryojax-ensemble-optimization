@@ -17,7 +17,7 @@ from cryojax.dataset import (
     RelionParticleStackDataset,
 )
 from cryojax.io import read_array_from_mrc
-from cryojax.ndimage import fourier_crop_downsample_to_shape
+from cryojax.ndimage import fourier_crop_to_shape
 
 import cryojax_eo as cxeo
 from cryojax_eo.internal import EnsOptMDConfig
@@ -137,7 +137,7 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
         box_size_ds = int(config["alignment_params"]["downsample_box_size"])
 
         voxel_size = voxel_size * volume_for_alignment.shape[0] / box_size_ds
-        volume_for_alignment = fourier_crop_downsample_to_shape(
+        volume_for_alignment = fourier_crop_to_shape(
             volume_for_alignment, (box_size_ds, box_size_ds, box_size_ds)
         )
 

@@ -21,6 +21,9 @@ def loss_for_grid_search(
     volume: cxs.AbstractVolumeRepresentation,
     relion_stack: ParticleStackInfo,
 ) -> Float:
+    assert (
+        relion_stack["parameters"] is not None
+    ), "relion_stack must have non None 'parameters' field."
     pose = cxs.QuaternionPose(
         offset_x_in_angstroms=0.0, offset_y_in_angstroms=0.0, wxyz=quat
     )
@@ -30,7 +33,6 @@ def loss_for_grid_search(
         relion_stack["parameters"]["image_config"],
         pose,
         relion_stack["parameters"]["transfer_theory"],
-        simulates_quantity=False,
         normalizes_signal=True,
     ).simulate()
 

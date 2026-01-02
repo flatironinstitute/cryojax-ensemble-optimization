@@ -4,7 +4,7 @@ import cryojax.simulator as cxs
 import jax
 import jax.numpy as jnp
 from cryojax.dataset import ParticleParameterInfo
-from cryojax.ndimage.transforms import CircularCosineMask
+from cryojax.ndimage import CircularCosineMask
 from jaxtyping import Array, Float, Int, PRNGKeyArray
 
 
@@ -56,9 +56,8 @@ def simulate_image_with_white_gaussian_noise(
         particle_parameters["image_config"],
         pose,
         particle_parameters["transfer_theory"],
-        signal_region=(mask.array == 1),
+        signal_region=(mask.get() == 1),
         normalizes_signal=True,
-        simulates_quantity=False,
     )
 
     distribution = cxs.GaussianWhiteNoiseModel(

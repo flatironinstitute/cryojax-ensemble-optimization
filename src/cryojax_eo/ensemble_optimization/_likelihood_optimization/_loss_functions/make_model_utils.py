@@ -23,7 +23,6 @@ def _make_image_model_with_stack_poses(
         relion_stack["parameters"]["pose"],
         relion_stack["parameters"]["transfer_theory"],
         normalizes_signal=True,
-        simulates_quantity=False,
     )
 
 
@@ -42,7 +41,6 @@ def _make_image_model_from_gmm_estimate_poses(
         pose,
         relion_stack["parameters"]["transfer_theory"],
         normalizes_signal=True,
-        simulates_quantity=False,
     )
 
 
