@@ -15,7 +15,7 @@ Our library has been tested on the latest Ubuntu version. Availability for other
 Our library can be installed to be used with a CPU via pip.
 
 ```bash
-pip install git+git@github.com:flatironinstitute/cryojax-ensemble-optimization.git
+pip install git+https://github.com/flatironinstitute/cryojax-ensemble-optimization.git
 ```
 We recommend using a freshly created virtual environment to install our library. A CPU installation is only recommended for dataset simulation, as OpenMM is built for GPU, and simulations will take a long time if run on CPU.
 
