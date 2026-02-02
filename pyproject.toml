@@ -10,15 +10,19 @@ authors = [
 description = "Cryo-EM Ensemble Optimization using JAX and OpenMM for Molecular Dynamics simulations."
 readme = "README.md"
 requires-python = ">=3.11"
-keywords = ["CryoEM", "Molecular Dynamics", "single particle"]
+keywords = ["jax", "equinox", "cryo-EM", "electron-microscopy", "molecular-dynamics"]
 license = {file="LICENSE"}
 classifiers = [
-  "Development Status :: 3 - Alpha",
-  "Intended Audience :: Science/Research",
-  "Natural Language :: English",
-  "Programming Language :: Python :: 3",
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU Lesser General Public License v2 (LGPLv2)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
 ]
-version = "0.1.0"
+urls = {repository = "https://github.com/flatironinstitute/cryojax-ensemble-optimization" }
+dynamic = ["version"]
 
 dependencies = [
     "numpy",
@@ -49,12 +53,16 @@ test = [
   "pytest"
 ]
 
-[project.urls]
-Documentation = "https://github.com/DSilva27/cryojax-ensemble-optimization/blob/main/README.rst"
-Issues = "https://github.com/DSilva27/cryojax-ensemble-optimization/issues"
-Source = "https://github.com/DSilva27/cryojax-ensemble-optimization"
 
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
 
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "cryojax/cryojax_version.py"
 [tool.ruff]
 extend-include = ["*.ipynb"]
 line-length = 90
