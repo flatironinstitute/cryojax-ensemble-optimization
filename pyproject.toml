@@ -7,17 +7,18 @@ authors = [
     {name = "Roy Lederman"},
 ]
 
-description = "My package description"
+description = "Cryo-EM Ensemble Optimization using JAX and OpenMM for Molecular Dynamics simulations."
 readme = "README.md"
 requires-python = ">=3.11"
 keywords = ["CryoEM", "Molecular Dynamics", "single particle"]
-license = "MIT"
+license = {file="LICENSE"}
 classifiers = [
-  "Development Status :: 4 - Beta",
-  "Programming Language :: Python",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: Implementation :: PyPy",
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Natural Language :: English",
+  "Programming Language :: Python :: 3",
 ]
+version = "0.13.4"
 
 dependencies = [
     "numpy",
@@ -38,14 +39,14 @@ dependencies = [
     "optimistix",
     "PyYAML"
 ]
-dynamic = ["version"]
 
 [project.optional-dependencies]
 dev = [
-  "pytest",
-  "mypy",
   "pre-commit",
   "ruff"
+]
+test = [
+  "pytest"
 ]
 
 [project.urls]
@@ -54,29 +55,21 @@ Issues = "https://github.com/DSilva27/cryojax-ensemble-optimization/issues"
 Source = "https://github.com/DSilva27/cryojax-ensemble-optimization"
 
 
-[build-system]
-requires = ["hatchling", "hatch-vcs"]
-build-backend = "hatchling.build"
-
-[tool.hatch.version]
-source = "vcs"
-
-[tool.hatch.build.hooks.vcs]
-version-file = "src/cryojax_eo/cryojax_ensemble_optimization_version.py"
-
 [tool.ruff]
 extend-include = ["*.ipynb"]
-lint.fixable = ["I001", "F401"]
 line-length = 90
-lint.ignore = ["E402", "E721", "E731", "E741", "F722"]
-lint.select = ["E", "F", "I001"]
 src = ["src"]
+
+[tool.ruff.lint]
+fixable = ["I001", "F401", "UP"]
+ignore = ["E402", "E721", "E731", "E741", "F722"]
+select = ["E", "F", "I001", "UP"]
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
 extra-standard-library = ["typing_extensions"]
 lines-after-imports = 2
-order-by-type = false
+order-by-type = true
 
 [tool.black]
 line-length = 90
