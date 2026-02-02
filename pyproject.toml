@@ -1,5 +1,5 @@
 [project]
-name = "cryojax_ensemble_optimization"
+name = "cryojax_eo"
 authors = [
     {name = "David Silva Sanchez", email = "david.silva@yale.edu"},
     {name = "Erik Henning Thiede"},
@@ -7,17 +7,18 @@ authors = [
     {name = "Roy Lederman"},
 ]
 
-description = "My package description"
+description = "Cryo-EM Ensemble Optimization using JAX and OpenMM for Molecular Dynamics simulations."
 readme = "README.md"
 requires-python = ">=3.11"
 keywords = ["CryoEM", "Molecular Dynamics", "single particle"]
-license = "MIT"
+license = {file="LICENSE"}
 classifiers = [
-  "Development Status :: 4 - Beta",
-  "Programming Language :: Python",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: Implementation :: PyPy",
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Natural Language :: English",
+  "Programming Language :: Python :: 3",
 ]
+version = "0.13.4"
 
 dependencies = [
     "numpy",
@@ -35,15 +36,17 @@ dependencies = [
     "openmm",
     "dm-pix",
     "optax",
+    "optimistix",
+    "PyYAML"
 ]
-dynamic = ["version"]
 
 [project.optional-dependencies]
 dev = [
-  "pytest",
-  "mypy",
   "pre-commit",
   "ruff"
+]
+test = [
+  "pytest"
 ]
 
 [project.urls]
@@ -52,29 +55,21 @@ Issues = "https://github.com/DSilva27/cryojax-ensemble-optimization/issues"
 Source = "https://github.com/DSilva27/cryojax-ensemble-optimization"
 
 
-[build-system]
-requires = ["hatchling", "hatch-vcs"]
-build-backend = "hatchling.build"
-
-[tool.hatch.version]
-source = "vcs"
-
-[tool.hatch.build.hooks.vcs]
-version-file = "src/cryojax_ensemble_optimization/cryojax_ensemble_optimization_version.py"
-
 [tool.ruff]
 extend-include = ["*.ipynb"]
-lint.fixable = ["I001", "F401"]
 line-length = 90
-lint.ignore = ["E402", "E721", "E731", "E741", "F722"]
-lint.select = ["E", "F", "I001"]
 src = ["src"]
+
+[tool.ruff.lint]
+fixable = ["I001", "F401", "UP"]
+ignore = ["E402", "E721", "E731", "E741", "F722"]
+select = ["E", "F", "I001", "UP"]
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
 extra-standard-library = ["typing_extensions"]
 lines-after-imports = 2
-order-by-type = false
+order-by-type = true
 
 [tool.black]
 line-length = 90
@@ -82,7 +77,9 @@ line-length = 90
 [tool.pyright]
 reportIncompatibleMethodOverride = true
 reportIncompatibleVariableOverride = false  # Incompatible with eqx.AbstractVar
-include = ["cryojax_ensemble_optimization", "tests"]
+include = ["cryojax_eo", "tests"]
 
 [project.scripts]
-cryojax_ensemble_optimization = "cryojax_ensemble_optimization.command_line:main_commands"
+run_ensemble_optimization = "cryojax_eo.commands.run_ensemble_optimization:main_cli"
+simulate_data = "cryojax_eo.commands.simulate_data:main_cli"
+fit_gmm_to_atoms = "cryojax_eo.commands.fit_gmm_to_atoms:main_cli"

@@ -1,26 +1,45 @@
-atom_selection: not element H
-likelihood_optimizer_params:
-  batch_size: 100
-  init_weights:
-  - 0.5
-  - 0.5
-  n_steps: 5
-  step_size: 0.25
-loads_b_factors: true
-loads_envelope: false
-n_steps: 200
-path_to_atomic_models:
-- ./atomic_models/initial_model_0.pdb
-- ./atomic_models/initial_model_1.pdb
-path_to_reference_model: ./atomic_models/ref_model.pdb
-path_to_output: ./outputs
-path_to_relion_project: ../data_generation/tutorial_data/
-path_to_starfile: ../data_generation/tutorial_data/tutorial_alanine.star
+data_params:
+  path_to_relion_project: ../data_simulation/tutorial_data/
+  path_to_starfile: ../data_simulation/tutorial_data/tutorial_alanine.star
+  data_sign: "dark-on-light"
+  loads_envelope: false # tutorial images do not have an envelope
+  # path_to_volumetric_mask: ... # not used for tutorial
+
+alignment_params:
+  path_to_prealigned_atomic_model: ../atomic_models/ala_A.pdb
+  # path_to_reference_volume: ... # not used for tutorial
+  # downsample_box_size: ... # not used for tutorial
+  # reference_volume_voxel_size: ... # not used for tutorial
+
 projector_params:
-  bias_constant_in_units: 50000.0
-  n_steps: 200
-  platform: CPU
+  bias_constant_in_kjpermol: 3.0e4
+  n_steps: 500
+  platform: CUDA
   platform_properties:
-    Threads: '64' # Number of threads to use!!!
-  projector_mode: openmm # only method supported for now
+    DeviceIndex: '0'
+  #platform: CPU
+  #platform_properties:
+  #  Threads: '4' # Number of threads to use!!!
+  # path_to_initial_states:
+  #   - path/to/initial_state_0.xml # Not used here
+  #   - path/to/initial_state_1.xml # Not used here
+
+likelihood_optimizer_params:
+  batch_size: 500
+  initial_weights:
+  - 0.5
+  - 0.5
+  n_steps: 10
+  step_size: 0.25
+  n_batches_per_step: 1
+  estimates_pose: false
+
+atom_selection: not element H
+loads_b_factors: true
+n_steps: 100
+path_to_atomic_models:
+- ../atomic_models/ala_C.pdb
+- ../atomic_models/ala_C.pdb
+
+path_to_output: ./outputs
 rng_seed: 0

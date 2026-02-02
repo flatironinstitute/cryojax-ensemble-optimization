@@ -6,5 +6,5 @@ ref_positions.pdb
 *.log
 traj_*
 
-data_generation/tutorial_data/
+data_simulation/tutorial_data/
 ensemble_optimization/outputs/
