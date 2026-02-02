@@ -26,7 +26,7 @@ alignment_params:
   downsample_box_size: 32 # (*) Downsample box size for reference volume
 
 projector_params:
-  bias_constant_in_kjpermol: 3.0e5 # Bias constant for the Steered MD projection (might require tuning)
+  bias_proportion: 0.1 # proportion between the norm of the bias force and MD force, i.e., proportion = ||F_bias|| / ||F_MD||
   n_steps: 1000
   path_to_initial_states: # (*) Initial states for each replica, useful for continuing optimizations. Optional.
     - ./initial_state_0.xml # MUST BE DIFFERENT FOR EACH REPLICA if provided

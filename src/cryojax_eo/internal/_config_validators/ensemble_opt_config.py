@@ -70,9 +70,19 @@ class EnsOptMDConfigProjector(BaseModel, extra="forbid"):
     n_steps: PositiveInt = Field(
         description="Number of steps for the MD sampler. Must be greater than 0."
     )
-    bias_constant_in_kjpermol: Union[PositiveFloat, List[PositiveFloat]] = Field(
+    bias_proportion: Union[PositiveFloat, List[PositiveFloat]] = Field(
         description="Biasing constant for the projection step. "
-        + "Can be a single value or a list of two values for linear scheduling."
+        + "Can be a single value or a list of two values for linear scheduling.",
+        default=0.1,
+    )
+    bias_constant_in_kjpermol: Optional[Union[PositiveFloat, List[PositiveFloat]]] = (
+        Field(
+            default=None,
+            description="Biasing constant in kJ/mol for the projection step. "
+            + "If None, will be computed automatically to "
+            + "achieve the desired bias_proportion. "
+            + "Can be a single value or a list of two values for linear scheduling.",
+        )
     )
     platform: Literal["CPU", "CUDA", "OpenCL"] = Field(
         default="CPU",

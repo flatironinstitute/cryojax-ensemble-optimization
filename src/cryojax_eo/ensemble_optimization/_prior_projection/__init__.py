@@ -8,6 +8,7 @@ from ._langevin_dynamics import (
     SteeredOverdampedLangevinSampler as SteeredOverdampedLangevinSampler,
 )
 from ._molecular_dynamics import (
+    compute_biasing_constant as compute_biasing_constant,
     EnsembleSteeredMDSimulator as EnsembleSteeredMDSimulator,
     SteeredMDSimulator as SteeredMDSimulator,
 )

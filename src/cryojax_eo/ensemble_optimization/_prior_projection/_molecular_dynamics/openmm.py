@@ -7,16 +7,15 @@ run_md_openmm
     Run MD simulations using OpenMM
 """
 
+import logging
 import os
 import pathlib
 import shutil
 import warnings
-from functools import partial
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 from typing_extensions import override
 
-import jax
 import jax.numpy as jnp
 import mdtraj
 import numpy as np
@@ -87,7 +86,9 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
         self.base_state_file_path = _validate_base_state_file_path(base_state_file_path)
 
         self.n_steps = n_steps
+
         if make_simulation_fn is None:
+            logging.info("Using default make_simulation_fn for OpenMM simulation.")
             parameters_for_md = _validate_and_set_params_for_md(parameters_for_md)
             self.simulation = _default_make_sim_fn(parameters_for_md, pdb.topology)
 
@@ -114,11 +115,17 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
                     )
                     path_to_state_file = f"{self.base_state_file_path}1.xml"
 
-        else:
-            path_to_state_file = f"{self.base_state_file_path}0.xml"
-            self.simulation.minimizeEnergy()
-            self.simulation.step(100)
+            logging.info(f"Initialized simulation from state file {init_state}.")
 
+        else:
+            logging.info("No initial state provided. Initializing from scratch.")
+            path_to_state_file = f"{self.base_state_file_path}0.xml"
+            logging.info("Minimizing energy and equilibrating...")
+            self.simulation.minimizeEnergy()
+            self.simulation.step(1000)
+            logging.info("Equilibration done.")
+
+        logging.info(f"Saving initial state to {path_to_state_file}...")
         self.simulation.saveState(path_to_state_file)
 
         return path_to_state_file
@@ -196,121 +203,99 @@ class EnsembleSteeredMDSimulator(AbstractEnsemblePriorProjector, strict=True):
 
 
 def compute_biasing_constant(
-    target_percentage: Float,
-    path_to_initial_pdb: str,
-    positions_for_bias,
-    n_steps: Int,
-    stride: Int = 1,
-    atom_selection: str = "not element H",
+    target_proportion: float,
+    path_to_target_pdb: str,
+    n_atoms_for_bias: int,
     *,
+    equib_steps: int = 1000,
+    steps_for_estimation: int = 500,
     make_simulation_fn: Optional[
         Callable[[Dict, openmm_app.Topology], openmm_app.Simulation]
     ] = None,
     parameters_for_md: Dict = {},
-):
+) -> float:
+    """
+    Compute the biasing constant `k` for a molecular dynamics simulation such that the
+    average magnitude of the biasing force is a specified proportion of the average
+    magnitude of the regular MD force.
+
+    **Arguments:**
+    - `target_proportion`:
+        The desired proportion between the average magnitude of
+        the biasing force and the average magnitude of the regular MD force.
+        Recommended to use a value less than 1.0.
+    - `path_to_target_pdb`:
+        Path to the initial PDB file to set up the molecular dynamics simulation.
+    - `n_atoms_for_bias`:
+        Number of atoms to consider for biasing force computation.
+    - `equib_steps`:
+        Number of equilibration steps to run before force estimation. Defaults to 1000.
+    - `steps_for_estimation`:
+        Number of simulation steps to run for force estimation. Defaults to 2000.
+    - `make_simulation_fn`:
+        Optional function to create an OpenMM Simulation object. If not provided, a
+        default function will be used.
+    - `parameters_for_md`:
+        Dictionary of parameters for setting up the molecular dynamics simulation.
+
+    **Returns:**
+    - `k_value`:
+        The computed biasing constant `k` such that the average biasing force magnitude
+        is `target_proportion` times the average regular MD force magnitude.
+    """
     if not _HAS_OPENMM:
         raise ImportError(
             "OpenMM is not installed. Please install OpenMM if using any features "
             + "that use molecular dynamics, e.g., the ensemble optimization pipeline "
             + "or flexible fitting."
         )
+    assert n_atoms_for_bias > 0, (
+        "The number of atoms for biasing force computation must be greater than zero."
+        " Please provide a " + "valid number of atoms."
+    )
+
     if make_simulation_fn is None:
         parameters_for_md = _validate_and_set_params_for_md(parameters_for_md)
         make_simulation_fn = _default_make_sim_fn
 
-    restrain_atom_list = mdtraj.load(str(path_to_initial_pdb)).topology.select(
-        atom_selection
-    )
+    logging.info("  Computing biasing constant...")
 
-    pdb = openmm_app.PDBFile(str(path_to_initial_pdb))
+    pdb = openmm_app.PDBFile(str(path_to_target_pdb))
     simulation = make_simulation_fn(parameters_for_md, pdb.topology)
     simulation.context.setPositions(pdb.positions)
+
+    # Equilibrate system
+    logging.info("    Equilibrating system...")
+    logging.info("    Minimizing energy...")
     simulation.minimizeEnergy()
+    logging.info("    Running MD steps...")
+    simulation.step(equib_steps)
+    logging.info("    Equilibration done.")
 
-    # initial_positions = simulation.context.getState(
-    #     getPositions=True
-    # ).getPositions()
-
-    # initial_positions = mdtraj.load(str(path_to_initial_pdb)).openmm_positions(0)
-
+    # Run simulation for estimation, save trajectory
     dir_exists = pathlib.Path("./tmp_biasing_comp").exists()
     os.makedirs("./tmp_biasing_comp", exist_ok=True)
     path_to_traj = "./tmp_biasing_comp/traj_for_force.xtc"
-    simulation.reporters.append(
-        openmm_app.XTCReporter(path_to_traj, reportInterval=stride)
-    )
-    simulation.step(n_steps)
+    simulation.reporters.append(openmm_app.XTCReporter(path_to_traj, reportInterval=1))
+    simulation.step(steps_for_estimation)
 
-    traj = mdtraj.load(path_to_traj, top=path_to_initial_pdb)
-
-    simulation = make_simulation_fn(parameters_for_md, pdb.topology)
-    md_forces = _compute_regular_force(traj, simulation)
+    # Load trajectory and compute value of the MD force
+    traj = mdtraj.load(path_to_traj, top=path_to_target_pdb)
 
     simulation = make_simulation_fn(parameters_for_md, pdb.topology)
-    bias_forces = _compute_biasing_force(
-        traj, simulation, restrain_atom_list, positions_for_bias
-    )
+    md_forces = _compute_md_force(traj, simulation)
+    md_forces_norm = np.linalg.norm(md_forces, axis=(1, 2))
 
-    k_value = _compute_k_value(
-        jnp.array(md_forces),
-        jnp.array(bias_forces),
-        target_percentage,
-        restrain_atom_list,
-    ).mean()
+    k_value = target_proportion * np.sqrt(n_atoms_for_bias) * md_forces_norm.mean()
 
     os.remove(path_to_traj)
     if not dir_exists:
         shutil.rmtree("./tmp_biasing_comp")
 
-    return k_value
+    return float(k_value)
 
 
-@partial(jax.vmap, in_axes=(0, 0, None, None))
-def _compute_k_value(base_force, bias_force, target_percentage, restrain_atom_list):
-    force1 = base_force[restrain_atom_list, :].flatten()
-    force2 = bias_force[restrain_atom_list, :].flatten()
-
-    rho = jnp.dot(force1, force2) / jnp.sum(force2**2)
-    R = jnp.sum(force1**2) / jnp.sum(force2**2)
-
-    a = 1.0 - target_percentage**2
-    b = -2.0 * target_percentage**2 * rho
-    c = -R * target_percentage**2
-
-    return -b + jnp.sqrt(b**2 - 4.0 * a * c) / (2.0 * a)
-
-
-def _compute_regular_force(trajectory: mdtraj.Trajectory, simulation):
-    forces = np.zeros((trajectory.n_frames, trajectory.n_atoms, 3))
-    for i in range(trajectory.n_frames):
-        simulation.context.setPositions(trajectory.openmm_positions(i))
-        forces[i] = np.array(
-            simulation.context.getState(getForces=True).getForces(asNumpy=True)
-        )
-    return forces
-
-
-def _compute_biasing_force(
-    trajectory: mdtraj.Trajectory,
-    simulation,
-    restrain_atom_list,
-    bias_positions,
-):
-    RMSD_value = openmm.RMSDForce(
-        bias_positions,
-        restrain_atom_list,
-    )
-
-    force_RMSD = openmm.CustomCVForce("0.5 * k * RMSD^2")
-    force_RMSD.addGlobalParameter("k", 1.0)
-    force_RMSD.addCollectiveVariable("RMSD", RMSD_value)
-    simulation.system.addForce(force_RMSD)
-
-    n_forces = len(simulation.system.getForces())
-    for i in range(n_forces - 1):
-        simulation.system.removeForce(0)
-
-    simulation.context.reinitialize()
+def _compute_md_force(trajectory: mdtraj.Trajectory, simulation):
     forces = np.zeros((trajectory.n_frames, trajectory.n_atoms, 3))
     for i in range(trajectory.n_frames):
         simulation.context.setPositions(trajectory.openmm_positions(i))
@@ -372,7 +357,7 @@ def _add_restraint_force_to_simulation(
         restrain_atom_list,
     )
 
-    force_RMSD = openmm.CustomCVForce("0.5 * k * RMSD^2")
+    force_RMSD = openmm.CustomCVForce("k * RMSD")
     force_RMSD.addGlobalParameter("k", bias_constant_in_kj_per_mol_angs)
     force_RMSD.addCollectiveVariable("RMSD", RMSD_value)
     simulation.system.addForce(force_RMSD)
