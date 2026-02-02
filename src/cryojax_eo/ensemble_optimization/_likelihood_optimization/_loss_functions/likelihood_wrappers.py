@@ -3,13 +3,12 @@ from typing_extensions import Literal
 
 import equinox as eqx
 import jax
-from cryojax.dataset import ParticleStackInfo
-from cryojax.jax_util import error_if_not_positive
 from jaxopt import ProjectedGradient
 from jaxopt.projection import projection_simplex
 from jaxtyping import Array, Float, Int
 
-from ...._custom_types import ConstantT, LossFn, PerParticleT
+from cryojax_eo.typing import ConstantT, LossFn, ParticleStackInfo, PerParticleT
+
 from ....simulator import DilatedMask
 from .ensemble_losses import (
     compute_likelihood_matrix,
@@ -61,8 +60,12 @@ class LikelihoodFn(AbstractLikelihoodFn, strict=True):
         dilated_mask: Optional[DilatedMask] = None,
         estimates_pose: bool = False,
     ):
-        self.variances = error_if_not_positive(variances)
-        self.amplitudes = error_if_not_positive(amplitudes)
+        assert (amplitudes > 0).all(), "Amplitudes must be positive."
+        assert (variances > 0).all(), "Variances must be positive."
+
+        self.variances = variances
+        self.amplitudes = amplitudes
+
         if image_to_walker_log_likelihood_fn == "iso_gaussian":
             self.image_to_walker_log_likelihood_fn = likelihood_isotropic_gaussian
             self.loss_fn_constant_args = (
@@ -133,8 +136,11 @@ class LikelihoodOptimalWeightsFn(AbstractLikelihoodFn, strict=True):
         dilated_mask: Optional[DilatedMask] = None,
         estimates_pose: bool = False,
     ):
-        self.variances = error_if_not_positive(variances)
-        self.amplitudes = error_if_not_positive(amplitudes)
+        assert (amplitudes > 0).all(), "Amplitudes must be positive."
+        assert (variances > 0).all(), "Variances must be positive."
+
+        self.variances = variances
+        self.amplitudes = amplitudes
         if image_to_walker_log_likelihood_fn == "iso_gaussian":
             self.image_to_walker_log_likelihood_fn = likelihood_isotropic_gaussian
             self.loss_fn_constant_args = (

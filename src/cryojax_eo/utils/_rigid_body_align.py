@@ -5,7 +5,6 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import optax
-from cryojax.jax_util import error_if_not_positive
 from jaxtyping import Array, Bool, Float, Int, Scalar
 
 
@@ -50,6 +49,8 @@ class ModelToVolumeAligner(eqx.Module):
         max_steps: int = 100,
         optimizers: Optional[Tuple[Any, Any]] = None,
     ):
+        assert voxel_size > 0, "voxel_size must be positive."
+        assert max_steps > 0, "max_steps must be positive."
         if optimizers is None:
             optimizers = (
                 optax.adabelief(learning_rate=1e-1, nesterov=True),
@@ -58,7 +59,7 @@ class ModelToVolumeAligner(eqx.Module):
         self.optimizers = optimizers
         self.rtol = rtol
         self.atol = atol
-        self.max_steps = int(error_if_not_positive(max_steps))
+        self.max_steps = int(max_steps)
         self.volume = _Volume(voxel_grid=real_voxel_grid, voxel_size=voxel_size)
 
     @eqx.filter_jit

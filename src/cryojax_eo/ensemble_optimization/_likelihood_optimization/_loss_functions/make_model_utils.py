@@ -1,6 +1,7 @@
 import cryojax.simulator as cxs
-from cryojax.dataset import ParticleStackInfo
 from jaxtyping import Array, Float
+
+from cryojax_eo.typing import ParticleStackInfo
 
 from ..._pose_search import global_SO3_hier_search
 

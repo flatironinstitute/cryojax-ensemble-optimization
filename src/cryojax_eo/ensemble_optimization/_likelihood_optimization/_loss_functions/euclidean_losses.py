@@ -1,10 +1,10 @@
 from typing import Optional
 
 import jax.numpy as jnp
-from cryojax.dataset import ParticleStackInfo
 from jaxtyping import Array, Float
 
-from ...._custom_types import PerParticleT
+from cryojax_eo.typing import ParticleStackInfo, PerParticleT
+
 from ....simulator._dilated_mask import DilatedMask
 from .common_functions import compute_optimal_scale_and_offset
 from .make_model_utils import make_image_model_from_gmm

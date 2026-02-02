@@ -7,7 +7,6 @@ from typing import Tuple
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from cryojax.jax_util import error_if_negative
 from jaxtyping import Array, Float, Int
 
 from .model_to_volume_loss import ModelToVolumeLikelihoodFn
@@ -25,9 +24,11 @@ class SteepestDescWalkerFlexibleFitting(eqx.Module):
         model_to_vol_likelihood_fn: ModelToVolumeLikelihoodFn,
     ):
         assert n_steps > 0, "n_steps must be positive"
+        assert step_size >= 0, "step_size must be non-negative."
+
         self.n_steps = n_steps
         self.model_to_vol_likelihood_fn = model_to_vol_likelihood_fn
-        self.step_size = error_if_negative(step_size)
+        self.step_size = step_size
 
     def __call__(
         self,

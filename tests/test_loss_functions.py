@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from cryojax.dataset import RelionParticleParameterFile, RelionParticleStackDataset
+from cryojax.dataset import RelionParticleDataset, RelionParticleParameterFile
 
 from cryojax_eo.ensemble_optimization import (
     compute_optimal_scale_and_offset,  # done
@@ -96,7 +96,7 @@ def test_likelihood_fn(
         [sample_path_to_pdb1], selection_string="not element H"
     )[0]
 
-    relion_stack = RelionParticleStackDataset(
+    relion_stack = RelionParticleDataset(
         RelionParticleParameterFile(
             path_to_starfile=sample_path_to_starfile,
         ),
@@ -174,7 +174,7 @@ def test_compute_likelihood_matrix(
     sample_path_to_starfile, sample_path_to_relion_project
 ):
     key = jax.random.key(0)
-    relion_stack = RelionParticleStackDataset(
+    relion_stack = RelionParticleDataset(
         RelionParticleParameterFile(
             path_to_starfile=sample_path_to_starfile,
         ),

@@ -2,8 +2,9 @@ import cryojax.simulator as cxs
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from cryojax.dataset import ParticleStackInfo
 from jaxtyping import Array, Float
+
+from cryojax_eo.typing import ParticleStackInfo
 
 from .._likelihood_optimization._loss_functions.common_functions import (
     compute_optimal_scale_and_offset,

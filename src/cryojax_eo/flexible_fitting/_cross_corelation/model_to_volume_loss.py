@@ -1,7 +1,6 @@
 import cryojax.simulator as cxs
 import equinox as eqx
 import jax.numpy as jnp
-from cryojax.jax_util import error_if_not_positive
 from jaxtyping import Array, Float, Int
 
 
@@ -21,12 +20,18 @@ class ModelToVolumeLikelihoodFn(eqx.Module):
         batch_size_for_z_planes: Int = 1,
         n_batches_of_atoms: Int = 1,
     ):
-        self.variances = error_if_not_positive(variances)
-        self.amplitudes = error_if_not_positive(amplitudes)
+        assert (amplitudes > 0).all(), "Amplitudes must be positive."
+        assert (variances > 0).all(), "Variances must be positive."
+        assert voxel_size > 0, "Voxel size must be positive."
+        assert n_batches_of_atoms > 0, "n_batches_of_atoms must be positive."
+        assert batch_size_for_z_planes > 0, "batch_size_for_z_planes must be positive."
 
-        self.voxel_size = error_if_not_positive(voxel_size)
-        self.batch_size_for_z_planes = int(error_if_not_positive(batch_size_for_z_planes))
-        self.n_batches_of_atoms = int(error_if_not_positive(n_batches_of_atoms))
+        self.variances = variances
+        self.amplitudes = amplitudes
+
+        self.voxel_size = voxel_size
+        self.batch_size_for_z_planes = int(batch_size_for_z_planes)
+        self.n_batches_of_atoms = int(n_batches_of_atoms)
 
     def __call__(
         self,
