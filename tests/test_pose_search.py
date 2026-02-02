@@ -1,4 +1,4 @@
-from cryojax.dataset import RelionParticleParameterFile, RelionParticleStackDataset
+from cryojax.dataset import RelionParticleDataset, RelionParticleParameterFile
 
 from cryojax_eo.ensemble_optimization import global_SO3_hier_search
 from cryojax_eo.io import load_gmm_volume_parametrization
@@ -14,7 +14,7 @@ def test_global_SO3_hier_search(
         selection_string="not element H",
     )[0]
 
-    relion_dataset = RelionParticleStackDataset(
+    relion_dataset = RelionParticleDataset(
         RelionParticleParameterFile(sample_path_to_starfile),
         sample_path_to_relion_project,
     )

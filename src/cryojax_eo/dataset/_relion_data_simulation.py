@@ -8,8 +8,8 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 from cryojax.dataset import (
+    RelionParticleDataset,
     RelionParticleParameterFile,
-    RelionParticleStackDataset,
     simulate_particle_stack,
 )
 from cryojax.ndimage import CircularCosineMask, FourierGaussian
@@ -59,7 +59,7 @@ def make_relion_parameter_file(
     return parameter_file
 
 
-def simulate_relion_dataset(config: DatasetSimulatorConfig) -> RelionParticleStackDataset:
+def simulate_relion_dataset(config: DatasetSimulatorConfig) -> RelionParticleDataset:
     os.makedirs(config.path_to_relion_project, exist_ok=True)
 
     seed = config.rng_seed
@@ -113,7 +113,7 @@ def _simulate_relion_dataset(
     *,
     overwrite: bool = False,
     batch_size: int = 1,
-) -> RelionParticleStackDataset:
+) -> RelionParticleDataset:
     assert len(volumes) == len(ensemble_probabilities), (
         "The number of volumes must be equal to the number of ensemble probabilities."
         f" {len(volumes)} != {len(ensemble_probabilities)}"
@@ -162,7 +162,7 @@ def _simulate_relion_dataset(
         snr_per_image,
     )
 
-    relion_dataset = RelionParticleStackDataset(
+    relion_dataset = RelionParticleDataset(
         parameter_file=parameter_file,
         path_to_relion_project=path_to_relion_project,
         mode="w",
@@ -171,7 +171,7 @@ def _simulate_relion_dataset(
 
     simulate_particle_stack(
         dataset=relion_dataset,
-        compute_image_fn=simulate_image_with_white_gaussian_noise,
+        simulate_fn=simulate_image_with_white_gaussian_noise,
         constant_args=constant_args,
         per_particle_args=per_particle_args,
         images_per_file=images_per_file,
@@ -190,7 +190,7 @@ def _make_particle_parameters(key: PRNGKeyArray, config: dict) -> Dict:
     by `cryojax_ensemble_refinement.internal.GeneratorConfig`.
     Skipping this step could lead to unexpected behavior.
     """
-    instrument_config = cxs.BasicImageConfig(
+    image_config = cxs.BasicImageConfig(
         shape=(config["box_size"], config["box_size"]),
         pixel_size=config["pixel_size"],
         voltage_in_kilovolts=config["voltage_in_kilovolts"],
@@ -291,7 +291,7 @@ def _make_particle_parameters(key: PRNGKeyArray, config: dict) -> Dict:
     )
 
     relion_particle_parameters = {
-        "image_config": instrument_config,
+        "image_config": image_config,
         "pose": pose,
         "transfer_theory": transfer_theory,
     }

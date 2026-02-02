@@ -9,10 +9,10 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax_dataloader as jdl
-from cryojax.dataset import ParticleStackInfo
 from jaxtyping import Array, Float, Int
 
-from ..._custom_types import PerParticleT
+from cryojax_eo.typing import ParticleStackInfo, PerParticleT
+
 from ._loss_functions.ensemble_losses import compute_likelihood_matrix
 from ._loss_functions.likelihood_wrappers import (
     _optimize_weights,

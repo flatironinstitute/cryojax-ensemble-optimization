@@ -2,10 +2,11 @@ from typing import Optional, Tuple
 
 import jax
 import jax.numpy as jnp
-from cryojax.dataset import ParticleStackInfo
 from dm_pix import rotate
 from jax.nn import relu
 from jaxtyping import Array, Float, Int
+
+from cryojax_eo.typing import ParticleStackInfo
 
 from ....simulator._dilated_mask import DilatedMask
 from .common_functions import compute_optimal_scale_and_offset

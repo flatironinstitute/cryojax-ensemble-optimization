@@ -4,7 +4,7 @@ import shutil
 import jax
 import jax.numpy as jnp
 import pytest
-from cryojax.dataset import RelionParticleParameterFile, RelionParticleStackDataset
+from cryojax.dataset import RelionParticleDataset, RelionParticleParameterFile
 
 from cryojax_eo.dataset import (
     create_dataloader,
@@ -86,7 +86,7 @@ def test_simulate_relion_dataset(sample_simulator_config):
 def test_create_dataloader(
     shuffle, sample_path_to_starfile, sample_path_to_relion_project
 ):
-    relion_stack_dataset = RelionParticleStackDataset(
+    relion_stack_dataset = RelionParticleDataset(
         RelionParticleParameterFile(sample_path_to_starfile),
         sample_path_to_relion_project,
     )

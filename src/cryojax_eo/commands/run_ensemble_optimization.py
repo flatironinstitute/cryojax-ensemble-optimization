@@ -13,8 +13,8 @@ import numpy as np
 import optax
 import yaml
 from cryojax.dataset import (
+    RelionParticleDataset,
     RelionParticleParameterFile,
-    RelionParticleStackDataset,
 )
 from cryojax.io import read_array_from_mrc
 from cryojax.ndimage import fourier_crop_to_shape
@@ -86,7 +86,7 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
 
     logging.debug("Loading experimental data...")
     # Load experimental data: images, mask, and consensus volume
-    stack_dataset = RelionParticleStackDataset(
+    stack_dataset = RelionParticleDataset(
         RelionParticleParameterFile(
             path_to_starfile=config["data_params"]["path_to_starfile"],
             loads_envelope=config["data_params"]["loads_envelope"],

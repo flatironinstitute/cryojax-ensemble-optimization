@@ -4,6 +4,7 @@ from . import (
     flexible_fitting as flexible_fitting,
     io as io,
     simulator as simulator,
+    typing as typing,
     utils as utils,
 )
 from .commands import (

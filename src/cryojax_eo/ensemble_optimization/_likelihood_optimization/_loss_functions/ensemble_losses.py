@@ -4,10 +4,10 @@ from typing import Optional
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from cryojax.dataset import ParticleStackInfo
 from jaxtyping import Array, Float
 
-from ...._custom_types import ConstantT, LossFn, PerParticleT
+from cryojax_eo.typing import ConstantT, LossFn, ParticleStackInfo, PerParticleT
+
 from ....simulator._dilated_mask import DilatedMask
 
 

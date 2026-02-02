@@ -2,21 +2,20 @@ from typing import Dict, Optional
 
 import jax_dataloader as jdl
 from cryojax.dataset import (
-    ParticleStackInfo,
-    RelionParticleStackDataset,
+    RelionParticleDataset,
 )
 from jaxtyping import PRNGKeyArray
 
-from .._custom_types import PerParticleT
+from cryojax_eo.typing import ParticleStackInfo, PerParticleT
 
 
 class CustomJaxDataset(jdl.Dataset):
-    cryojax_dataset: RelionParticleStackDataset
+    cryojax_dataset: RelionParticleDataset
     per_particle_args: Optional[PerParticleT]
 
     def __init__(
         self,
-        cryojax_dataset: RelionParticleStackDataset,
+        cryojax_dataset: RelionParticleDataset,
         per_particle_args: Optional[PerParticleT] = None,
     ):
         self.cryojax_dataset = cryojax_dataset
@@ -39,7 +38,7 @@ class CustomJaxDataset(jdl.Dataset):
 
 
 def create_dataloader(
-    relion_stack_dataset: RelionParticleStackDataset,
+    relion_stack_dataset: RelionParticleDataset,
     batch_size: int,
     shuffle: bool = False,
     drop_last: bool = False,
@@ -48,10 +47,10 @@ def create_dataloader(
     jax_prng_key: Optional[PRNGKeyArray] = None,
 ) -> jdl.DataLoader:
     """
-    Create a Jax DataLoader for a RelionParticleStackDataset.
+    Create a Jax DataLoader for a `RelionParticleDataset`.
 
     **Arguments:**
-        - relion_stack_dataset: A RelionParticleStackDataset object.
+        - relion_stack_dataset: A `RelionParticleDataset` object.
         - batch_size: The size of each batch.
         - shuffle: Whether to shuffle the dataset.
         - drop_last: Whether to drop the last batch if it is smaller than batch_size.
