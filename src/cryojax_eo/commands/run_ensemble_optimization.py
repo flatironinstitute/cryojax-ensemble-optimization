@@ -75,7 +75,7 @@ def _make_bias_constant_scheduler(config, atom_list):
         bias_constant_unit_prop = cxeo.ensemble_optimization.compute_biasing_constant(
             target_proportion=1.0,
             path_to_target_pdb=config["path_to_atomic_models"][0],
-            n_atoms_for_bias=len(atom_list),
+            restrain_atom_list=atom_list,
             parameters_for_md={
                 "platform": config["projector_params"]["platform"],
                 "properties": config["projector_params"]["platform_properties"],

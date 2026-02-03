@@ -72,7 +72,7 @@ class EnsOptMDConfigProjector(BaseModel, extra="forbid"):
     bias_proportion: PositiveFloat | list[PositiveFloat] = Field(
         description="Biasing constant for the projection step. "
         + "Can be a single value or a list of two values for linear scheduling.",
-        default=0.1,
+        default=0.01,
     )
     bias_constant_in_kjpermol: PositiveFloat | list[PositiveFloat] | None = Field(
         default=None,

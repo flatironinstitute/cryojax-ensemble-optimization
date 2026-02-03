@@ -203,11 +203,11 @@ class EnsembleSteeredMDSimulator(AbstractEnsemblePriorProjector, strict=True):
 def compute_biasing_constant(
     target_proportion: float,
     path_to_target_pdb: str,
-    n_atoms_for_bias: int,
+    restrain_atom_list: list[int],
     *,
-    equib_steps: int = 1000,
-    steps_for_estimation: int = 500,
-    make_simulation_fn: Callable | None,
+    equib_steps: int = 2000,
+    steps_for_estimation: int = 2000,
+    make_simulation_fn: Callable | None = None,
     parameters_for_md: dict = {},
 ) -> float:
     """
@@ -222,8 +222,8 @@ def compute_biasing_constant(
         Recommended to use a value less than 1.0.
     - `path_to_target_pdb`:
         Path to the initial PDB file to set up the molecular dynamics simulation.
-    - `n_atoms_for_bias`:
-        Number of atoms to consider for biasing force computation.
+    - `restrain_atom_list`:
+        List of atom indices to be used for computing the biasing force.
     - `equib_steps`:
         Number of equilibration steps to run before force estimation. Defaults to 1000.
     - `steps_for_estimation`:
@@ -245,7 +245,7 @@ def compute_biasing_constant(
             + "that use molecular dynamics, e.g., the ensemble optimization pipeline "
             + "or flexible fitting."
         )
-    assert n_atoms_for_bias > 0, (
+    assert len(restrain_atom_list) > 0, (
         "The number of atoms for biasing force computation must be greater than zero."
         " Please provide a " + "valid number of atoms."
     )
@@ -279,9 +279,10 @@ def compute_biasing_constant(
     traj = mdtraj.load(path_to_traj, top=path_to_target_pdb)
 
     simulation = make_simulation_fn(parameters_for_md, pdb.topology)
-    md_forces = _compute_md_force(traj, simulation)
+    md_forces = _compute_md_force(traj, simulation, restrain_atom_list)
     md_forces_norm = np.linalg.norm(md_forces, axis=(1, 2))
 
+    n_atoms_for_bias = len(restrain_atom_list)
     k_value = target_proportion * np.sqrt(n_atoms_for_bias) * md_forces_norm.mean()
 
     os.remove(path_to_traj)
@@ -291,13 +292,15 @@ def compute_biasing_constant(
     return float(k_value)
 
 
-def _compute_md_force(trajectory: mdtraj.Trajectory, simulation):
-    forces = np.zeros((trajectory.n_frames, trajectory.n_atoms, 3))
+def _compute_md_force(
+    trajectory: mdtraj.Trajectory, simulation, restrain_atom_list: list[int]
+):
+    forces = np.zeros((trajectory.n_frames, len(restrain_atom_list), 3))
     for i in range(trajectory.n_frames):
         simulation.context.setPositions(trajectory.openmm_positions(i))
         forces[i] = np.array(
             simulation.context.getState(getForces=True).getForces(asNumpy=True)
-        )
+        )[restrain_atom_list]
     return forces
 
 
