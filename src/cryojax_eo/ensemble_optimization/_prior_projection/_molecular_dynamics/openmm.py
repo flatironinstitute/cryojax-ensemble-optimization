@@ -12,8 +12,8 @@ import os
 import pathlib
 import shutil
 import warnings
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
 from typing_extensions import override
 
 import jax.numpy as jnp
@@ -41,7 +41,7 @@ except ImportError:
 from ..base_prior_projector import AbstractEnsemblePriorProjector, AbstractPriorProjector
 
 
-def _get_default_md_params() -> Dict:
+def _get_default_md_params() -> dict:
     return {
         "forcefield": "amber14-all.xml",
         "water_model": "amber14/tip3p.xml",
@@ -59,20 +59,18 @@ def _get_default_md_params() -> Dict:
 class SteeredMDSimulator(AbstractPriorProjector, strict=True):
     n_steps: Int
     simulation: openmm_app.Simulation
-    restrain_atom_list: List[Int]
+    restrain_atom_list: list[Int]
     base_state_file_path: str
 
     def __init__(
         self,
         path_to_initial_pdb: str | pathlib.Path,
         n_steps: Int,
-        restrain_atom_list: List[Int],
-        parameters_for_md: Dict,
+        restrain_atom_list: list[Int],
+        parameters_for_md: dict,
         base_state_file_path: str,
         *,
-        make_simulation_fn: Optional[
-            Callable[[Dict, openmm_app.Topology], openmm_app.Simulation]
-        ] = None,
+        make_simulation_fn: Callable | None = None,
     ):
         if not _HAS_OPENMM:
             raise ImportError(
@@ -98,7 +96,7 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
         self.simulation.context.setPositions(pdb.positions)
 
     @override
-    def initialize(self, init_state: Optional[str] = None) -> str:
+    def initialize(self, init_state: str | None = None) -> str:
         if init_state is not None:
             assert pathlib.Path(init_state).exists(), (
                 "init_state does not exist. "
@@ -133,7 +131,7 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
     @override
     def __call__(
         self, ref_walkers: Float[Array, "n_atoms 3"], state: str, bias_constant: float
-    ) -> Tuple[Float[Array, "n_atoms 3"], str]:
+    ) -> tuple[Float[Array, "n_atoms 3"], str]:
         _assert_is_valid_state_file(state, self.base_state_file_path)
 
         simulation = _add_restraint_force_to_simulation(
@@ -176,9 +174,9 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
 
 
 class EnsembleSteeredMDSimulator(AbstractEnsemblePriorProjector, strict=True):
-    projectors: List[SteeredMDSimulator]
+    projectors: list[SteeredMDSimulator]
 
-    def __init__(self, md_simulators: List[SteeredMDSimulator]):
+    def __init__(self, md_simulators: list[SteeredMDSimulator]):
         if not _HAS_OPENMM:
             raise ImportError(
                 "OpenMM is not installed. Please install OpenMM if using any features "
@@ -191,9 +189,9 @@ class EnsembleSteeredMDSimulator(AbstractEnsemblePriorProjector, strict=True):
     def __call__(
         self,
         ref_positions: Float[Array, "n_walkers n_atoms 3"],
-        states: List[str],
+        states: list[str],
         bias_constant: float,
-    ) -> Tuple[Float[Array, "n_walkers n_atoms 3"], List[str]]:
+    ) -> tuple[Float[Array, "n_walkers n_atoms 3"], list[str]]:
         projected_walkers = np.zeros_like(ref_positions)
         for i, projector in enumerate(self.projectors):
             projected_walkers[i], states[i] = projector(
@@ -209,10 +207,8 @@ def compute_biasing_constant(
     *,
     equib_steps: int = 1000,
     steps_for_estimation: int = 500,
-    make_simulation_fn: Optional[
-        Callable[[Dict, openmm_app.Topology], openmm_app.Simulation]
-    ] = None,
-    parameters_for_md: Dict = {},
+    make_simulation_fn: Callable | None,
+    parameters_for_md: dict = {},
 ) -> float:
     """
     Compute the biasing constant `k` for a molecular dynamics simulation such that the
@@ -349,7 +345,7 @@ def _assert_is_valid_state_file(
 def _add_restraint_force_to_simulation(
     simulation: openmm_app.Simulation,
     positions: openmm_unit.Quantity,
-    restrain_atom_list: List[int],
+    restrain_atom_list: list[int],
     bias_constant_in_kj_per_mol_angs: float,
 ) -> openmm_app.Simulation:
     RMSD_value = openmm.RMSDForce(

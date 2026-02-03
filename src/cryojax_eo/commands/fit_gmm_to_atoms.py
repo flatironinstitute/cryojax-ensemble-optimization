@@ -39,7 +39,7 @@ def mkbasedir(out):
 
 def warnexists(out):
     if os.path.exists(out):
-        Warning("Warning: {} already exists. Overwriting.".format(out))
+        Warning(f"Warning: {out} already exists. Overwriting.")
 
 
 def main(args):
@@ -53,14 +53,14 @@ def main(args):
         config_file = "default_config.yaml"
         config_dict = dict(config.model_dump())
     else:
-        with open(config_file, "r") as f:
+        with open(config_file) as f:
             config_dict = yaml.safe_load(f)
             config = GMMFitConfig(**config_dict)
 
     basedir = output_file.parent
     warnexists(basedir)
     mkbasedir(basedir)
-    print("A copy of the config file and the log will be written to {}".format(basedir))
+    print(f"A copy of the config file and the log will be written to {basedir}")
     sys.stdout.flush()
 
     # make copy of config to output_path
@@ -79,9 +79,8 @@ def main(args):
         yaml.dump(config_dict, f, default_flow_style=False)
 
     logging.info(
-        "A copy of the used config file has been written to {}".format(
-            os.path.join(basedir, config_fname)
-        )
+        f"A copy of the used config file has been written "
+        f"to {os.path.join(basedir, config_fname)}"
     )
 
     logging.info("Simulating particle stack...")
@@ -107,7 +106,7 @@ def main(args):
     )
 
     logging.info("Simulation complete.")
-    logging.info("Output written to {}".format(basedir))
+    logging.info(f"Output written to {basedir}")
 
     return
 

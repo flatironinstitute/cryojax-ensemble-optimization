@@ -2,7 +2,6 @@
 Weight and position optimizers for ensemble refinement.
 """
 
-from typing import Tuple
 from typing_extensions import override
 
 import equinox as eqx
@@ -15,10 +14,10 @@ from cryojax_eo.typing import ParticleStackInfo, PerParticleT
 
 from ._loss_functions.ensemble_losses import compute_likelihood_matrix
 from ._loss_functions.likelihood_wrappers import (
-    _optimize_weights,
     AbstractLikelihoodFn,
     LikelihoodFn,
     LikelihoodOptimalWeightsFn,
+    _optimize_weights,
 )
 from .base_optimizer import AbstractEnsembleParameterOptimizer
 
@@ -130,7 +129,7 @@ def _compute_ensemble_gradients(
     relion_stack: ParticleStackInfo,
     per_particle_args: PerParticleT,
     likelihood_fn: LikelihoodOptimalWeightsFn,
-) -> Tuple[
+) -> tuple[
     Float[Array, "n_walkers n_atoms 3"],
     Float[Array, " n_walkers"],
 ]:

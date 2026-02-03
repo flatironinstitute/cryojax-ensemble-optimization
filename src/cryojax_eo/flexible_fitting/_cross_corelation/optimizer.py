@@ -2,8 +2,6 @@
 Weight and position optimizers for ensemble refinement.
 """
 
-from typing import Tuple
-
 import equinox as eqx
 import jax
 import jax.numpy as jnp
@@ -34,7 +32,7 @@ class SteepestDescWalkerFlexibleFitting(eqx.Module):
         self,
         walkers,
         reference_volume,
-    ) -> Tuple[Float, Float[Array, "n_atoms 3"]]:
+    ) -> tuple[Float, Float[Array, "n_atoms 3"]]:
         loss = jnp.inf
         for _ in range(self.n_steps):
             loss, walkers = _optimize_walkers_positions(
@@ -53,7 +51,7 @@ def _optimize_walkers_positions(
     reference_volume: Float[Array, "n_pixels n_pixels n_pixels"],
     step_size: Float,
     likelihood_fn: ModelToVolumeLikelihoodFn,
-) -> Tuple[Float, Float[Array, "n_atoms 3"]]:
+) -> tuple[Float, Float[Array, "n_atoms 3"]]:
     def _lklhood_fn(walker, ref_volume):
         return likelihood_fn(walker, ref_volume)
 

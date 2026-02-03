@@ -1,5 +1,3 @@
-from typing import Optional
-
 import jax.numpy as jnp
 from jaxtyping import Array, Float
 
@@ -15,7 +13,7 @@ def likelihood_isotropic_gaussian(
     relion_stack: ParticleStackInfo,
     amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
     variances: Float[Array, "n_atoms n_gaussians_per_atom"],
-    dilated_mask: Optional[DilatedMask] = None,
+    dilated_mask: DilatedMask | None = None,
     estimates_pose: bool = False,
     *,
     constant_args: float = 1.0,
@@ -74,7 +72,7 @@ def likelihood_isotropic_gaussian_marginalized(
     relion_stack: ParticleStackInfo,
     amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
     variances: Float[Array, "n_atoms n_gaussians_per_atom"],
-    dilated_mask: Optional[DilatedMask] = None,
+    dilated_mask: DilatedMask | None = None,
     estimates_pose: bool = False,
     *,
     constant_args: float = 1.0,

@@ -1,6 +1,5 @@
 from pathlib import Path
-from typing import overload
-from typing_extensions import Literal
+from typing import Literal, overload
 
 import yaml
 
@@ -53,7 +52,7 @@ def load_config(
     ValueError
         If the provided config_mode is not recognized.
     """
-    with open(path_to_config, "r") as f:
+    with open(path_to_config) as f:
         config_dict = yaml.safe_load(f)
 
     if config_mode == "data simulation":

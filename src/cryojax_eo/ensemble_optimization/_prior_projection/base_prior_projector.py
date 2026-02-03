@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Any, List, Optional, Tuple
+from typing import Any
 
 import equinox as eqx
 from jaxtyping import Array, Float
@@ -13,7 +13,7 @@ class AbstractPriorProjector(eqx.Module, strict=True):
     @abstractmethod
     def initialize(
         self,
-        init_state: Optional[Any] = None,
+        init_state: Any | None = None,
     ) -> Any:
         raise NotImplementedError(
             "Abstract method not implemented. "
@@ -26,7 +26,7 @@ class AbstractPriorProjector(eqx.Module, strict=True):
         ref_positions: Float[Array, "n_atoms 3"] | Float[Array, "n_walkers n_atoms 3"],
         state: Any,
         bias_constant: Float,
-    ) -> Tuple[Float[Array, "n_atoms 3"] | Float[Array, "n_walkers n_atoms 3"], Any]:
+    ) -> tuple[Float[Array, "n_atoms 3"] | Float[Array, "n_walkers n_atoms 3"], Any]:
         raise NotImplementedError("Abstract method not implemented.")
 
 
@@ -35,12 +35,12 @@ class AbstractEnsemblePriorProjector(eqx.Module, strict=True):
     Abstract class for ensemble prior projectors.
     """
 
-    projectors: eqx.AbstractVar[List[AbstractPriorProjector]]
+    projectors: eqx.AbstractVar[list[AbstractPriorProjector]]
 
     def initialize(
         self,
-        init_states: Optional[List[Any]] = None,
-    ) -> List[Any]:
+        init_states: list[Any] | None = None,
+    ) -> list[Any]:
         if init_states is None:
             init_states = [None] * len(self.projectors)
         states = []
@@ -52,7 +52,7 @@ class AbstractEnsemblePriorProjector(eqx.Module, strict=True):
     def __call__(
         self,
         ref_positions: Float[Array, "n_walkers n_atoms 3"],
-        states: List[Any],
+        states: list[Any],
         bias_constant: Float,
-    ) -> Tuple[Float[Array, "n_walkers n_atoms 3"], List[Any]]:
+    ) -> tuple[Float[Array, "n_walkers n_atoms 3"], list[Any]]:
         raise NotImplementedError("Abstract method not implemented.")

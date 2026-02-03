@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import List, Tuple
 
 import cryojax.simulator as cxs
 import equinox as eqx
@@ -16,7 +15,7 @@ class Gaussian3D(eqx.Module, strict=True):
     positions: Float[Array, "n_beads 3"]
     amplitude: Float
     variance: Float
-    shape: Tuple[Int, Int, Int]
+    shape: tuple[Int, Int, Int]
     voxel_size: Int
     n_gaussians_per_bead: Int
 
@@ -149,7 +148,7 @@ def _make_initial_gmm(
 
 @eqx.filter_jit
 def _compute_residues(
-    y: List[float], args: Tuple[PyTree, Gaussian3D, Float[Array, "z y x"]]
+    y: list[float], args: tuple[PyTree, Gaussian3D, Float[Array, "z y x"]]
 ) -> Float[Array, "z y x"]:
     pytreedef, gmm_model_noopt, target_volume = args
     gmm_volume = eqx.combine(

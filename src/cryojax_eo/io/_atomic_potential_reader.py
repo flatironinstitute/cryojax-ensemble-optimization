@@ -1,5 +1,4 @@
 import logging
-from typing import List, Tuple
 
 import cryojax.simulator as cxs
 
@@ -7,11 +6,11 @@ from ..io._atomic_model_reader import read_atomic_models
 
 
 def load_gmm_volume_parametrization(
-    atomic_models_filenames: List[str],
+    atomic_models_filenames: list[str],
     *,
     selection_string: str = "all",
     loads_b_factors: bool = False,
-) -> Tuple[cxs.GaussianMixtureVolume]:
+) -> tuple[cxs.GaussianMixtureVolume]:
     """
     Loads a GMM volume parametrization. The input files should be either in pdb format, or
     a `.npz` format with entries `positions`, `amplitudes` and `variances`.

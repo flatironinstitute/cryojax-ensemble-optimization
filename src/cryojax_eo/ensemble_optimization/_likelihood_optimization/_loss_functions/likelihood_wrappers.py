@@ -1,5 +1,4 @@
-from typing import Any, Optional
-from typing_extensions import Literal
+from typing import Any, Literal
 
 import equinox as eqx
 import jax
@@ -27,7 +26,7 @@ class AbstractLikelihoodFn(eqx.Module, strict=True):
     amplitudes: eqx.AbstractVar[Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]]
     image_to_walker_log_likelihood_fn: eqx.AbstractVar[LossFn]
     loss_fn_constant_args: eqx.AbstractVar[ConstantT]
-    dilated_mask: eqx.AbstractClassVar[Optional[DilatedMask]]
+    dilated_mask: eqx.AbstractClassVar[DilatedMask | None]
     estimates_pose: eqx.AbstractVar[bool]
 
     def __call__(
@@ -45,7 +44,7 @@ class LikelihoodFn(AbstractLikelihoodFn, strict=True):
     amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]
     image_to_walker_log_likelihood_fn: LossFn
     loss_fn_constant_args: ConstantT
-    dilated_mask: Optional[DilatedMask] = None
+    dilated_mask: DilatedMask | None = None
     estimates_pose: bool = False
 
     def __init__(
@@ -56,8 +55,8 @@ class LikelihoodFn(AbstractLikelihoodFn, strict=True):
             "iso_gaussian", "iso_gaussian_var_marg", "sliced_wasserstein"
         ]
         | LossFn,
-        loss_fn_constant_args: Optional[ConstantT] = None,
-        dilated_mask: Optional[DilatedMask] = None,
+        loss_fn_constant_args: ConstantT | None = None,
+        dilated_mask: DilatedMask | None = None,
         estimates_pose: bool = False,
     ):
         assert (amplitudes > 0).all(), "Amplitudes must be positive."
@@ -121,7 +120,7 @@ class LikelihoodOptimalWeightsFn(AbstractLikelihoodFn, strict=True):
     amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"]
     image_to_walker_log_likelihood_fn: LossFn
     loss_fn_constant_args: ConstantT
-    dilated_mask: Optional[DilatedMask] = None
+    dilated_mask: DilatedMask | None = None
     estimates_pose: bool = False
 
     def __init__(
@@ -132,8 +131,8 @@ class LikelihoodOptimalWeightsFn(AbstractLikelihoodFn, strict=True):
             "iso_gaussian", "iso_gaussian_var_marg"
         ]
         | LossFn,
-        loss_fn_constant_args: Optional[ConstantT] = None,
-        dilated_mask: Optional[DilatedMask] = None,
+        loss_fn_constant_args: ConstantT | None = None,
+        dilated_mask: DilatedMask | None = None,
         estimates_pose: bool = False,
     ):
         assert (amplitudes > 0).all(), "Amplitudes must be positive."

@@ -29,20 +29,18 @@ def mkbasedir(out):
 
 def warnexists(out):
     if os.path.exists(out):
-        Warning("Warning: {} already exists. Overwriting.".format(out))
+        Warning(f"Warning: {out} already exists. Overwriting.")
 
 
 def main(args):
-    with open(args.config, "r") as f:
+    with open(args.config) as f:
         config_dict = yaml.safe_load(f)
         config = DatasetSimulatorConfig(**config_dict)
 
     project_path = config.path_to_relion_project
     warnexists(project_path)
     mkbasedir(project_path)
-    print(
-        "A copy of the config file and the log will be written to {}".format(project_path)
-    )
+    print(f"A copy of the config file and the log will be written to {project_path}")
     sys.stdout.flush()
 
     # make copy of config to output_path
@@ -57,18 +55,17 @@ def main(args):
     logger.setLevel(logging.INFO)
 
     config_fname = os.path.basename(args.config)
-    os.system("cp {} {}".format(args.config, os.path.join(project_path, config_fname)))
+    os.system(f"cp {args.config} {os.path.join(project_path, config_fname)}")
 
     logging.info(
-        "A copy of the used config file has been written to {}".format(
-            os.path.join(project_path, config_fname)
-        )
+        f"A copy of the used config file has been written"
+        f" to {os.path.join(project_path, config_fname)}"
     )
 
     logging.info("Simulating particle stack...")
     simulate_relion_dataset(config)
     logging.info("Simulation complete.")
-    logging.info("Output written to {}".format(project_path))
+    logging.info(f"Output written to {project_path}")
 
     return
 

@@ -49,7 +49,7 @@ dev = [
   "pre-commit",
   "ruff"
 ]
-test = [
+tests = [
   "pytest"
 ]
 
@@ -62,7 +62,8 @@ build-backend = "hatchling.build"
 source = "vcs"
 
 [tool.hatch.build.hooks.vcs]
-version-file = "cryojax/cryojax_version.py"
+version-file = "src/cryojax_eo/cryojax_eo_version.py"
+
 [tool.ruff]
 extend-include = ["*.ipynb"]
 line-length = 90

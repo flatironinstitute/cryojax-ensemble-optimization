@@ -7,7 +7,6 @@ All jax-ified functions have a `_jnp` suffix, other functions are numpy based
 """
 
 from functools import partial
-from typing import Tuple
 
 import jax
 import jax.numpy as jnp
@@ -266,7 +265,7 @@ def get_s2_neighbor(mini, curr_res):
 
 def get_base_ind(
     ind: Int[Array, " n_indices"], base_resol: Float = 1.0
-) -> Tuple[Int[Array, " n_indices"], Int[Array, " n_indices"]]:
+) -> tuple[Int[Array, " n_indices"], Int[Array, " n_indices"]]:
     """
     Return the corresponding S2 and S1 grid index for an index on the base SO3 grid
     """

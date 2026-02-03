@@ -1,7 +1,6 @@
 from functools import partial
 from pathlib import Path
-from typing import Dict, List, Optional, Union
-from typing_extensions import Annotated, Literal
+from typing import Annotated, Literal
 
 import jax.numpy as jnp
 import mdtraj
@@ -10,12 +9,12 @@ from pydantic import (
     BaseModel,
     DirectoryPath,
     Field,
-    field_serializer,
-    field_validator,
     FilePath,
-    model_validator,
     PositiveFloat,
     PositiveInt,
+    field_serializer,
+    field_validator,
+    model_validator,
 )
 
 from .utils import _validate_file_with_type, _validate_files_with_type
@@ -35,7 +34,7 @@ class EnsOptMDConfigOptimizationConfig(BaseModel, extra="forbid"):
         default=1,
         description="Number of batches per step for the optimization process.",
     )
-    initial_weights: Optional[List[float]] = Field(
+    initial_weights: list[float] | None = Field(
         default=None,
         description="Initial weights for the models. "
         "If None, will be set to uniform distribution.",
@@ -70,33 +69,31 @@ class EnsOptMDConfigProjector(BaseModel, extra="forbid"):
     n_steps: PositiveInt = Field(
         description="Number of steps for the MD sampler. Must be greater than 0."
     )
-    bias_proportion: Union[PositiveFloat, List[PositiveFloat]] = Field(
+    bias_proportion: PositiveFloat | list[PositiveFloat] = Field(
         description="Biasing constant for the projection step. "
         + "Can be a single value or a list of two values for linear scheduling.",
         default=0.1,
     )
-    bias_constant_in_kjpermol: Optional[Union[PositiveFloat, List[PositiveFloat]]] = (
-        Field(
-            default=None,
-            description="Biasing constant in kJ/mol for the projection step. "
-            + "If None, will be computed automatically to "
-            + "achieve the desired bias_proportion. "
-            + "Can be a single value or a list of two values for linear scheduling.",
-        )
+    bias_constant_in_kjpermol: PositiveFloat | list[PositiveFloat] | None = Field(
+        default=None,
+        description="Biasing constant in kJ/mol for the projection step. "
+        + "If None, will be computed automatically to "
+        + "achieve the desired bias_proportion. "
+        + "Can be a single value or a list of two values for linear scheduling.",
     )
     platform: Literal["CPU", "CUDA", "OpenCL"] = Field(
         default="CPU",
         description="Platform to use for the MD sampler. "
         + "Must be 'CPU', 'CUDA', or 'OpenCL'.",
     )
-    platform_properties: Optional[Dict[str, str]] = Field(
+    platform_properties: dict[str, str] | None = Field(
         default=None,
         description="Platform properties for OpenMM. "
         + "For CPU the default is {'Threads': '1'}"
         + " and for CUDA the default is {'DeviceIndex': '0'}.",
     )
 
-    path_to_initial_states: Optional[str | List[FilePath]] = Field(
+    path_to_initial_states: str | list[FilePath] | None = Field(
         default=None,
         description="Path to the initial states. "
         + "If None, will be set to the path to the atomic models.",
@@ -135,7 +132,7 @@ class EnsOptAlignConfig(BaseModel, extra="forbid"):
         + " and will be used for alignment of the walkers during optimization."
     )
 
-    path_to_reference_volume: Optional[FilePath] = Field(
+    path_to_reference_volume: FilePath | None = Field(
         default=None,
         description="Path to the consensus volume. "
         + "Used for rigid body alignment of walkers. "
@@ -148,7 +145,7 @@ class EnsOptAlignConfig(BaseModel, extra="forbid"):
         + "The box size must be a positive integer.",
     )
 
-    reference_volume_voxel_size: Optional[PositiveFloat] = Field(
+    reference_volume_voxel_size: PositiveFloat | None = Field(
         default=None,
         description="Overrides the voxel size stored in the MRC header "
         + "of the consensus volume."
@@ -177,7 +174,7 @@ class EnsOptDataConfig(BaseModel, extra="forbid"):
     loads_envelope: bool = Field(
         default=False, description="Whether to load the envelope from the starfile. "
     )
-    path_to_volumetric_mask: Optional[FilePath] = Field(
+    path_to_volumetric_mask: FilePath | None = Field(
         default=None,
         description="Path to a volumetric mask. "
         + "For example: the dillated mask obtained from a homogeneous refinment job, "
@@ -207,7 +204,7 @@ class EnsOptDataConfig(BaseModel, extra="forbid"):
 
 class EnsOptMDConfig(BaseModel, extra="forbid"):
     # I/O
-    path_to_atomic_models: Union[str, List[FilePath]] = Field(
+    path_to_atomic_models: str | list[FilePath] = Field(
         description="Path to the atomic models directory. "
         + "If a pattern is provided, all files matching the pattern will be used."
     )
@@ -231,23 +228,23 @@ class EnsOptMDConfig(BaseModel, extra="forbid"):
     )
 
     # Data
-    data_params: Dict = Field(
+    data_params: dict = Field(
         description="Parameters for the experimental data. "
         + "This is a dictionary formatted by the `EnsOptDataConfig` class."
     )
 
     # Pipeline
-    projector_params: Dict = Field(
+    projector_params: dict = Field(
         description="Parameters for the physics-based ensemble projector. "
         + "This is a dictionary formatted by the `EnsOptMDConfigProjector` class."
     )
-    likelihood_optimizer_params: Dict = Field(
+    likelihood_optimizer_params: dict = Field(
         description="Parameters for the ensemble optimizer. "
         + "This is a dictionary formatted by "
         + "the `EnsOptMDConfigOptimizationConfig` class."
     )
 
-    alignment_params: Dict = Field(
+    alignment_params: dict = Field(
         description="Parameters for the alignment of the walkers. "
     )
     # Optimization
