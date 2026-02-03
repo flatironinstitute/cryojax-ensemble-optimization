@@ -28,7 +28,8 @@ jobs:
         run: |
           uv venv --python=${{ matrix.python-version }}
           uv pip install --upgrade pip
-          uv pip install -e '.[dev,docs,tests,extras]'
+          uv pip install -e '.[dev,tests]'
+          uv pip install openmm
 
       - name: Checks with pre-commit
         run: |
@@ -36,4 +37,4 @@ jobs:
 
       - name: Run tests
         run: |
-          uv run --no-sync pytest
+          uv run --no-sync pytest tests/
