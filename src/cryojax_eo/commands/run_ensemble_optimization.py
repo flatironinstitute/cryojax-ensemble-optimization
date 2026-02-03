@@ -44,7 +44,7 @@ def mkbasedir(out):
 
 def warnexists(out):
     if os.path.exists(out):
-        Warning("Warning: {} already exists. Overwriting.".format(out))
+        Warning(f"Warning: {out} already exists. Overwriting.")
     return
 
 
@@ -245,7 +245,7 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
 
 
 def main(args):
-    with open(args.config, "r") as f:
+    with open(args.config) as f:
         config_dict = yaml.safe_load(f)
         config = EnsOptMDConfig(**config_dict)
 
@@ -269,9 +269,8 @@ def main(args):
         yaml.dump(config_dict, f, default_flow_style=False)
 
     logging.info(
-        "A copy of the used config file has been written to {}".format(
-            os.path.join(config.path_to_output, config_fname)
-        )
+        f"A copy of the used config file has been written "
+        f"to {os.path.join(config.path_to_output, config_fname)}"
     )
 
     logging.info("Running ensemble optimization...")

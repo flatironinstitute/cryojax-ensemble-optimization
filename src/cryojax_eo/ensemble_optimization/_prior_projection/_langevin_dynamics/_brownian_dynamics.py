@@ -1,4 +1,4 @@
-from typing import Tuple, TypeVar
+from typing import TypeVar
 from typing_extensions import override
 
 import equinox as eqx
@@ -41,8 +41,8 @@ class OverdampedLangevinSampler(AbstractPriorProjector):
 
     @override
     def initialize(
-        self, init_state: Tuple[PRNGKeyArray, Float[Array, "n_atoms 3"]]
-    ) -> Tuple[PRNGKeyArray, Float[Array, "n_atoms 3"]]:
+        self, init_state: tuple[PRNGKeyArray, Float[Array, "n_atoms 3"]]
+    ) -> tuple[PRNGKeyArray, Float[Array, "n_atoms 3"]]:
         """
         Initialize the sampler with the initial state. For this sampler, the initial state
         is the indentity, and its purpsoe is simply to validate the type of the input.
@@ -66,12 +66,12 @@ class OverdampedLangevinSampler(AbstractPriorProjector):
 
     def __call__(
         self,
-        state: Tuple[PRNGKeyArray, Float[Array, "n_atoms 3"]],
+        state: tuple[PRNGKeyArray, Float[Array, "n_atoms 3"]],
         *,
         outputs_trajectory: bool = False,
-    ) -> Tuple[
+    ) -> tuple[
         Float[Array, "n_atoms 3"],
-        Tuple[PRNGKeyArray, Float[Array, "n_atoms 3"]],
+        tuple[PRNGKeyArray, Float[Array, "n_atoms 3"]],
     ]:
         """
         Sample a trajectory from the initial atom positions.
@@ -128,8 +128,8 @@ class SteeredOverdampedLangevinSampler(AbstractPriorProjector):
 
     @override
     def initialize(
-        self, init_state: Tuple[PRNGKeyArray, Float[Array, "n_atoms 3"]]
-    ) -> Tuple[PRNGKeyArray, Float[Array, "n_atoms 3"]]:
+        self, init_state: tuple[PRNGKeyArray, Float[Array, "n_atoms 3"]]
+    ) -> tuple[PRNGKeyArray, Float[Array, "n_atoms 3"]]:
         """
         Initialize the sampler with the initial state. For this sampler, the initial state
         is the indentity, and its purpsoe is simply to validate the type of the input.
@@ -154,12 +154,12 @@ class SteeredOverdampedLangevinSampler(AbstractPriorProjector):
     def __call__(
         self,
         ref_walkers: Float[Array, "n_atoms 3"],
-        state: Tuple[PRNGKeyArray, Float[Array, "n_atoms 3"]],
+        state: tuple[PRNGKeyArray, Float[Array, "n_atoms 3"]],
         *,
         outputs_trajectory: bool = False,
-    ) -> Tuple[
+    ) -> tuple[
         Float[Array, "n_atoms 3"],
-        Tuple[PRNGKeyArray, Float[Array, "n_atoms 3"]],
+        tuple[PRNGKeyArray, Float[Array, "n_atoms 3"]],
     ]:
         """
         Sample a trajectory from the initial atom positions.
@@ -218,8 +218,8 @@ class ParallelSteeredOverdampedLangevinSampler(AbstractPriorProjector):
 
     @override
     def initialize(
-        self, init_state: Tuple[PRNGKeyArray, Float[Array, "n_walkers n_atoms 3"]]
-    ) -> Tuple[PRNGKeyArray, Float[Array, "n_atoms 3"]]:
+        self, init_state: tuple[PRNGKeyArray, Float[Array, "n_walkers n_atoms 3"]]
+    ) -> tuple[PRNGKeyArray, Float[Array, "n_atoms 3"]]:
         """
         Initialize the sampler with the initial state. For this sampler, the initial state
         is the indentity, and its purpsoe is simply to validate the type of the input.
@@ -244,12 +244,12 @@ class ParallelSteeredOverdampedLangevinSampler(AbstractPriorProjector):
     def __call__(
         self,
         ref_walkers: Float[Array, "n_walkers n_atoms 3"],
-        state: Tuple[PRNGKeyArray, Float[Array, "n_walkers n_atoms 3"]],
+        state: tuple[PRNGKeyArray, Float[Array, "n_walkers n_atoms 3"]],
         *,
         outputs_trajectory: bool = False,
-    ) -> Tuple[
+    ) -> tuple[
         Float[Array, "n_walkers n_atoms 3"],
-        Tuple[PRNGKeyArray, Float[Array, "n_walkers n_atoms 3"]],
+        tuple[PRNGKeyArray, Float[Array, "n_walkers n_atoms 3"]],
     ]:
         """
         Sample a trajectory from the initial atom positions.

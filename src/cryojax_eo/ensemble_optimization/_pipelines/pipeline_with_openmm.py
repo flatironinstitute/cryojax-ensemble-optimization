@@ -1,7 +1,7 @@
 import logging
 import os
 import pathlib
-from typing import Any, Tuple
+from typing import Any
 from typing_extensions import override
 
 import jax
@@ -65,7 +65,7 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
         *,
         output_directory: str | pathlib.Path,
         initial_state_for_projector: Any = None,
-    ) -> Tuple[
+    ) -> tuple[
         Float[Array, "n_steps n_walkers n_atoms 3"],
         Float[Array, "n_steps n_walkers"],
     ]:

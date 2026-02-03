@@ -6,9 +6,9 @@ import pytest
 from cryojax.dataset import RelionParticleDataset, RelionParticleParameterFile
 
 from cryojax_eo.ensemble_optimization import (
-    compute_optimal_scale_and_offset,  # done
     LikelihoodFn,
     LikelihoodOptimalWeightsFn,
+    compute_optimal_scale_and_offset,  # done
     make_image_model_from_gmm,  # done
 )
 from cryojax_eo.io import read_atomic_models

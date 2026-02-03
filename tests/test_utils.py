@@ -3,10 +3,10 @@ import jax.numpy as jnp
 from cryojax.io import read_array_from_mrc, read_atoms_from_pdb
 
 from cryojax_eo.utils import (
-    fit_gmm_model_to_voxel_grid,
     Gaussian3D,
-    make_gmm_model_from_atomic_model,
     ModelToVolumeAligner,
+    fit_gmm_model_to_voxel_grid,
+    make_gmm_model_from_atomic_model,
 )
 
 

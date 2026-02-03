@@ -1,5 +1,4 @@
 from functools import partial
-from typing import Optional
 
 import equinox as eqx
 import jax
@@ -68,7 +67,7 @@ def compute_likelihood_matrix(
     amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     image_to_walker_log_likelihood_fn: LossFn,
-    dilated_mask: Optional[DilatedMask] = None,
+    dilated_mask: DilatedMask | None = None,
     estimates_pose: bool = False,
     *,
     constant_args: ConstantT,
@@ -140,7 +139,7 @@ def compute_neg_log_likelihood(
     amplitudes: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     variances: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
     image_to_walker_log_likelihood_fn: LossFn,
-    dilated_mask: Optional[DilatedMask] = None,
+    dilated_mask: DilatedMask | None = None,
     estimates_pose: bool = False,
     *,
     constant_args: ConstantT,

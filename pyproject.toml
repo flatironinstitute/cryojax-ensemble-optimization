@@ -7,17 +7,22 @@ authors = [
     {name = "Roy Lederman"},
 ]
 
-description = "My package description"
+description = "Cryo-EM Ensemble Optimization using JAX and OpenMM for Molecular Dynamics simulations."
 readme = "README.md"
 requires-python = ">=3.11"
-keywords = ["CryoEM", "Molecular Dynamics", "single particle"]
-license = "MIT"
+keywords = ["jax", "equinox", "cryo-EM", "electron-microscopy", "molecular-dynamics"]
+license = {file="LICENSE"}
 classifiers = [
-  "Development Status :: 4 - Beta",
-  "Programming Language :: Python",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: Implementation :: PyPy",
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU Lesser General Public License v2 (LGPLv2)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
 ]
+urls = {repository = "https://github.com/flatironinstitute/cryojax-ensemble-optimization" }
+dynamic = ["version"]
 
 dependencies = [
     "numpy",
@@ -38,20 +43,15 @@ dependencies = [
     "optimistix",
     "PyYAML"
 ]
-dynamic = ["version"]
 
 [project.optional-dependencies]
 dev = [
-  "pytest",
-  "mypy",
   "pre-commit",
   "ruff"
 ]
-
-[project.urls]
-Documentation = "https://github.com/DSilva27/cryojax-ensemble-optimization/blob/main/README.rst"
-Issues = "https://github.com/DSilva27/cryojax-ensemble-optimization/issues"
-Source = "https://github.com/DSilva27/cryojax-ensemble-optimization"
+tests = [
+  "pytest"
+]
 
 
 [build-system]
@@ -62,21 +62,23 @@ build-backend = "hatchling.build"
 source = "vcs"
 
 [tool.hatch.build.hooks.vcs]
-version-file = "src/cryojax_eo/cryojax_ensemble_optimization_version.py"
+version-file = "src/cryojax_eo/cryojax_eo_version.py"
 
 [tool.ruff]
 extend-include = ["*.ipynb"]
-lint.fixable = ["I001", "F401"]
 line-length = 90
-lint.ignore = ["E402", "E721", "E731", "E741", "F722"]
-lint.select = ["E", "F", "I001"]
 src = ["src"]
+
+[tool.ruff.lint]
+fixable = ["I001", "F401", "UP"]
+ignore = ["E402", "E721", "E731", "E741", "F722"]
+select = ["E", "F", "I001", "UP"]
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
 extra-standard-library = ["typing_extensions"]
 lines-after-imports = 2
-order-by-type = false
+order-by-type = true
 
 [tool.black]
 line-length = 90

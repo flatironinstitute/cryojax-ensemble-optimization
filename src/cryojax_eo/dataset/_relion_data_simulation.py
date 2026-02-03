@@ -1,7 +1,7 @@
 import logging
 import os
 from functools import partial
-from typing import Dict, List, Literal, Tuple
+from typing import Literal
 
 import cryojax.simulator as cxs
 import equinox as eqx
@@ -105,10 +105,10 @@ def _simulate_relion_dataset(
     parameter_file: RelionParticleParameterFile,
     path_to_relion_project: str,
     images_per_file: int,
-    volumes: Tuple[cxs.AbstractVolumeRepresentation],
+    volumes: tuple[cxs.AbstractVolumeRepresentation],
     ensemble_probabilities: Float[Array, " n_volumes"],
     mask: CircularCosineMask,
-    noise_snr_range: List[Float],
+    noise_snr_range: list[Float],
     data_sign: Literal["dark-on-light", "light-on-dark"],
     *,
     overwrite: bool = False,
@@ -178,13 +178,13 @@ def _simulate_relion_dataset(
         batch_size=batch_size,
         overwrite=overwrite,
     )
-    logging.info("Images generated. Saved to {}".format(path_to_relion_project))
+    logging.info(f"Images generated. Saved to {path_to_relion_project}")
     logging.info("Simulated dataset generation complete.")
     return relion_dataset
 
 
 @partial(eqx.filter_vmap, in_axes=(0, None))
-def _make_particle_parameters(key: PRNGKeyArray, config: dict) -> Dict:
+def _make_particle_parameters(key: PRNGKeyArray, config: dict) -> dict:
     """
     WARNING: this function assumes the `config` has been validated
     by `cryojax_ensemble_refinement.internal.GeneratorConfig`.

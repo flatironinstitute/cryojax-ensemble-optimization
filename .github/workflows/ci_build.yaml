@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - main
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: ${{ matrix.os }}-${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(github.base_ref == 'main' && '["ubuntu-latest"]') }}
+        python-version: ${{ fromJSON(github.base_ref == 'main' && '["3.11", "3.12", "3.13", "3.14"]') }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install dependencies
+        run: |
+          uv venv --python=${{ matrix.python-version }}
+          uv pip install --upgrade pip
+          uv pip install -e '.[dev,tests]'
+          uv pip install openmm
+
+      - name: Checks with pre-commit
+        run: |
+          uv run --no-sync pre-commit run --all-files
+
+      - name: Run tests
+        run: |
+          uv run --no-sync pytest tests/

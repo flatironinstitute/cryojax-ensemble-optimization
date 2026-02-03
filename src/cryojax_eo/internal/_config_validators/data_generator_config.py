@@ -1,17 +1,16 @@
 import warnings
 from pathlib import Path
-from typing import List, Optional, Union
-from typing_extensions import Literal
+from typing import Literal
 
 import jax.numpy as jnp
 from pydantic import (
     BaseModel,
     Field,
-    field_serializer,
-    field_validator,
     FilePath,
     PositiveFloat,
     PositiveInt,
+    field_serializer,
+    field_validator,
 )
 
 from .utils import _validate_files_with_type
@@ -23,12 +22,12 @@ class DatasetSimulatorConfigAtomicModels(BaseModel, extra="forbid"):
     in the data generation pipeline.
     """
 
-    path_to_atomic_models: Union[str, List[FilePath]] = Field(
+    path_to_atomic_models: str | list[FilePath] = Field(
         description="Path to the atomic models directory. "
         + "If a pattern is provided, all files matching the pattern will be used."
     )
 
-    atomic_models_probabilities: Union[PositiveFloat, List[PositiveFloat]] = Field(
+    atomic_models_probabilities: PositiveFloat | list[PositiveFloat] = Field(
         description="Probabilstic weights for each model. Will be normalized to sum to 1."
     )
 
@@ -88,26 +87,24 @@ class DatasetSimulatorConfig(BaseModel, extra="forbid"):
     )
 
     # Pose
-    offset_x_in_angstroms: Union[float, List[float]] = Field(
+    offset_x_in_angstroms: float | list[float] = Field(
         0.0, description="Offset in x direction in Angstroms."
     )
-    offset_y_in_angstroms: Union[float, List[float]] = Field(
+    offset_y_in_angstroms: float | list[float] = Field(
         0.0, description="Offset in y direction in Angstroms."
     )
 
     # Transfer Theory
-    defocus_in_angstroms: Union[PositiveFloat, List[PositiveFloat]] = Field(
+    defocus_in_angstroms: PositiveFloat | list[PositiveFloat] = Field(
         0.0, description="Defocus in Angstroms."
     )
-    astigmatism_in_angstroms: Union[float, List[float]] = Field(
+    astigmatism_in_angstroms: float | list[float] = Field(
         0.0, description="Astigmatism in Angstroms."
     )
-    astigmatism_angle_in_degrees: Union[float, List[float]] = Field(
+    astigmatism_angle_in_degrees: float | list[float] = Field(
         0.0, description="Astigmatism angle in degrees."
     )
-    phase_shift: Union[float, List[float]] = Field(
-        0.0, description="Phase shift in radians."
-    )
+    phase_shift: float | list[float] = Field(0.0, description="Phase shift in radians.")
     amplitude_contrast_ratio: PositiveFloat = Field(
         0.1, description="Amplitude contrast ratio."
     )
@@ -115,15 +112,15 @@ class DatasetSimulatorConfig(BaseModel, extra="forbid"):
         2.7, description="Microscope spherical aberration in mm."
     )
     ctf_scale_factor: PositiveFloat = Field(1.0, description="CTF scale factor.")
-    envelope_b_factor: Union[float, List[float]] = Field(
+    envelope_b_factor: float | list[float] = Field(
         0.0, description="Envelope B-factor in Angstroms^2."
     )
 
     # Noise and randomness
-    noise_snr: Union[PositiveFloat, List[PositiveFloat]] = Field(
+    noise_snr: PositiveFloat | list[PositiveFloat] = Field(
         description="Signal to noise ratio."
     )
-    mask_radius: Optional[PositiveFloat] = Field(
+    mask_radius: PositiveFloat | None = Field(
         default=None,
         description="Radius for a circular cryojax Mask."
         + " This is used to compute the variance of the signal, "
