@@ -1,5 +1,3 @@
-from typing import Tuple
-
 import cryojax.simulator as cxs
 import jax
 import jax.numpy as jnp
@@ -16,12 +14,12 @@ def _select_potential(volumes, idx):
 
 def simulate_image_with_white_gaussian_noise(
     particle_parameters: ParticleParameterInfo,
-    constant_args: Tuple[
-        Tuple[cxs.AbstractVolumeRepresentation],
+    constant_args: tuple[
+        tuple[cxs.AbstractVolumeRepresentation],
         CircularCosineMask,
         float,
     ],
-    per_particle_args: Tuple[PRNGKeyArray, Int, Float],
+    per_particle_args: tuple[PRNGKeyArray, Int, Float],
 ) -> Float[
     Array,
     "{relion_particle_stack.config.y_dim} {relion_particle_stack.config.x_dim}",  # noqa

@@ -3,7 +3,8 @@ Base class for force fields used in custom prior projection methods.
 """
 
 from abc import abstractmethod
-from typing import Callable, TypeVar
+from collections.abc import Callable
+from typing import TypeVar
 
 import equinox as eqx
 from jaxtyping import Array, Float

@@ -1,7 +1,6 @@
 import glob
 import os
 from pathlib import Path
-from typing import List, Union
 
 from natsort import natsorted
 from pydantic import (
@@ -25,7 +24,7 @@ def _validate_file_with_type(filename: str, file_type: str) -> str:
 # Might be useful, and I don't want to figure it out again
 # TODO: remove if not needed
 def _contains_file_type(
-    directory_path: DirectoryPath, file_type: str | List[str]
+    directory_path: DirectoryPath, file_type: str | list[str]
 ) -> DirectoryPath:
     if isinstance(file_type, str):
         file_type = [file_type]
@@ -46,8 +45,8 @@ def _contains_file_type(
 
 
 def _validate_files_with_type(
-    path_to_files: Union[str, List[FilePath]], file_types: List[str]
-) -> List[str]:
+    path_to_files: str | list[FilePath], file_types: list[str]
+) -> list[str]:
     if isinstance(path_to_files, str):
         if "*" in path_to_files:
             output = [Path(f) for f in natsorted(glob.glob(path_to_files))]

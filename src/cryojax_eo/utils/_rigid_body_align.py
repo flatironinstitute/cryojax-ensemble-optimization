@@ -1,4 +1,4 @@
-from typing import Any, Optional, Tuple
+from typing import Any
 
 import cryojax.simulator as cxs
 import equinox as eqx
@@ -12,7 +12,7 @@ class _OptimizerState(eqx.Module, strict=True):
     step: Int[Array, ""]
     old_loss: Scalar
     curr_loss: Scalar
-    opt_state: Tuple[Any, Any]
+    opt_state: tuple[Any, Any]
 
 
 class _AtomicModel(eqx.Module):
@@ -35,7 +35,7 @@ class Solution(eqx.Module):
 
 class ModelToVolumeAligner(eqx.Module):
     volume: _Volume
-    optimizers: Tuple[Any, Any]
+    optimizers: tuple[Any, Any]
     rtol: float
     atol: float
     max_steps: int
@@ -47,7 +47,7 @@ class ModelToVolumeAligner(eqx.Module):
         rtol: float = 1e-5,
         atol: float = 1e-5,
         max_steps: int = 100,
-        optimizers: Optional[Tuple[Any, Any]] = None,
+        optimizers: tuple[Any, Any] | None = None,
     ):
         assert voxel_size > 0, "voxel_size must be positive."
         assert max_steps > 0, "max_steps must be positive."
@@ -80,9 +80,9 @@ class ModelToVolumeAligner(eqx.Module):
     @eqx.filter_jit
     def _step(
         self,
-        val: Tuple[Float[Array, "4"], Float[Array, "3"], _OptimizerState],
-        args: Tuple[_AtomicModel, _Volume],
-    ) -> Tuple[Float[Array, "4"], Float[Array, "3"], _OptimizerState]:
+        val: tuple[Float[Array, "4"], Float[Array, "3"], _OptimizerState],
+        args: tuple[_AtomicModel, _Volume],
+    ) -> tuple[Float[Array, "4"], Float[Array, "3"], _OptimizerState]:
         quat, offset, state = val
         q_opt_state, d_opt_state = state.opt_state
         optim_q, optim_d = self.optimizers
@@ -123,7 +123,7 @@ class ModelToVolumeAligner(eqx.Module):
         variances: Float[Array, "n_atoms n_gaussians"],
         quat_init: Float[Array, "4"] = jnp.array([1.0, 0.0, 0.0, 0.0]),
         offset_init: Float[Array, "3"] = jnp.array([0.0, 0.0, 0.0]),
-    ) -> Tuple[Float[Array, "n_atoms 3"], Solution]:
+    ) -> tuple[Float[Array, "n_atoms 3"], Solution]:
         atomic_model = _AtomicModel(
             positions=atomic_positions_in_angstroms,
             amplitudes=amplitudes,
@@ -160,7 +160,7 @@ def _atom_potential_to_volume(
     atom_positions: Float[Array, "n_atoms_atoms 3"],
     gaussian_amp: Float[Array, "n_atoms_atoms n_gaussians"],
     gaussian_var: Float[Array, "n_atoms_atoms n_gaussians"],
-    shape: Tuple[int, int, int],
+    shape: tuple[int, int, int],
     voxel_size: float,
 ) -> Float[Array, "z x y"]:
     atom_potential = cxs.GaussianMixtureVolume(atom_positions, gaussian_amp, gaussian_var)
@@ -174,7 +174,7 @@ def _atom_potential_to_volume(
 def _loss_fn(
     quat: Float[Array, " 4"],
     offset: Float[Array, "3"],
-    args: Tuple[_AtomicModel, _Volume],
+    args: tuple[_AtomicModel, _Volume],
 ) -> Float[Array, ""]:
     atomic_model, volume = args
 
@@ -200,8 +200,8 @@ def _loss_fn(
 def _loss_and_grad_quat_fn(
     quat: Float[Array, " 4"],
     offset: Float[Array, "3"],
-    args: Tuple[_AtomicModel, _Volume],
-) -> Tuple[Float[Array, ""], Float[Array, " 4"]]:
+    args: tuple[_AtomicModel, _Volume],
+) -> tuple[Float[Array, ""], Float[Array, " 4"]]:
     # print("compiling!")
     return jax.value_and_grad(_loss_fn, argnums=0)(quat, offset, args)
 
@@ -210,7 +210,7 @@ def _loss_and_grad_quat_fn(
 def _loss_and_grad_offset_fn(
     quat: Float[Array, " 4"],
     offset: Float[Array, "3"],
-    args: Tuple[_AtomicModel, _Volume],
-) -> Tuple[Float[Array, ""], Float[Array, " 3"]]:
+    args: tuple[_AtomicModel, _Volume],
+) -> tuple[Float[Array, ""], Float[Array, " 3"]]:
     # print("compiling!")
     return jax.value_and_grad(_loss_fn, argnums=1)(quat, offset, args)

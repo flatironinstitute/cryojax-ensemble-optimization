@@ -1,6 +1,6 @@
 import os
+from collections.abc import Callable
 from functools import partial
-from typing import Callable
 
 import equinox as eqx
 import jax

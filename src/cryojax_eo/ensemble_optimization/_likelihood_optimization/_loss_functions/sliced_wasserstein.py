@@ -1,5 +1,3 @@
-from typing import Optional, Tuple
-
 import jax
 import jax.numpy as jnp
 from dm_pix import rotate
@@ -28,11 +26,11 @@ def likelihood_sliced_wasserstein(
     relion_stack: ParticleStackInfo,
     amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
     variances: Float[Array, "n_atoms n_gaussians_per_atom"],
-    dilated_mask: Optional[DilatedMask] = None,
+    dilated_mask: DilatedMask | None = None,
     estimates_pose: bool = False,
     *,
-    constant_args: Tuple[Int, Int] = (18, 2),
-    per_particle_args: Tuple = (),
+    constant_args: tuple[Int, Int] = (18, 2),
+    per_particle_args: tuple = (),
     # n_projections: Int,
 ) -> Float:
     """

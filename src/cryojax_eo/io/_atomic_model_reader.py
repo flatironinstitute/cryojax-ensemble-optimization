@@ -1,22 +1,21 @@
 from pathlib import Path
-from typing import Dict, List
 
 import jax.numpy as jnp
 import mdtraj
 from cryojax.constants import (
-    b_factor_to_variance,
     PengScatteringFactorParameters,
+    b_factor_to_variance,
 )
 from cryojax.io import read_atoms_from_pdb
 from jaxtyping import Array, Float
 
 
 def read_atomic_models(
-    atomic_models_filenames: List[str],
+    atomic_models_filenames: list[str],
     *,
     selection_string: str = "all",
     loads_b_factors: bool = False,
-) -> Dict[int, Dict[str, Float[Array, ""]]]:
+) -> dict[int, dict[str, Float[Array, ""]]]:
     """
 
     Reads atomic models from files and extracts scattering parameters.
@@ -70,8 +69,8 @@ def read_atomic_models(
 
 
 def _read_atomic_models_from_npz(
-    atomic_models_filenames: List[str],
-) -> Dict[int, Dict[str, Float[Array, ""]]]:
+    atomic_models_filenames: list[str],
+) -> dict[int, dict[str, Float[Array, ""]]]:
     atomic_models_scattering_params = {}
 
     for i, filename in enumerate(atomic_models_filenames):
@@ -94,10 +93,10 @@ def _read_atomic_models_from_npz(
 
 
 def _read_atomic_models_from_pdb(
-    atomic_models_filenames: List[str],
+    atomic_models_filenames: list[str],
     selection_string: str = "all",
     loads_b_factors: bool = False,
-) -> Dict[int, Dict[str, Float[Array, ""]]]:
+) -> dict[int, dict[str, Float[Array, ""]]]:
     atomic_models_scattering_params = {}
 
     atoms_for_alignment = mdtraj.load(atomic_models_filenames[0])

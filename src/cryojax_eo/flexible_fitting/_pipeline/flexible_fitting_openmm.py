@@ -1,6 +1,6 @@
 import os
 import pathlib
-from typing import Any, Tuple
+from typing import Any
 
 import equinox as eqx
 import jax.numpy as jnp
@@ -49,7 +49,7 @@ class FlexibleFittingPipeline(eqx.Module):
         *,
         output_directory: str | pathlib.Path,
         initial_state_for_projector: Any = None,
-    ) -> Tuple[Float[Array, "n_atoms 3"], Any]:
+    ) -> tuple[Float[Array, "n_atoms 3"], Any]:
         # print("Initializing projetor...")
         md_state = self.prior_projector.initialize(initial_state_for_projector)
         # print("Projector initialized.")

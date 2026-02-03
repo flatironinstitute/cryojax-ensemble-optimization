@@ -1,6 +1,6 @@
 import pathlib
 from abc import abstractmethod
-from typing import Any, Tuple
+from typing import Any
 
 import optax
 from equinox import AbstractVar, Module
@@ -31,7 +31,7 @@ class AbstractEnsembleOptimizationPipeline(Module, strict=True):
         *,
         output_directory: str | pathlib.Path,
         initial_state_for_projector: Any = None,
-    ) -> Tuple[
+    ) -> tuple[
         Float[Array, "n_steps n_walkers n_atoms 3"],
         Float[Array, "n_steps n_walkers"],
     ]:

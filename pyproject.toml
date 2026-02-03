@@ -63,6 +63,7 @@ source = "vcs"
 
 [tool.hatch.build.hooks.vcs]
 version-file = "src/cryojax_eo/cryojax_eo_version.py"
+
 [tool.ruff]
 extend-include = ["*.ipynb"]
 line-length = 90

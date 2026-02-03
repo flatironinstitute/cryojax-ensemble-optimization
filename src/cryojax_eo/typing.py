@@ -1,5 +1,5 @@
-from typing import Any, Callable, Optional, TypedDict, TypeVar
-from typing_extensions import TypeAlias
+from collections.abc import Callable
+from typing import Any, TypeAlias, TypedDict, TypeVar
 
 import numpy as np
 from cryojax.simulator import BasicImageConfig, ContrastTransferTheory, EulerAnglePose
@@ -30,8 +30,8 @@ LossFn: TypeAlias = Callable[
         ParticleStackInfo,
         Float[Array, "n_atoms n_gaussians_per_atom"],
         Float[Array, "n_atoms n_gaussians_per_atom"],
-        Optional[Any],
-        Optional[bool],
+        Any | None,
+        bool | None,
         ConstantT,
         PerParticleT,
     ],

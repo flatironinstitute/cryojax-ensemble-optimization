@@ -1,5 +1,3 @@
-from typing import Optional, Tuple
-
 import jax.numpy as jnp
 from jaxtyping import Array, Float
 
@@ -7,8 +5,8 @@ from jaxtyping import Array, Float
 def compute_optimal_scale_and_offset(
     target_image: Float[Array, "n_pixels n_pixels"],
     ref_image: Float[Array, "n_pixels n_pixels"],
-    signal_region: Optional[Float[Array, "n_pixels n_pixels"]] = None,
-) -> Tuple[Float, Float]:
+    signal_region: Float[Array, "n_pixels n_pixels"] | None = None,
+) -> tuple[Float, Float]:
     if signal_region is None:
         signal_region = jnp.ones_like(target_image, dtype=bool)
 
