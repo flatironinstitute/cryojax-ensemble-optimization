@@ -29,5 +29,6 @@ from ._prior_projection import (
     ParallelSteeredOverdampedLangevinSampler as ParallelSteeredOverdampedLangevinSampler,
     SteeredMDSimulator as SteeredMDSimulator,
     SteeredOverdampedLangevinSampler as SteeredOverdampedLangevinSampler,
+    compute_biasing_constant as compute_biasing_constant,
     compute_harmonic_steering_force as compute_harmonic_steering_force,
 )

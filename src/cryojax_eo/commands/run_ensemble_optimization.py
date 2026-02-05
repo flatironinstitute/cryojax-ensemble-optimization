@@ -57,6 +57,78 @@ def _make_atom_list(atom_selection, topology) -> np.ndarray:
     return np.array(atom_list)
 
 
+def _make_bias_constant_scheduler(config, atom_list):
+    # Running the optimization
+    if config["projector_params"]["bias_constant_in_kjpermol"] is not None:
+        msg = (
+            "A bias constant was provided in the config file."
+            " The bias proportion will be ignored."
+            " Only do this if you know what you are doing."
+            " Or have previously computed the bias constant."
+        )
+        print(msg)
+        logging.warning(msg)
+        bias_constant = config["projector_params"]["bias_constant_in_kjpermol"]
+
+    else:
+        logging.info("Computing biasing constant...")
+        bias_constant_unit_prop = cxeo.ensemble_optimization.compute_biasing_constant(
+            target_proportion=1.0,
+            path_to_target_pdb=config["path_to_atomic_models"][0],
+            restrain_atom_list=atom_list,
+            parameters_for_md={
+                "platform": config["projector_params"]["platform"],
+                "properties": config["projector_params"]["platform_properties"],
+            },
+        )
+        bias_constant_unit_prop = float(bias_constant_unit_prop)
+        msg = (
+            f"For a proportion of 1.0, the biasing constant "
+            f"is {bias_constant_unit_prop:.2f} kJ/mol."
+            " Saving value to"
+            f" {os.path.join(config['path_to_output'], 'biasing_constant.txt')}."
+            " You can use this value for future runs by setting"
+            " projector_params.bias_constant_in_kjpermol in the config file."
+            " This will save you time in future runs."
+            " Note that this value is specific to the system."
+        )
+        logging.info(msg)
+        print(msg)
+        # make the header be proportion, bias_constant
+        np.savetxt(
+            os.path.join(config["path_to_output"], "biasing_constant.txt"),
+            np.array([[1.0, bias_constant_unit_prop]]),
+            header="proportion bias_constant_in_kjpermol",
+        )
+
+        if isinstance(config["projector_params"]["bias_proportion"], float):
+            bias_constant = (
+                bias_constant_unit_prop * config["projector_params"]["bias_proportion"]
+            )
+        else:
+            bias_constant = [
+                bias_constant_unit_prop
+                * config["projector_params"]["bias_proportion"][0],
+                bias_constant_unit_prop
+                * config["projector_params"]["bias_proportion"][1],
+            ]
+
+    if isinstance(bias_constant, float):
+        bias_constant_scheduler = optax.constant_schedule(
+            bias_constant,
+        )
+    elif isinstance(bias_constant, list) and len(bias_constant) == 2:
+        bias_constant_scheduler = optax.linear_schedule(
+            init_value=bias_constant[0],
+            end_value=bias_constant[1],
+            transition_steps=config["n_steps"],
+        )
+    else:
+        raise ValueError("bias_proportion must be a float or a list of two floats.")
+
+    return bias_constant_scheduler
+
+
 def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
     config = dict(ensemble_opt_config.model_dump())
 
@@ -146,6 +218,9 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
     else:
         model_aligner = None
 
+    # Compute bias constant before to possibly avoid GPU issues
+    bias_constant_scheduler = _make_bias_constant_scheduler(config, atom_list)
+
     # Construct prior projector
     projector_list = []
 
@@ -202,26 +277,6 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
             runs_postprocessing=runs_postprocessing,
         )
     )
-
-    # Running the optimization
-
-    if isinstance(config["projector_params"]["bias_constant_in_kjpermol"], float):
-        bias_constant_scheduler = optax.constant_schedule(
-            config["projector_params"]["bias_constant_in_kjpermol"]
-        )
-    elif (
-        isinstance(config["projector_params"]["bias_constant_in_kjpermol"], list)
-        and len(config["projector_params"]["bias_constant_in_kjpermol"]) == 2
-    ):
-        bias_constant_scheduler = optax.linear_schedule(
-            init_value=config["projector_params"]["bias_constant_in_kjpermol"][0],
-            end_value=config["projector_params"]["bias_constant_in_kjpermol"][1],
-            transition_steps=config["n_steps"],
-        )
-    else:
-        raise ValueError(
-            "bias_constant_in_kjpermol must be a float or a list of two floats."
-        )
 
     initial_weights = jnp.array(config["likelihood_optimizer_params"]["initial_weights"])
 

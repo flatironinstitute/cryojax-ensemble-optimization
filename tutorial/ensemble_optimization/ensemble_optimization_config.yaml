@@ -12,7 +12,7 @@ alignment_params:
   # reference_volume_voxel_size: ... # not used for tutorial
 
 projector_params:
-  bias_constant_in_kjpermol: 3.0e4
+  bias_proportion: 0.1
   n_steps: 500
   platform: CUDA
   platform_properties:
