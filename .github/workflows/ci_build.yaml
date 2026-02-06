@@ -28,7 +28,7 @@ jobs:
         run: |
           uv venv --python=${{ matrix.python-version }}
           uv pip install --upgrade pip
-          uv pip install -e '.[dev]'
+          uv pip install -e '.[dev, tests]'
 
       - name: Checks with pre-commit
         run: |
