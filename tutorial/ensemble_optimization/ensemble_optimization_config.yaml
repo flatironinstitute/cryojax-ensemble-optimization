@@ -31,7 +31,6 @@ likelihood_optimizer_params:
   - 0.5
   n_steps: 10
   step_size: 0.25
-  n_batches_per_step: 1
   estimates_pose: false
 
 atom_selection: not element H

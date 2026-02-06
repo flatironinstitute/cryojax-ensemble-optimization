@@ -20,6 +20,14 @@ from cryospax import (
 )
 
 import cryojax_eo as cxeo
+from cryojax_eo.ensemble_optimization import (
+    EnsembleOptimizationPipeline,
+    EnsembleSteeredMDSimulator,
+    ImagesToEnsembleLikelihoodFn,
+    IterativeEnsembleLikelihoodOptimizer,
+    MargGaussianWhiteLogLikelihoodFn,
+    SteeredMDSimulator,
+)
 from cryojax_eo.internal import EnsOptMDConfig
 from cryojax_eo.io import read_atomic_models
 from cryojax_eo.simulator import DilatedMask
@@ -77,10 +85,10 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
 
     initial_walkers = jnp.array([model["positions"] for model in atomic_models.values()])
     variances = jnp.array([model["variances"] for model in atomic_models.values()])[
-        :, atom_list
+        0, atom_list
     ]
     amplitudes = jnp.array([model["amplitudes"] for model in atomic_models.values()])[
-        :, atom_list
+        0, atom_list
     ]
     logging.debug("Atomic models loaded.")
 
@@ -91,7 +99,7 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
             path_to_starfile=config["data_params"]["path_to_starfile"],
             options=dict(
                 loads_envelope=config["data_params"]["loads_envelope"],
-                broadcasts_image_config=False,
+                broadcasts_image_config=True,
             ),
         ),
         path_to_relion_project=config["data_params"]["path_to_relion_project"],
@@ -154,7 +162,7 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
 
     for i in range(initial_walkers.shape[0]):
         projector_list.append(
-            cxeo.ensemble_optimization.SteeredMDSimulator(
+            SteeredMDSimulator(
                 path_to_initial_pdb=config["path_to_atomic_models"][i],
                 n_steps=config["projector_params"]["n_steps"],
                 restrain_atom_list=atom_list.tolist(),
@@ -167,43 +175,44 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
                 ),
             )
         )
-    md_projector = cxeo.ensemble_optimization.EnsembleSteeredMDSimulator(projector_list)
+    md_projector = EnsembleSteeredMDSimulator(projector_list)
 
     # Construct likelihood optimizer
-    data_sign = -1.0 if config["data_params"]["data_sign"] == "dark-on-light" else 1.0
-    likelihood_fn = cxeo.ensemble_optimization.LikelihoodOptimalWeightsFn(
+    image_sign = -1.0 if config["data_params"]["data_sign"] == "dark-on-light" else 1.0
+
+    img_to_walker_log_likelihood_fn = MargGaussianWhiteLogLikelihoodFn(
         amplitudes,
         variances,
-        image_to_walker_log_likelihood_fn="iso_gaussian_var_marg",
-        loss_fn_constant_args=data_sign,
+        image_sign=jnp.asarray(image_sign),
         dilated_mask=dilated_mask,
-        estimates_pose=config["likelihood_optimizer_params"]["estimates_pose"],
     )
-
-    likelihood_optimizer = (
-        cxeo.ensemble_optimization.IterativeEnsembleLikelihoodOptimizer(
-            step_size=config["likelihood_optimizer_params"]["step_size"],
-            n_steps=config["likelihood_optimizer_params"]["n_steps"],
-            n_batches_per_step=config["likelihood_optimizer_params"][
-                "n_batches_per_step"
-            ],
-            likelihood_fn=likelihood_fn,
+    ensemble_likelihood_fn = ImagesToEnsembleLikelihoodFn(
+        img_to_walker_log_likelihood_fn, n_walkers_in_parallel=1, n_images_in_parallel=50
+    )
+    if config["likelihood_optimizer_params"]["estimates_pose"]:
+        raise NotImplementedError(
+            "Pose estimation inside the MD ensemble"
+            " optimization pipeline is not yet implemented."
         )
+
+    likelihood_optimizer = IterativeEnsembleLikelihoodOptimizer(
+        step_size=config["likelihood_optimizer_params"]["step_size"],
+        n_steps=config["likelihood_optimizer_params"]["n_steps"],
+        ensemble_likelihood_fn=ensemble_likelihood_fn,
+        pose_search=None,
     )
 
     runs_postprocessing = True if initial_walkers.shape[0] > 1 else False
 
     # Construct the ensemble optimization pipeline
-    ensemble_refinement_pipeline = (
-        cxeo.ensemble_optimization.EnsembleOptimizationPipeline(
-            prior_projector=md_projector,
-            likelihood_optimizer=likelihood_optimizer,
-            n_steps=config["n_steps"],
-            prealigned_structure=ref_structure,
-            atom_indices_for_opt=jnp.asarray(atom_list, dtype=int),
-            model_to_volume_aligner=model_aligner,
-            runs_postprocessing=runs_postprocessing,
-        )
+    ensemble_refinement_pipeline = EnsembleOptimizationPipeline(
+        prior_projector=md_projector,
+        likelihood_optimizer=likelihood_optimizer,
+        n_steps=config["n_steps"],
+        prealigned_structure=ref_structure,
+        atom_indices_for_opt=jnp.asarray(atom_list, dtype=int),
+        model_to_volume_aligner=model_aligner,
+        runs_postprocessing=runs_postprocessing,
     )
 
     # Running the optimization

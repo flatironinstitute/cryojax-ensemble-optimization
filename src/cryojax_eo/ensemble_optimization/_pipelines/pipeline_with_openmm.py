@@ -14,7 +14,7 @@ from mdtraj.formats import XTCTrajectoryFile
 from tqdm import tqdm
 
 from ...utils import ModelToVolumeAligner
-from .._likelihood_optimization.optimizers import (
+from .._likelihood_optimization import (
     IterativeEnsembleLikelihoodOptimizer,
     ProjGradDescWeightOptimizer,
 )
@@ -96,14 +96,22 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
             walkers, reference_structure, self.atom_indices_for_opt
         )
         logging.info("Walkers aligned.")
-        for i in tqdm(range(self.n_steps)):
-            logging.info(f"Starting optimization step {i+1}/{self.n_steps}...")
+
+        progress_bar = tqdm(range(self.n_steps), desc="Optimization Progress")
+        # make the tqdm progress bar show the current neg_log_likelihood at each step
+        for i in progress_bar:
+            logging.info(f"Starting optimization step {i + 1}/{self.n_steps}...")
 
             logging.info("   Likelihood Optimization: ")
-            tmp_walkers, weights = self.likelihood_optimizer(
+            neg_log_likelihood, tmp_walkers, weights = self.likelihood_optimizer(
                 walkers[:, self.atom_indices_for_opt, :],
                 weights,
                 dataloader,
+            )
+            logging.info(f"   Negative Log-Likelihood: {neg_log_likelihood}")
+            progress_bar.set_description(
+                f"Iter {i + 1}/{self.n_steps}, "
+                f"Neg Log-Likelihood: {neg_log_likelihood:.4f}"
             )
 
             walkers = walkers.at[:, self.atom_indices_for_opt, :].set(tmp_walkers)
@@ -129,8 +137,8 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
                     walkers,
                     self.model_to_volume_aligner,
                     self.atom_indices_for_opt,
-                    self.likelihood_optimizer.likelihood_fn.amplitudes,
-                    self.likelihood_optimizer.likelihood_fn.variances,
+                    self.likelihood_optimizer.ensemble_likelihood_fn.image_to_walker_likelihood_fn.amplitudes,
+                    self.likelihood_optimizer.ensemble_likelihood_fn.image_to_walker_likelihood_fn.variances,
                 )
                 logging.info("   Walkers aligned to volume.")
 
@@ -153,7 +161,8 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
             logging.info("Running postprocessing...")
             weight_optimizer = ProjGradDescWeightOptimizer(
                 n_steps=500,
-                likelihood_fn=self.likelihood_optimizer.likelihood_fn,
+                ensemble_likelihood_fn=self.likelihood_optimizer.ensemble_likelihood_fn,
+                pose_search=self.likelihood_optimizer.pose_search,
             )
             walkers, weights = self.postprocess(
                 walkers, weights, dataloader, weight_optimizer
@@ -220,8 +229,8 @@ def _align_walkers_to_volume(
 
         _, solution = model_to_volume_aligner.align(
             atomic_positions,
-            amplitudes[i],
-            variances[i],
+            amplitudes,
+            variances,
         )
         aligned_positions = walkers[i] @ solution.rotation_matrix + solution.offset
 

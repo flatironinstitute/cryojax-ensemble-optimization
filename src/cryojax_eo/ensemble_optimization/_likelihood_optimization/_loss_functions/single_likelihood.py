@@ -1,0 +1,213 @@
+from typing import Any
+
+import cryojax.simulator as cxs
+import equinox as eqx
+import jax.numpy as jnp
+from jaxtyping import Array, Float
+
+from ....simulator._dilated_mask import DilatedMask
+from .common_functions import compute_optimal_scale_and_offset
+from .make_model_utils import make_image_model_from_gmm
+
+
+class AbstractImageToWalkerLogLikelihoodFn(eqx.Module, strict=True):
+    amplitudes: eqx.AbstractVar[Float[Array, "n_atoms n_gaussians_per_atom"]]
+    variances: eqx.AbstractVar[Float[Array, "n_atoms n_gaussians_per_atom"]]
+    image_sign: eqx.AbstractVar[Float[Array, ""]]
+    dilated_mask: eqx.AbstractVar[DilatedMask | None]
+
+    def __call__(
+        self,
+        walker: Float[Array, "n_atoms 3"],
+        image: Float[Array, "y x"],
+        image_config: cxs.BasicImageConfig,
+        pose: cxs.AbstractPose,
+        transfer_theory: cxs.ContrastTransferTheory,
+        per_particle_args: Any,
+    ) -> Float:
+        raise NotImplementedError
+
+
+class MargGaussianWhiteLogLikelihoodFn(AbstractImageToWalkerLogLikelihoodFn, strict=True):
+    amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"]
+    variances: Float[Array, "n_atoms n_gaussians_per_atom"]
+    image_sign: Float[Array, ""]
+    dilated_mask: DilatedMask | None
+
+    def __init__(
+        self,
+        amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
+        variances: Float[Array, "n_atoms n_gaussians_per_atom"],
+        image_sign: Float[Array, ""] | float,
+        dilated_mask: DilatedMask | None = None,
+    ):
+        assert (amplitudes > 0).all(), "Amplitudes must be positive."
+        assert (variances > 0).all(), "Variances must be positive."
+
+        self.variances = variances
+        self.amplitudes = amplitudes
+        self.image_sign = jnp.asarray(image_sign)
+        self.dilated_mask = dilated_mask
+
+    def __call__(
+        self,
+        walker: Float[Array, "n_atoms 3"],
+        image: Float[Array, "y x"],
+        image_config: cxs.BasicImageConfig,
+        pose: cxs.AbstractPose,
+        transfer_theory: cxs.ContrastTransferTheory,
+        per_particle_args: Any,
+    ) -> Float:
+        return _likelihood_isotropic_gaussian_marginalized(
+            walker=walker,
+            amplitudes=self.amplitudes,
+            variances=self.variances,
+            image=image,
+            image_config=image_config,
+            pose=pose,
+            transfer_theory=transfer_theory,
+            dilated_mask=self.dilated_mask,
+            image_sign=self.image_sign,
+        )
+
+
+class GaussianWhiteLogLikelihoodFn(AbstractImageToWalkerLogLikelihoodFn, strict=True):
+    amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"]
+    variances: Float[Array, "n_atoms n_gaussians_per_atom"]
+    image_sign: Float[Array, ""]
+    dilated_mask: DilatedMask | None
+
+    def __init__(
+        self,
+        amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
+        variances: Float[Array, "n_atoms n_gaussians_per_atom"],
+        image_sign: Float[Array, ""],
+        dilated_mask: DilatedMask | None = None,
+    ):
+        assert (amplitudes > 0).all(), "Amplitudes must be positive."
+        assert (variances > 0).all(), "Variances must be positive."
+
+        self.variances = variances
+        self.amplitudes = amplitudes
+        self.image_sign = image_sign
+        self.dilated_mask = dilated_mask
+
+    def __call__(
+        self,
+        walker: Float[Array, "n_atoms 3"],
+        image: Float[Array, "y x"],
+        image_config: cxs.BasicImageConfig,
+        pose: cxs.AbstractPose,
+        transfer_theory: cxs.ContrastTransferTheory,
+        per_particle_args: Float[Array, ""],
+    ) -> Float:
+        return _likelihood_gaussian_white_noise(
+            walker=walker,
+            amplitudes=self.amplitudes,
+            variances=self.variances,
+            image=image,
+            image_config=image_config,
+            pose=pose,
+            transfer_theory=transfer_theory,
+            dilated_mask=self.dilated_mask,
+            image_sign=self.image_sign,
+            per_particle_args=per_particle_args,
+        )
+
+
+def _likelihood_gaussian_white_noise(
+    walker: Float[Array, "n_atoms 3"],
+    amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
+    variances: Float[Array, "n_atoms n_gaussians_per_atom"],
+    image: Float[Array, "y x"],
+    image_config: cxs.BasicImageConfig,
+    pose: cxs.AbstractPose,
+    transfer_theory: cxs.ContrastTransferTheory,
+    dilated_mask: DilatedMask | None = None,
+    image_sign: Float[Array, ""] = jnp.array(1.0),
+    per_particle_args: Float[Array, ""] = jnp.array(1.0),
+) -> Float:
+    """
+    Compute the likelihood of a walker given a Relion stack using an isotropic Gaussian
+    likelihood function.
+
+    **Arguments:**
+    - `walker`: A `walker` that is, a point cloud representing an atomic model.
+    - `relion_stack`: A cryojax `ParticleStack` object.
+    - `amplitudes`: The amplitudes for the GMM atomic volume representation.
+    - `variances`: The variances for the GMM atomic volume representation.
+    - `dilated_mask`: An optional dilated mask to apply to the computed image.
+    - `image_sign`: For this particular function the constant argument
+        is the sign of the observed image. For typical Relion stacks this is -1.0.
+        For data generated with cryoJAX this is 1.0.
+    - `per_particle_args`: The noise variance for the likelihood function.
+
+    **Returns:**
+    - The log likelihood of the walker given the Relion stack.
+
+    """
+
+    noise_variance = per_particle_args
+
+    image_model = make_image_model_from_gmm(
+        walker, amplitudes, variances, image_config, pose, transfer_theory
+    )
+    computed_image = image_model.simulate()
+    observed_image = jnp.asarray(image)
+
+    if dilated_mask is not None:
+        mask2d = dilated_mask.project(pose)
+    else:
+        mask2d = jnp.ones_like(computed_image)
+
+    computed_image = computed_image * mask2d
+    observed_image = image_sign * observed_image * mask2d
+
+    scale, offset = compute_optimal_scale_and_offset(computed_image, observed_image)
+
+    return -jnp.sum((scale * computed_image - observed_image + offset) ** 2) / (
+        2 * noise_variance
+    )
+
+
+def _likelihood_isotropic_gaussian_marginalized(
+    walker: Float[Array, "n_atoms 3"],
+    amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
+    variances: Float[Array, "n_atoms n_gaussians_per_atom"],
+    image: Float[Array, "y x"],
+    image_config: cxs.BasicImageConfig,
+    pose: cxs.AbstractPose,
+    transfer_theory: cxs.ContrastTransferTheory,
+    dilated_mask: DilatedMask | None = None,
+    image_sign: Float[Array, ""] = jnp.array(1.0),
+    per_particle_args: None = None,
+) -> Float:
+    """
+    Compute the marginalized likelihood of a walker given a Relion stack using an
+    isotropic Gaussian likelihood function where the variance has been marginalized.
+    This is useful when the variance is not known or is not fixed.
+    """
+    assert (
+        per_particle_args is None
+    ), "per_particle_args is not used in this function and should be None."
+
+    image_model = make_image_model_from_gmm(
+        walker, amplitudes, variances, image_config, pose, transfer_theory
+    )
+    computed_image = image_model.simulate()
+    observed_image = jnp.asarray(image)
+
+    if dilated_mask is not None:
+        mask2d = dilated_mask.project(pose)
+    else:
+        mask2d = jnp.ones_like(computed_image)
+
+    computed_image = computed_image * mask2d
+    observed_image = image_sign * observed_image * mask2d
+
+    scale, offset = compute_optimal_scale_and_offset(computed_image, observed_image)
+    n_pixels = computed_image.size
+    loss = -n_pixels * jnp.log(
+        jnp.linalg.norm(scale * computed_image - observed_image + offset)
+    )
+    return loss

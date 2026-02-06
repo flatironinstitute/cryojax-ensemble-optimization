@@ -1,13 +1,12 @@
 import cryojax.simulator as cxs
 import jax
-import jax.numpy as jnp
 import numpy as np
 import pytest
 from cryospax import RelionParticleDataset, RelionParticleParameterFile
 
 from cryojax_eo.ensemble_optimization import (
-    LikelihoodFn,
-    LikelihoodOptimalWeightsFn,
+    GaussianWhiteLogLikelihoodFn,
+    MargGaussianWhiteLogLikelihoodFn,  # done
     compute_optimal_scale_and_offset,  # done
     make_image_model_from_gmm,  # done
 )
@@ -39,20 +38,18 @@ def simple_volume_mask(sample_path_to_starfile):
     return DilatedMask(voxel_grid, image_config)
 
 
-@pytest.mark.parametrize("estimates_pose", [True, False])
-def test_make_image_model_from_gmm(
-    sample_path_to_pdb1, sample_relion_stack, estimates_pose
-):
+def test_make_image_model_from_gmm(sample_path_to_pdb1, sample_relion_stack):
     atomic_model = read_atomic_models(
         [sample_path_to_pdb1], selection_string="not element H"
     )[0]
 
     make_image_model_from_gmm(
         atomic_model["positions"],
-        sample_relion_stack,
         atomic_model["amplitudes"],
         atomic_model["variances"],
-        estimates_pose=estimates_pose,
+        sample_relion_stack["parameters"]["image_config"],
+        sample_relion_stack["parameters"]["pose"],
+        sample_relion_stack["parameters"]["transfer_theory"],
     )
     return
 
@@ -77,17 +74,15 @@ def test_compute_scale_and_offset():
     return
 
 
-@pytest.mark.parametrize("likelihood_wrapper", [LikelihoodFn, LikelihoodOptimalWeightsFn])
 @pytest.mark.parametrize("use_dilated_mask", [True, False])
 @pytest.mark.parametrize(
     "image_to_walker_likelihood_fn",
-    ["iso_gaussian", "iso_gaussian_var_marg", "sliced_wasserstein", "dummy"],
+    [MargGaussianWhiteLogLikelihoodFn, GaussianWhiteLogLikelihoodFn],
 )
 def test_likelihood_fn(
     sample_path_to_pdb1,
     sample_path_to_starfile,
     sample_path_to_relion_project,
-    likelihood_wrapper,
     image_to_walker_likelihood_fn,
     use_dilated_mask,
     simple_volume_mask,
@@ -96,54 +91,34 @@ def test_likelihood_fn(
         [sample_path_to_pdb1], selection_string="not element H"
     )[0]
 
-    relion_stack = RelionParticleDataset(
+    relion_dataset = RelionParticleDataset(
         RelionParticleParameterFile(
             path_to_starfile=sample_path_to_starfile,
-            options=dict(broadcasts_image_config=False),
+            options=dict(broadcasts_image_config=True),
         ),
         path_to_relion_project=sample_path_to_relion_project,
         mode="r",
-    )[0:2]
+    )
 
     if use_dilated_mask:
         dilated_mask = simple_volume_mask
     else:
         dilated_mask = None
 
-    if image_to_walker_likelihood_fn == "iso_gaussian":
-        per_particle_args = jnp.array([1.0, 1.0])
-        constant_args = 1.0
-
-    elif image_to_walker_likelihood_fn == "iso_gaussian_var_marg":
-        per_particle_args = ()
-        constant_args = 1.0
-    elif image_to_walker_likelihood_fn == "sliced_wasserstein":
-        per_particle_args = ()
-        constant_args = (3, 2)
-    else:
-        per_particle_args = None
-        constant_args = None
-
-    try:
-        likelihood_fn = likelihood_wrapper(
-            amplitudes=atomic_model["amplitudes"][None, ...],
-            variances=atomic_model["variances"][None, ...],
-            image_to_walker_log_likelihood_fn=image_to_walker_likelihood_fn,
-            loss_fn_constant_args=constant_args,
-            dilated_mask=dilated_mask,
-        )
-    except Exception as e:
-        if image_to_walker_likelihood_fn == "dummy":
-            assert isinstance(e, ValueError)
-            return
-        else:
-            raise e
-
-    likelihood_fn(
-        atomic_model["positions"][None, ...],
-        weights=jnp.array([1.0]),
-        relion_stack=relion_stack,
-        per_particle_args=per_particle_args,
+    img_to_walker_likelihood_fn = image_to_walker_likelihood_fn(
+        amplitudes=atomic_model["amplitudes"],
+        variances=atomic_model["variances"],
+        image_sign=1.0,
+        dilated_mask=dilated_mask,
+    )
+    stack = relion_dataset[0]
+    img_to_walker_likelihood_fn(
+        walker=atomic_model["positions"],
+        image=stack["images"],
+        image_config=stack["parameters"]["image_config"],
+        pose=stack["parameters"]["pose"],
+        transfer_theory=stack["parameters"]["transfer_theory"],
+        per_particle_args=1.0,
     )
     return
 
@@ -175,7 +150,7 @@ def test_compute_likelihood_matrix(
     sample_path_to_starfile, sample_path_to_relion_project
 ):
     key = jax.random.key(0)
-    relion_stack = RelionParticleDataset(
+    relion_dataset = RelionParticleDataset(
         RelionParticleParameterFile(
             path_to_starfile=sample_path_to_starfile,
         ),
@@ -197,7 +172,7 @@ def test_compute_likelihood_matrix(
     n_particles = 5
     likelihood_matrix = compute_likelihood_matrix(
         ensemble_walkers,
-        relion_stack[:n_particles],
+        relion_dataset[:n_particles],
         amplitudes,
         variances,
         image_to_walker_log_likelihood_fn,
@@ -213,7 +188,7 @@ def test_compute_likelihood_matrix(
     n_particles = 5
     likelihood_matrix = compute_likelihood_matrix(
         ensemble_walkers,
-        relion_stack[:n_particles],
+        relion_dataset[:n_particles],
         amplitudes,
         variances,
         image_to_walker_log_likelihood_fn,
