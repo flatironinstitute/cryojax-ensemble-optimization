@@ -1,6 +1,7 @@
+import equinox as eqx
 from cryospax import RelionParticleDataset, RelionParticleParameterFile
 
-from cryojax_eo.ensemble_optimization import global_SO3_hier_search
+from cryojax_eo.ensemble_optimization import HierarchicalSO3GridSearch
 from cryojax_eo.io import load_gmm_volume_parametrization
 
 
@@ -16,11 +17,18 @@ def test_global_SO3_hier_search(
 
     relion_dataset = RelionParticleDataset(
         RelionParticleParameterFile(
-            sample_path_to_starfile, options=dict(broadcasts_image_config=False)
+            sample_path_to_starfile, options=dict(broadcasts_image_config=True)
         ),
         sample_path_to_relion_project,
     )
-
-    global_SO3_hier_search(gmm_volume, relion_dataset[0], 1, 5, 40)
+    pose_search = HierarchicalSO3GridSearch(base_grid_res=1, n_rounds=5, n_candidates=40)
+    stack = relion_dataset[0]
+    pose = pose_search(
+        gmm_volume,
+        stack["images"],
+        stack["parameters"]["image_config"],
+        stack["parameters"]["transfer_theory"],
+    )
+    eqx.tree_equal(pose, stack["parameters"]["pose"], rtol=1e-2)
 
     return

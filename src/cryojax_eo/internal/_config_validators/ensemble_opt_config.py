@@ -30,10 +30,6 @@ class EnsOptMDConfigOptimizationConfig(BaseModel, extra="forbid"):
     batch_size: PositiveInt = Field(
         description="Batch size for SGD",
     )
-    n_batches_per_step: PositiveInt = Field(
-        default=1,
-        description="Number of batches per step for the optimization process.",
-    )
     initial_weights: list[float] | None = Field(
         default=None,
         description="Initial weights for the models. "

@@ -13,8 +13,9 @@ from cryojax_eo.dataset import create_dataloader
 from cryojax_eo.ensemble_optimization import (
     EnsembleOptimizationPipeline,
     EnsembleSteeredMDSimulator,
+    ImagesToEnsembleLikelihoodFn,
     IterativeEnsembleLikelihoodOptimizer,
-    LikelihoodOptimalWeightsFn,
+    MargGaussianWhiteLogLikelihoodFn,
     SteeredMDSimulator,
 )
 from cryojax_eo.io import load_gmm_volume_parametrization, read_atomic_models
@@ -65,15 +66,15 @@ def test_ensemble_optimization_optimizer(
 
     walkers = jnp.array([model["positions"] for model in atomic_models.values()])
     variances = jnp.array([model["variances"] for model in atomic_models.values()])[
-        :, atom_list
+        0, atom_list
     ]
     amplitudes = jnp.array([model["amplitudes"] for model in atomic_models.values()])[
-        :, atom_list
+        0, atom_list
     ]
 
     relion_dataset = RelionParticleDataset(
         RelionParticleParameterFile(
-            sample_path_to_starfile, options=dict(broadcasts_image_config=False)
+            sample_path_to_starfile, options=dict(broadcasts_image_config=True)
         ),
         sample_path_to_relion_project,
     )
@@ -86,17 +87,16 @@ def test_ensemble_optimization_optimizer(
         jax_prng_key=jax.random.key(0),
     )
 
-    likelihood_fn = LikelihoodOptimalWeightsFn(
-        amplitudes=amplitudes,
-        variances=variances,
-        image_to_walker_log_likelihood_fn="iso_gaussian_var_marg",
+    img_to_walker_likelihood_fn = MargGaussianWhiteLogLikelihoodFn(
+        amplitudes=amplitudes, variances=variances, image_sign=1.0, dilated_mask=None
     )
+    ensemble_likelihood_fn = ImagesToEnsembleLikelihoodFn(img_to_walker_likelihood_fn)
 
     optimizer = IterativeEnsembleLikelihoodOptimizer(
         step_size=1.0,
         n_steps=2,
-        n_batches_per_step=2,
-        likelihood_fn=likelihood_fn,
+        ensemble_likelihood_fn=ensemble_likelihood_fn,
+        pose_search=None,
     )
 
     projector = EnsembleSteeredMDSimulator(

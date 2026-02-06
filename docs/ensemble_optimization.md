@@ -46,7 +46,6 @@ likelihood_optimizer_params:
   - 0.33
   n_steps: 10
   step_size: 2.0
-  n_batches_per_step: 5 # Allows for a memory-friendly way to compute more batches per step
 
 atom_selection: ... # path to a txt/npy file, or a mdtraj-compatible selection string, e.g., "not element H"
 loads_b_factors: true # Load Debye-Waller b-factors from provided PDBs
