@@ -5,8 +5,8 @@ import jax
 import jax.numpy as jnp
 import mdtraj
 import pytest
-from cryojax.dataset import RelionParticleDataset, RelionParticleParameterFile
 from cryojax.simulator import GaussianMixtureRenderFn
+from cryospax import RelionParticleDataset, RelionParticleParameterFile
 from optax import constant_schedule
 
 from cryojax_eo.dataset import create_dataloader
@@ -72,7 +72,9 @@ def test_ensemble_optimization_optimizer(
     ]
 
     relion_dataset = RelionParticleDataset(
-        RelionParticleParameterFile(sample_path_to_starfile),
+        RelionParticleParameterFile(
+            sample_path_to_starfile, options=dict(broadcasts_image_config=False)
+        ),
         sample_path_to_relion_project,
     )
 

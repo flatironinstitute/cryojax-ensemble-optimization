@@ -14,8 +14,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(github.base_ref == 'main' && '["ubuntu-latest"]') }}
-        python-version: ${{ fromJSON(github.base_ref == 'main' && '["3.11", "3.12", "3.13", "3.14"]') }}
+        os: ${{ fromJSON(github.base_ref == 'main' && '["ubuntu-latest"]' || '["ubuntu-latest"]') }}
+        python-version: ${{ fromJSON(github.base_ref == 'main' && '["3.11", "3.12", "3.13", "3.14"]' || '["3.11"]') }}
 
     steps:
       - name: Checkout repository
@@ -28,8 +28,7 @@ jobs:
         run: |
           uv venv --python=${{ matrix.python-version }}
           uv pip install --upgrade pip
-          uv pip install -e '.[dev,tests]'
-          uv pip install openmm
+          uv pip install -e '.[dev, tests]'
 
       - name: Checks with pre-commit
         run: |

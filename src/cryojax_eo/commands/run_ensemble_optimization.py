@@ -12,12 +12,12 @@ import mrcfile
 import numpy as np
 import optax
 import yaml
-from cryojax.dataset import (
+from cryojax.io import read_array_from_mrc
+from cryojax.ndimage import fourier_crop_to_shape
+from cryospax import (
     RelionParticleDataset,
     RelionParticleParameterFile,
 )
-from cryojax.io import read_array_from_mrc
-from cryojax.ndimage import fourier_crop_to_shape
 
 import cryojax_eo as cxeo
 from cryojax_eo.internal import EnsOptMDConfig
@@ -89,7 +89,10 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
     stack_dataset = RelionParticleDataset(
         RelionParticleParameterFile(
             path_to_starfile=config["data_params"]["path_to_starfile"],
-            loads_envelope=config["data_params"]["loads_envelope"],
+            options=dict(
+                loads_envelope=config["data_params"]["loads_envelope"],
+                broadcasts_image_config=False,
+            ),
         ),
         path_to_relion_project=config["data_params"]["path_to_relion_project"],
     )
