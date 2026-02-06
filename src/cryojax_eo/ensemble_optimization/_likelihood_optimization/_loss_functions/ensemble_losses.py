@@ -10,12 +10,18 @@ from cryojax_eo.typing import ConstantT, LossFn, ParticleStackInfo, PerParticleT
 from ....simulator._dilated_mask import DilatedMask
 
 
+IN_AXES_STACK = dict(
+    images=0,
+    parameters=dict(image_config=None, pose=0, transfer_theory=0),
+)
+
+
 @partial(
     eqx.filter_vmap, in_axes=(0, None, 0, 0, None, None, None, None, None), out_axes=0
 )
 @partial(
     eqx.filter_vmap,
-    in_axes=(None, eqx.if_array(0), None, None, None, None, None, None, eqx.if_array(0)),
+    in_axes=(None, IN_AXES_STACK, None, None, None, None, None, None, eqx.if_array(0)),
     out_axes=0,
 )
 def _compute_likelihood_matrix(

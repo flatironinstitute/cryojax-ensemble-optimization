@@ -91,7 +91,7 @@ If multiple models are provided, all the models will be aligned to the first mod
 The data can be easily visualized through the [cryoJAX](https://michael-0brien.github.io/cryojax/) API:
 
 ```python
-from cryojax.dataset import (
+from cryospax import (
     RelionParticleParameterFile,
     RelionParticleStackDataset,
 )

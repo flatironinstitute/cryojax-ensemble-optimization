@@ -7,13 +7,13 @@ import cryojax.simulator as cxs
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from cryojax.dataset import (
+from cryojax.ndimage import CircularCosineMask, FourierGaussian
+from cryojax.rotations import SO3
+from cryospax import (
     RelionParticleDataset,
     RelionParticleParameterFile,
     simulate_particle_stack,
 )
-from cryojax.ndimage import CircularCosineMask, FourierGaussian
-from cryojax.rotations import SO3
 from jaxtyping import Array, Float, PRNGKeyArray
 
 from ..internal._config_validators import DatasetSimulatorConfig
@@ -29,7 +29,7 @@ def make_relion_parameter_file(
     This functions writes to disk a starfile containing the
     generated particle parameters. The starfile is saved to the path
     specified in the configuration. The function also returns a
-    `cryojax.dataset.RelionParticleParameterFile` object that can be used to read the
+    `cryospax.RelionParticleParameterFile` object that can be used to read the
     starfile and access the particle parameters.
 
     **Arguments:**
@@ -52,7 +52,10 @@ def make_relion_parameter_file(
     parameter_file = RelionParticleParameterFile(
         path_to_starfile=config_dict["path_to_starfile"],
         mode="w",
-        exists_ok=config_dict["overwrite"],
+        exist_ok=config_dict["overwrite"],
+        options=dict(
+            broadcasts_image_config=True
+        ),  # Change to False when cryospax is updated
     )
     parameter_file.append(particle_parameters)
 
