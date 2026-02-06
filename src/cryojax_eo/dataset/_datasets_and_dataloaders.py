@@ -1,5 +1,5 @@
 import jax_dataloader as jdl
-from cryojax.dataset import (
+from cryospax import (
     RelionParticleDataset,
 )
 from jaxtyping import PRNGKeyArray

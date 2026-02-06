@@ -1,6 +1,6 @@
 import jax
 import jax.numpy as jnp
-from cryojax.dataset import RelionParticleDataset, RelionParticleParameterFile
+from cryospax import RelionParticleDataset, RelionParticleParameterFile
 
 from cryojax_eo.dataset import create_dataloader
 from cryojax_eo.ensemble_optimization import (
@@ -26,7 +26,9 @@ def test_iterative_optimizer(
     amplitudes = jnp.array([model["amplitudes"] for model in atomic_models.values()])
 
     relion_dataset = RelionParticleDataset(
-        RelionParticleParameterFile(sample_path_to_starfile),
+        RelionParticleParameterFile(
+            sample_path_to_starfile, options=dict(broadcasts_image_config=False)
+        ),
         sample_path_to_relion_project,
     )
 
@@ -77,7 +79,9 @@ def test_weight_optimizer(
     amplitudes = jnp.array([model["amplitudes"] for model in atomic_models.values()])
 
     relion_dataset = RelionParticleDataset(
-        RelionParticleParameterFile(sample_path_to_starfile),
+        RelionParticleParameterFile(
+            sample_path_to_starfile, options=dict(broadcasts_image_config=False)
+        ),
         sample_path_to_relion_project,
     )
 

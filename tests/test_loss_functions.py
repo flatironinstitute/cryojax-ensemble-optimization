@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from cryojax.dataset import RelionParticleDataset, RelionParticleParameterFile
+from cryospax import RelionParticleDataset, RelionParticleParameterFile
 
 from cryojax_eo.ensemble_optimization import (
     LikelihoodFn,
@@ -99,6 +99,7 @@ def test_likelihood_fn(
     relion_stack = RelionParticleDataset(
         RelionParticleParameterFile(
             path_to_starfile=sample_path_to_starfile,
+            options=dict(broadcasts_image_config=False),
         ),
         path_to_relion_project=sample_path_to_relion_project,
         mode="r",
