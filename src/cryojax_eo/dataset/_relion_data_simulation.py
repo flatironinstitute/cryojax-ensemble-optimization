@@ -7,17 +7,16 @@ import cryojax.simulator as cxs
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from cryojax.dataset import (
+from cryojax.ndimage import CircularCosineMask, FourierGaussian
+from cryojax.rotations import SO3
+from cryospax import (
     RelionParticleDataset,
     RelionParticleParameterFile,
     simulate_particle_stack,
 )
-from cryojax.ndimage import CircularCosineMask, FourierGaussian
-from cryojax.rotations import SO3
 from jaxtyping import Array, Float, PRNGKeyArray
 
 from ..internal._config_validators import DatasetSimulatorConfig
-from ..io import load_gmm_volume_parametrization
 from ..simulator._image_simulation import simulate_image_with_white_gaussian_noise
 
 
@@ -29,7 +28,7 @@ def make_relion_parameter_file(
     This functions writes to disk a starfile containing the
     generated particle parameters. The starfile is saved to the path
     specified in the configuration. The function also returns a
-    `cryojax.dataset.RelionParticleParameterFile` object that can be used to read the
+    `cryospax.RelionParticleParameterFile` object that can be used to read the
     starfile and access the particle parameters.
 
     **Arguments:**
@@ -52,7 +51,10 @@ def make_relion_parameter_file(
     parameter_file = RelionParticleParameterFile(
         path_to_starfile=config_dict["path_to_starfile"],
         mode="w",
-        exists_ok=config_dict["overwrite"],
+        exist_ok=config_dict["overwrite"],
+        options=dict(
+            broadcasts_image_config=True
+        ),  # Change to False when cryospax is updated
     )
     parameter_file.append(particle_parameters)
 
@@ -70,11 +72,16 @@ def simulate_relion_dataset(config: DatasetSimulatorConfig) -> RelionParticleDat
 
     # dumping so serialization happens
     config_dict = dict(config.model_dump())
-
-    volumes = load_gmm_volume_parametrization(
-        config_dict["atomic_models_params"]["path_to_atomic_models"],
-        selection_string=config_dict["atomic_models_params"]["atom_selection"],
-        loads_b_factors=config_dict["atomic_models_params"]["loads_b_factors"],
+    volumes = tuple(
+        [
+            cxs.load_tabulated_volume(
+                filename,
+                output_type=cxs.GaussianMixtureVolume,
+                include_b_factors=config_dict["atomic_models_params"]["loads_b_factors"],
+                selection_string=config_dict["atomic_models_params"]["atom_selection"],
+            )
+            for filename in config_dict["atomic_models_params"]["path_to_atomic_models"]
+        ]
     )
 
     mask = CircularCosineMask(
@@ -105,7 +112,7 @@ def _simulate_relion_dataset(
     parameter_file: RelionParticleParameterFile,
     path_to_relion_project: str,
     images_per_file: int,
-    volumes: tuple[cxs.AbstractVolumeRepresentation],
+    volumes: tuple[cxs.GaussianMixtureVolume, ...],
     ensemble_probabilities: Float[Array, " n_volumes"],
     mask: CircularCosineMask,
     noise_snr_range: list[Float],

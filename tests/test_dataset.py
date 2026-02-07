@@ -1,10 +1,11 @@
 import os
+import pathlib
 import shutil
 
 import jax
 import jax.numpy as jnp
 import pytest
-from cryojax.dataset import RelionParticleDataset, RelionParticleParameterFile
+from cryospax import RelionParticleDataset, RelionParticleParameterFile
 
 from cryojax_eo.dataset import (
     create_dataloader,
@@ -28,7 +29,7 @@ def sample_simulator_config(
         data_sign="dark-on-light",
         pixel_size=0.8,
         box_size=32,
-        pad_scale=1.0,
+        pad_scale=1,
         voltage_in_kilovolts=300.0,
         offset_x_in_angstroms=0.0,
         offset_y_in_angstroms=0.0,
@@ -50,8 +51,8 @@ def sample_simulator_config(
             loads_b_factors=True,
             atom_selection="not element H",
         ),
-        path_to_relion_project=path_to_relion_project,
-        path_to_starfile=path_to_starfile,
+        path_to_relion_project=pathlib.Path(path_to_relion_project),
+        path_to_starfile=pathlib.Path(path_to_starfile),
         images_per_file=10,
         batch_size_for_generation=10,
         overwrite=True,
@@ -87,7 +88,9 @@ def test_create_dataloader(
     shuffle, sample_path_to_starfile, sample_path_to_relion_project
 ):
     relion_stack_dataset = RelionParticleDataset(
-        RelionParticleParameterFile(sample_path_to_starfile),
+        RelionParticleParameterFile(
+            sample_path_to_starfile, options=dict(broadcasts_image_config=True)
+        ),
         sample_path_to_relion_project,
     )
 

@@ -7,14 +7,16 @@ from typing_extensions import override
 import jax
 import jax.numpy as jnp
 import mdtraj
+import numpy as np
 import optax
 from jax_dataloader import DataLoader
 from jaxtyping import Array, Float, Int, PRNGKeyArray
 from mdtraj.formats import XTCTrajectoryFile
 from tqdm import tqdm
 
-from ...utils import ModelToVolumeAligner
-from .._likelihood_optimization.optimizers import (
+from cryojax_eo.utils import ModelToVolumeAligner, rigid_align_positions
+
+from .._likelihood_optimization import (
     IterativeEnsembleLikelihoodOptimizer,
     ProjGradDescWeightOptimizer,
 )
@@ -73,7 +75,9 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
         md_states = self.prior_projector.initialize(initial_state_for_projector)
         logging.info("Projector initialized.")
 
-        reference_structure = self.prealigned_structure
+        ref_positions = (
+            np.asarray(self.prealigned_structure.xyz[0]) * 10.0
+        )  # Convert from nm to Angstroms
 
         walkers = initial_walkers.copy()
         weights = initial_weights.copy()
@@ -93,17 +97,25 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
 
         logging.info("Aligning walkers to reference structure...")
         walkers = _align_walkers_to_reference(
-            walkers, reference_structure, self.atom_indices_for_opt
+            walkers, ref_positions, self.atom_indices_for_opt
         )
         logging.info("Walkers aligned.")
-        for i in tqdm(range(self.n_steps)):
-            logging.info(f"Starting optimization step {i+1}/{self.n_steps}...")
+
+        progress_bar = tqdm(range(self.n_steps), desc="Optimization Progress")
+        # make the tqdm progress bar show the current neg_log_likelihood at each step
+        for i in progress_bar:
+            logging.info(f"Starting optimization step {i + 1}/{self.n_steps}...")
 
             logging.info("   Likelihood Optimization: ")
-            tmp_walkers, weights = self.likelihood_optimizer(
+            neg_log_likelihood, tmp_walkers, weights = self.likelihood_optimizer(
                 walkers[:, self.atom_indices_for_opt, :],
                 weights,
                 dataloader,
+            )
+            logging.info(f"   Negative Log-Likelihood: {neg_log_likelihood}")
+            progress_bar.set_description(
+                f"Iter {i + 1}/{self.n_steps}, "
+                f"Neg Log-Likelihood: {neg_log_likelihood:.4f}"
             )
 
             walkers = walkers.at[:, self.atom_indices_for_opt, :].set(tmp_walkers)
@@ -119,7 +131,7 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
 
             logging.info("   Aligning walkers to reference structure...")
             walkers = _align_walkers_to_reference(
-                walkers, reference_structure, self.atom_indices_for_opt
+                walkers, ref_positions, self.atom_indices_for_opt
             )
             logging.info("   Walkers aligned.")
 
@@ -129,8 +141,8 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
                     walkers,
                     self.model_to_volume_aligner,
                     self.atom_indices_for_opt,
-                    self.likelihood_optimizer.likelihood_fn.amplitudes,
-                    self.likelihood_optimizer.likelihood_fn.variances,
+                    self.likelihood_optimizer.ensemble_likelihood_fn.image_to_walker_likelihood_fn.amplitudes,
+                    self.likelihood_optimizer.ensemble_likelihood_fn.image_to_walker_likelihood_fn.variances,
                 )
                 logging.info("   Walkers aligned to volume.")
 
@@ -146,14 +158,15 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
         for i, walker in enumerate(walkers):
             mdtraj.Trajectory(
                 xyz=walker / 10.0,
-                topology=reference_structure.topology,
+                topology=self.prealigned_structure.topology,
             ).save_pdb(os.path.join(output_directory, f"final_walker_{i}.pdb"))
 
         if self.runs_postprocessing:
             logging.info("Running postprocessing...")
             weight_optimizer = ProjGradDescWeightOptimizer(
                 n_steps=500,
-                likelihood_fn=self.likelihood_optimizer.likelihood_fn,
+                ensemble_likelihood_fn=self.likelihood_optimizer.ensemble_likelihood_fn,
+                pose_search=self.likelihood_optimizer.pose_search,
             )
             walkers, weights = self.postprocess(
                 walkers, weights, dataloader, weight_optimizer
@@ -183,26 +196,21 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
 
 def _align_walkers_to_reference(
     walkers: Float[Array, "n_walkers n_atoms 3"],
-    reference_structure: mdtraj.Trajectory,
+    ref_positions: Float[Array, "n_atoms 3"],
     atom_indices: Int[Array, " n_atoms_for_opt"],
 ) -> Float[Array, "n_walkers n_atoms 3"]:
     """
     Align the walkers to the reference structure.
     """
 
-    new_walkers = jnp.asarray(walkers.copy())
+    aligned_walkers = np.zeros_like(walkers)
     for i in range(walkers.shape[0]):
-        walker_mdtraj = mdtraj.Trajectory(
-            xyz=walkers[i] / 10.0,  # Convert to nm
-            topology=reference_structure.topology,
+        _, rot_matrix, displacement = rigid_align_positions(
+            walkers[i, atom_indices], ref_positions[atom_indices]
         )
-        walker_mdtraj = walker_mdtraj.superpose(
-            reference_structure,
-            frame=0,
-            atom_indices=atom_indices,
-        )
-        new_walkers = new_walkers.at[i].set(walker_mdtraj.xyz[0] * 10.0)
-    return new_walkers
+        aligned_walkers[i] = walkers[i] @ rot_matrix.T + displacement
+
+    return jnp.asarray(aligned_walkers)
 
 
 def _align_walkers_to_volume(
@@ -220,8 +228,8 @@ def _align_walkers_to_volume(
 
         _, solution = model_to_volume_aligner.align(
             atomic_positions,
-            amplitudes[i],
-            variances[i],
+            amplitudes,
+            variances,
         )
         aligned_positions = walkers[i] @ solution.rotation_matrix + solution.offset
 

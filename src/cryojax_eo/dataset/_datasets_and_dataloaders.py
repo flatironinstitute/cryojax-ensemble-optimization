@@ -1,25 +1,27 @@
+from typing import Any
+
 import jax_dataloader as jdl
-from cryojax.dataset import (
+from cryospax import (
     RelionParticleDataset,
 )
 from jaxtyping import PRNGKeyArray
 
-from cryojax_eo.typing import ParticleStackInfo, PerParticleT
+from cryojax_eo.typing import ParticleStackInfo
 
 
 class CustomJaxDataset(jdl.Dataset):
     cryojax_dataset: RelionParticleDataset
-    per_particle_args: PerParticleT | None
+    per_particle_args: Any | None
 
     def __init__(
         self,
         cryojax_dataset: RelionParticleDataset,
-        per_particle_args: PerParticleT | None = None,
+        per_particle_args: Any | None = None,
     ):
         self.cryojax_dataset = cryojax_dataset
         self.per_particle_args = per_particle_args
 
-    def __getitem__(self, index) -> dict[str, ParticleStackInfo | PerParticleT]:
+    def __getitem__(self, index) -> dict[str, ParticleStackInfo | Any]:
         if self.per_particle_args is None:
             per_particle_args = None
         else:
@@ -41,7 +43,7 @@ def create_dataloader(
     shuffle: bool = False,
     drop_last: bool = False,
     *,
-    per_particle_args: PerParticleT | None = None,
+    per_particle_args: Any | None = None,
     jax_prng_key: PRNGKeyArray | None = None,
 ) -> jdl.DataLoader:
     """

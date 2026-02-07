@@ -1,149 +1,138 @@
-from pathlib import Path
-
 import jax.numpy as jnp
 import mdtraj
+import numpy as np
 from cryojax.constants import (
     PengScatteringFactorParameters,
     b_factor_to_variance,
 )
 from cryojax.io import read_atoms_from_pdb
-from jaxtyping import Array, Float
+from jaxtyping import Array, Float, Int
+
+from cryojax_eo.utils import rigid_align_positions
 
 
-def read_atomic_models(
-    atomic_models_filenames: list[str],
+def read_walkers_from_pdbs(
+    filenames: list[str],
     *,
-    selection_string: str = "all",
     loads_b_factors: bool = False,
-) -> dict[int, dict[str, Float[Array, ""]]]:
+) -> tuple[
+    Float[Array, "n_walkers n_atoms 3"],
+    Float[Array, "n_atoms n_gaussians"],
+    Float[Array, "n_atoms n_gaussians"],
+]:
     """
-
-    Reads atomic models from files and extracts scattering parameters.
-    The input files should be either in pdb format, or a `.npz` format with entries
-    `positions`, `amplitudes` and `variances`.
+    Reads atomic models from PDB files and extracts positions, scattering amplitudes, and
+    variances for each model. The function can also load Debye-Waller b-factors
+    if specified. Due to the constraints of this library, the variances and
+    amplitudes must be consistent across all models. This means that the atomic models
+    must have the same atomic composition, but the positions can differ.
 
     **Arguments:**
-        atomic_models_filenames: List of filenames of the atomic models.
-        selection_string: Selection string for the atomic models in mdtraj format.
-        loads_b_factors: Whether to load B-factors from the PDB files.
+    - `filenames`:
+        List of paths to PDB files containing atomic models.
+    - `loads_b_factors`:
+        If `True`, the function will read the B-factors from the PDB files
+        and use them to compute the variances. If `False`, default variances
+        based on atomic types will be used.
+
     **Returns:**
-        atomic_models_scattering_params: Dictionary of atomic model scattering parameters.
-        The dictionary has the following structure:
-        {
-            i: {
-                "positions": atom_positions,
-                "amplitudes": amplitudes,
-                "variances": variances,
-            }
-        }
-        where i is the index of the atomic model, and atom_positions, amplitudes,
-        and variances are numpy arrays of shape (n_atoms, 3),
-        (n_atoms, n_gaussians_per_atom), and (n_atoms,), respectively.
+    A tuple containing:
+    - `walkers`:
+        A JAX array of shape `(n_walkers, n_atoms, 3)`
+        with the atomic positions for each model.
+    - `amplitudes`:
+        A JAX array of shape `(n_atoms, n_gaussians)` with the scattering amplitudes.
+    - `variances`:
+        A JAX array of shape `(n_atoms, n_gaussians)` with the scattering variances.
     """
 
-    # Doing checks here again
-    # In case people don't use the config validator
-    file_extension = Path(atomic_models_filenames[0]).suffix
-    assert all(
-        [Path(file).suffix == file_extension for file in atomic_models_filenames]
-    ), "All files must have the same extension."
-
-    assert all(
-        [Path(file).exists() for file in atomic_models_filenames]
-    ), "Some files do not exist."
-
-    if file_extension == ".pdb":
-        atomic_models_scattering_params = _read_atomic_models_from_pdb(
-            atomic_models_filenames,
-            selection_string=selection_string,
-            loads_b_factors=loads_b_factors,
+    walkers_and_params = {}
+    for i in range(len(filenames)):
+        atom_positions, atomic_numbers, atom_properties = read_atoms_from_pdb(
+            filenames[i], center=True, loads_properties=True
         )
-    elif file_extension == ".npz":
-        atomic_models_scattering_params = _read_atomic_models_from_npz(
-            atomic_models_filenames,
+        variances, amplitudes = _compute_scattering_params(
+            atomic_numbers,
+            atom_properties["b_factors"] if loads_b_factors else None,
         )
-    else:
-        raise NotImplementedError(f"File extension {file_extension} not supported.")
-
-    return atomic_models_scattering_params
-
-
-def _read_atomic_models_from_npz(
-    atomic_models_filenames: list[str],
-) -> dict[int, dict[str, Float[Array, ""]]]:
-    atomic_models_scattering_params = {}
-
-    for i, filename in enumerate(atomic_models_filenames):
-        data = jnp.load(filename)
-
-        try:
-            atomic_models_scattering_params[i] = {
-                "positions": data["positions"],
-                "amplitudes": data["amplitudes"],
-                "variances": data["variances"],
-            }
-        except KeyError as e:
-            raise ValueError(
-                f"Missing key in npz file {filename}: {e}. "
-                + "Keys should be 'positions', 'amplitudes', "
-                + "and 'variances'."
-            )
-
-    return atomic_models_scattering_params
-
-
-def _read_atomic_models_from_pdb(
-    atomic_models_filenames: list[str],
-    selection_string: str = "all",
-    loads_b_factors: bool = False,
-) -> dict[int, dict[str, Float[Array, ""]]]:
-    atomic_models_scattering_params = {}
-
-    atoms_for_alignment = mdtraj.load(atomic_models_filenames[0])
-    atoms_for_alignment = atoms_for_alignment.center_coordinates(mass_weighted=True)
-    atom_indices = atoms_for_alignment.topology.select(selection_string)
-
-    for i in range(len(atomic_models_filenames)):
-        if loads_b_factors:
-            _, atomic_numbers, atomic_properties = read_atoms_from_pdb(
-                atomic_models_filenames[i],
-                center=True,
-                loads_properties=True,
-                selection_string=selection_string,
-            )
-
-            scattering_factors = PengScatteringFactorParameters(atomic_numbers)
-            amplitudes = scattering_factors.a
-            variances = b_factor_to_variance(
-                scattering_factors.b + atomic_properties["b_factors"][:, None]
-            )
-
-        else:
-            _, atomic_numbers = read_atoms_from_pdb(
-                atomic_models_filenames[i],
-                center=True,
-                loads_properties=False,
-                selection_string=selection_string,
-            )
-
-            scattering_factors = PengScatteringFactorParameters(atomic_numbers)
-            amplitudes = scattering_factors.a
-            variances = b_factor_to_variance(scattering_factors.b)
-
-        atom_positions = mdtraj.load(
-            atomic_models_filenames[i],
-        )
-
-        atom_positions = atom_positions.superpose(
-            atoms_for_alignment,
-            frame=0,
-            atom_indices=atom_positions.topology.select("name CA"),
-        )
-
-        atomic_models_scattering_params[i] = {
-            "positions": atom_positions.xyz[0][atom_indices] * 10.0,
+        walkers_and_params[i] = {
+            "positions": atom_positions,
             "amplitudes": amplitudes,
             "variances": variances,
         }
 
-    return atomic_models_scattering_params
+    _assert_consistent_scattering_params(walkers_and_params)
+
+    variances = walkers_and_params[0]["variances"]
+    amplitudes = walkers_and_params[0]["amplitudes"]
+    walkers = np.array(
+        [walkers_and_params[i]["positions"] for i in range(len(filenames))]
+    )
+    topology = mdtraj.load(filenames[0]).topology
+    walkers = _align_walkers_to_reference(walkers, topology)
+
+    return walkers, amplitudes, variances
+
+
+def _align_walkers_to_reference(
+    walkers: Float[Array, "n_walkers n_atoms 3"],
+    topology: mdtraj.Topology,
+):
+    aligned_walkers = np.zeros_like(walkers)
+    atom_indices = topology.select("name CA")
+    for i in range(walkers.shape[0]):
+        _, rot_matrix, displacement = rigid_align_positions(
+            walkers[i, atom_indices], walkers[0, atom_indices]
+        )
+        aligned_walkers[i] = walkers[i] @ rot_matrix.T + displacement
+
+    return aligned_walkers
+
+
+def _assert_consistent_scattering_params(walkers_and_params: dict):
+    """
+    Asserts that the scattering amplitudes and variances are consistent across
+    all models. This is necessary because the current implementation of the optimization
+    process assumes that all models have the same atomic composition,
+    and thus the same scattering parameters.
+    """
+    reference_amplitudes = walkers_and_params[0]["amplitudes"]
+    reference_variances = walkers_and_params[0]["variances"]
+
+    for i, (model_id, params) in enumerate(walkers_and_params.items()):
+        if i == 0:
+            continue  # Skip the reference model
+
+        _var_shapes_match = params["amplitudes"].shape == reference_amplitudes.shape
+        _amp_shapes_match = params["variances"].shape == reference_variances.shape
+        if not _var_shapes_match or not _amp_shapes_match:
+            raise ValueError(
+                f"Scattering parameters for model {model_id} "
+                "have inconsistent shapes with the reference model."
+            )
+        else:
+            if not jnp.allclose(params["amplitudes"], reference_amplitudes):
+                raise ValueError(
+                    f"Scattering amplitudes for model {model_id} "
+                    "are inconsistent with the reference model."
+                )
+            if not jnp.allclose(params["variances"], reference_variances):
+                raise ValueError(
+                    f"Scattering variances for model {model_id} "
+                    "are inconsistent with the reference model."
+                )
+
+
+def _compute_scattering_params(
+    atomic_numbers: Int[Array, " n_atoms"],
+    b_factors: Float[Array, " n_atoms"] | None,
+):
+    scattering_factors = PengScatteringFactorParameters(atomic_numbers)
+    amplitudes = scattering_factors.a
+
+    if b_factors is None:
+        variances = scattering_factors.b
+    else:
+        variances = b_factor_to_variance(scattering_factors.b + b_factors[:, None])
+
+    return amplitudes, variances

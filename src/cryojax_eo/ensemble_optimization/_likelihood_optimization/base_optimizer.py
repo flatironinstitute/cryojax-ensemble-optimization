@@ -6,9 +6,10 @@ from abc import abstractmethod
 
 from equinox import AbstractVar, Module
 from jax_dataloader import DataLoader
-from jaxtyping import Array, Float, Int
+from jaxtyping import Array, Float
 
-from ._loss_functions import AbstractLikelihoodFn
+from .._pose_search import HierarchicalSO3GridSearch
+from ._loss_functions import AbstractImagesToEnsembleLikelihoodFn
 
 
 class AbstractEnsembleParameterOptimizer(Module):
@@ -16,8 +17,9 @@ class AbstractEnsembleParameterOptimizer(Module):
     of an ensemble of structures.
     """
 
-    n_steps: AbstractVar[Int]
-    likelihood_fn: AbstractVar[AbstractLikelihoodFn]
+    n_steps: AbstractVar[int]
+    ensemble_likelihood_fn: AbstractVar[AbstractImagesToEnsembleLikelihoodFn]
+    pose_search: AbstractVar[HierarchicalSO3GridSearch | None]
 
     @abstractmethod
     def __call__(

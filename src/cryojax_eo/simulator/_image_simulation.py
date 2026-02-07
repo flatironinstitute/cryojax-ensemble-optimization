@@ -44,17 +44,10 @@ def simulate_image_with_white_gaussian_noise(
     volumes, mask, data_sign = constant_args
     volume = _select_potential(volumes, potential_idx)
 
-    # pose = jax.lax.cond(
-    #     isinstance(volume, cxs.FourierVoxelGridVolume),
-    #     lambda p: p.to_inverse_rotation(),
-    #     lambda p: p,
-    #     particle_parameters["pose"],
-    # )
-    pose = particle_parameters["pose"]
     image_model = cxs.make_image_model(
         volume,
         particle_parameters["image_config"],
-        pose,
+        particle_parameters["pose"],
         particle_parameters["transfer_theory"],
         signal_region=(mask.get() == 1),
         normalizes_signal=True,

@@ -1,35 +1,38 @@
 import os
 import shutil
 
+import cryojax.simulator as cxs
 import jax
 import jax.numpy as jnp
 import mdtraj
 import pytest
-from cryojax.dataset import RelionParticleDataset, RelionParticleParameterFile
-from cryojax.simulator import GaussianMixtureRenderFn
+from cryospax import RelionParticleDataset, RelionParticleParameterFile
 from optax import constant_schedule
 
 from cryojax_eo.dataset import create_dataloader
 from cryojax_eo.ensemble_optimization import (
     EnsembleOptimizationPipeline,
     EnsembleSteeredMDSimulator,
+    ImagesToEnsembleLikelihoodFn,
     IterativeEnsembleLikelihoodOptimizer,
-    LikelihoodOptimalWeightsFn,
+    MargGaussianWhiteLogLikelihoodFn,
     SteeredMDSimulator,
 )
-from cryojax_eo.io import load_gmm_volume_parametrization, read_atomic_models
+from cryojax_eo.io import read_walkers_from_pdbs
 from cryojax_eo.utils import ModelToVolumeAligner
 
 
 @pytest.fixture
 def sample_model_aligner(sample_path_to_pdb1):
-    gmm_volume = load_gmm_volume_parametrization(
-        [sample_path_to_pdb1],
+    gmm_volume = cxs.load_tabulated_volume(
+        sample_path_to_pdb1,
+        output_type=cxs.GaussianMixtureVolume,
         selection_string="not element H",
-    )[0]
+        include_b_factors=True,
+    )
 
     voxel_size = 0.2 * 128 / 32
-    render_fn = GaussianMixtureRenderFn((32, 32, 32), voxel_size)
+    render_fn = cxs.GaussianMixtureRenderFn((32, 32, 32), voxel_size)
     real_voxel_grid = render_fn(gmm_volume)
     return ModelToVolumeAligner(real_voxel_grid, voxel_size)
 
@@ -59,20 +62,16 @@ def test_ensemble_optimization_optimizer(
     prealigned_structure = mdtraj.load(sample_path_to_pdb1).center_coordinates()
     atom_list = prealigned_structure.topology.select("not element H")
 
-    atomic_models = read_atomic_models(
-        [sample_path_to_pdb1, sample_path_to_pdb2], selection_string="all"
+    walkers, amplitudes, variances = read_walkers_from_pdbs(
+        [sample_path_to_pdb1, sample_path_to_pdb2]
     )
-
-    walkers = jnp.array([model["positions"] for model in atomic_models.values()])
-    variances = jnp.array([model["variances"] for model in atomic_models.values()])[
-        :, atom_list
-    ]
-    amplitudes = jnp.array([model["amplitudes"] for model in atomic_models.values()])[
-        :, atom_list
-    ]
+    variances = variances[atom_list]
+    amplitudes = amplitudes[atom_list]
 
     relion_dataset = RelionParticleDataset(
-        RelionParticleParameterFile(sample_path_to_starfile),
+        RelionParticleParameterFile(
+            sample_path_to_starfile, options=dict(broadcasts_image_config=True)
+        ),
         sample_path_to_relion_project,
     )
 
@@ -84,17 +83,17 @@ def test_ensemble_optimization_optimizer(
         jax_prng_key=jax.random.key(0),
     )
 
-    likelihood_fn = LikelihoodOptimalWeightsFn(
-        amplitudes=amplitudes,
-        variances=variances,
-        image_to_walker_log_likelihood_fn="iso_gaussian_var_marg",
+    img_to_walker_likelihood_fn = MargGaussianWhiteLogLikelihoodFn(
+        amplitudes=amplitudes, variances=variances, image_sign=1.0, dilated_mask=None
     )
+    ensemble_likelihood_fn = ImagesToEnsembleLikelihoodFn(img_to_walker_likelihood_fn)
 
     optimizer = IterativeEnsembleLikelihoodOptimizer(
         step_size=1.0,
         n_steps=2,
         n_batches_per_step=2,
-        likelihood_fn=likelihood_fn,
+        ensemble_likelihood_fn=ensemble_likelihood_fn,
+        pose_search=None,
     )
 
     projector = EnsembleSteeredMDSimulator(
