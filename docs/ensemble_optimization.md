@@ -46,6 +46,7 @@ likelihood_optimizer_params:
   - 0.33
   n_steps: 10
   step_size: 2.0
+  n_batches_per_step: 5 # allows for memory friendly computation of gradients
 
 atom_selection: ... # path to a txt/npy file, or a mdtraj-compatible selection string, e.g., "not element H"
 loads_b_factors: true # Load Debye-Waller b-factors from provided PDBs

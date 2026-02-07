@@ -1,5 +1,6 @@
 import jax
 import jax.numpy as jnp
+import mdtraj
 from cryospax import RelionParticleDataset, RelionParticleParameterFile
 
 from cryojax_eo.dataset import create_dataloader
@@ -9,7 +10,7 @@ from cryojax_eo.ensemble_optimization import (
     MargGaussianWhiteLogLikelihoodFn,
     ProjGradDescWeightOptimizer,
 )
-from cryojax_eo.io import read_atomic_models
+from cryojax_eo.io import read_walkers_from_pdbs
 
 
 def test_iterative_optimizer(
@@ -18,13 +19,13 @@ def test_iterative_optimizer(
     sample_path_to_relion_project,
     sample_path_to_starfile,
 ):
-    atomic_models = read_atomic_models(
-        [sample_path_to_pdb1, sample_path_to_pdb2], selection_string="not element H"
+    atom_indices = mdtraj.load(sample_path_to_pdb1).topology.select("not element H")
+    walkers, amplitudes, variances = read_walkers_from_pdbs(
+        [sample_path_to_pdb1, sample_path_to_pdb2]
     )
-
-    positions = jnp.array([model["positions"] for model in atomic_models.values()])
-    variances = jnp.array([model["variances"] for model in atomic_models.values()])
-    amplitudes = jnp.array([model["amplitudes"] for model in atomic_models.values()])
+    walkers = walkers[:, atom_indices]
+    variances = variances[atom_indices]
+    amplitudes = amplitudes[atom_indices]
 
     relion_dataset = RelionParticleDataset(
         RelionParticleParameterFile(
@@ -42,8 +43,8 @@ def test_iterative_optimizer(
     )
 
     img_to_walker_likelihood_fn = MargGaussianWhiteLogLikelihoodFn(
-        amplitudes=amplitudes[0],
-        variances=variances[0],
+        amplitudes=amplitudes,
+        variances=variances,
         image_sign=1.0,
     )
 
@@ -53,13 +54,14 @@ def test_iterative_optimizer(
         step_size=1.0,
         n_steps=2,
         ensemble_likelihood_fn=ensemble_likelihood_fn,
+        n_batches_per_step=2,
     )
 
     weights = jnp.array([0.5, 0.5])
-    _, new_positions, new_weights = optimizer(positions, weights, dataloader)
+    _, new_positions, new_weights = optimizer(walkers, weights, dataloader)
 
     assert (
-        new_positions.shape == positions.shape
+        new_positions.shape == walkers.shape
     ), "Optimized positions have incorrect shape"
     assert new_weights.shape == weights.shape, "Optimized weights have incorrect shape"
 
@@ -72,13 +74,14 @@ def test_weight_optimizer(
     sample_path_to_relion_project,
     sample_path_to_starfile,
 ):
-    atomic_models = read_atomic_models(
-        [sample_path_to_pdb1, sample_path_to_pdb2], selection_string="not element H"
+    walkers, amplitudes, variances = read_walkers_from_pdbs(
+        [sample_path_to_pdb1, sample_path_to_pdb2]
     )
 
-    positions = jnp.array([model["positions"] for model in atomic_models.values()])
-    variances = jnp.array([model["variances"] for model in atomic_models.values()])
-    amplitudes = jnp.array([model["amplitudes"] for model in atomic_models.values()])
+    atom_indices = mdtraj.load(sample_path_to_pdb1).topology.select("not element H")
+    walkers = walkers[:, atom_indices]
+    variances = variances[atom_indices]
+    amplitudes = amplitudes[atom_indices]
 
     relion_dataset = RelionParticleDataset(
         RelionParticleParameterFile(
@@ -96,8 +99,8 @@ def test_weight_optimizer(
     )
 
     img_to_walker_likelihood_fn = MargGaussianWhiteLogLikelihoodFn(
-        amplitudes=amplitudes[0],
-        variances=variances[0],
+        amplitudes=amplitudes,
+        variances=variances,
         image_sign=1.0,
     )
 
@@ -109,7 +112,7 @@ def test_weight_optimizer(
     )
 
     weights = jnp.array([0.5, 0.5])
-    new_weights = optimizer(positions, weights, dataloader)
+    new_weights = optimizer(walkers, weights, dataloader)
 
     assert new_weights.shape == weights.shape, "Optimized weights have incorrect shape"
 

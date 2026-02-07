@@ -1,8 +1,8 @@
+import cryojax.simulator as cxs
 import equinox as eqx
 from cryospax import RelionParticleDataset, RelionParticleParameterFile
 
 from cryojax_eo.ensemble_optimization import HierarchicalSO3GridSearch
-from cryojax_eo.io import load_gmm_volume_parametrization
 
 
 def test_global_SO3_hier_search(
@@ -10,10 +10,12 @@ def test_global_SO3_hier_search(
     sample_path_to_relion_project,
     sample_path_to_starfile,
 ):
-    gmm_volume = load_gmm_volume_parametrization(
-        [sample_path_to_pdb1],
+    gmm_volume = cxs.load_tabulated_volume(
+        sample_path_to_pdb1,
+        output_type=cxs.GaussianMixtureVolume,
+        include_b_factors=True,
         selection_string="not element H",
-    )[0]
+    )
 
     relion_dataset = RelionParticleDataset(
         RelionParticleParameterFile(

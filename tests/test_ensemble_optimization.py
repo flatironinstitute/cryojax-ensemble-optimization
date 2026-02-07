@@ -1,11 +1,11 @@
 import os
 import shutil
 
+import cryojax.simulator as cxs
 import jax
 import jax.numpy as jnp
 import mdtraj
 import pytest
-from cryojax.simulator import GaussianMixtureRenderFn
 from cryospax import RelionParticleDataset, RelionParticleParameterFile
 from optax import constant_schedule
 
@@ -18,19 +18,21 @@ from cryojax_eo.ensemble_optimization import (
     MargGaussianWhiteLogLikelihoodFn,
     SteeredMDSimulator,
 )
-from cryojax_eo.io import load_gmm_volume_parametrization, read_atomic_models
+from cryojax_eo.io import read_walkers_from_pdbs
 from cryojax_eo.utils import ModelToVolumeAligner
 
 
 @pytest.fixture
 def sample_model_aligner(sample_path_to_pdb1):
-    gmm_volume = load_gmm_volume_parametrization(
-        [sample_path_to_pdb1],
+    gmm_volume = cxs.load_tabulated_volume(
+        sample_path_to_pdb1,
+        output_type=cxs.GaussianMixtureVolume,
         selection_string="not element H",
-    )[0]
+        include_b_factors=True,
+    )
 
     voxel_size = 0.2 * 128 / 32
-    render_fn = GaussianMixtureRenderFn((32, 32, 32), voxel_size)
+    render_fn = cxs.GaussianMixtureRenderFn((32, 32, 32), voxel_size)
     real_voxel_grid = render_fn(gmm_volume)
     return ModelToVolumeAligner(real_voxel_grid, voxel_size)
 
@@ -60,17 +62,11 @@ def test_ensemble_optimization_optimizer(
     prealigned_structure = mdtraj.load(sample_path_to_pdb1).center_coordinates()
     atom_list = prealigned_structure.topology.select("not element H")
 
-    atomic_models = read_atomic_models(
-        [sample_path_to_pdb1, sample_path_to_pdb2], selection_string="all"
+    walkers, amplitudes, variances = read_walkers_from_pdbs(
+        [sample_path_to_pdb1, sample_path_to_pdb2]
     )
-
-    walkers = jnp.array([model["positions"] for model in atomic_models.values()])
-    variances = jnp.array([model["variances"] for model in atomic_models.values()])[
-        0, atom_list
-    ]
-    amplitudes = jnp.array([model["amplitudes"] for model in atomic_models.values()])[
-        0, atom_list
-    ]
+    variances = variances[atom_list]
+    amplitudes = amplitudes[atom_list]
 
     relion_dataset = RelionParticleDataset(
         RelionParticleParameterFile(
@@ -95,6 +91,7 @@ def test_ensemble_optimization_optimizer(
     optimizer = IterativeEnsembleLikelihoodOptimizer(
         step_size=1.0,
         n_steps=2,
+        n_batches_per_step=2,
         ensemble_likelihood_fn=ensemble_likelihood_fn,
         pose_search=None,
     )
