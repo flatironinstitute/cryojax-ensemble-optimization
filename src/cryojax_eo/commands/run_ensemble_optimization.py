@@ -29,7 +29,7 @@ from cryojax_eo.ensemble_optimization import (
     SteeredMDSimulator,
 )
 from cryojax_eo.internal import EnsOptMDConfig
-from cryojax_eo.io import read_atomic_models
+from cryojax_eo.io import read_walkers_from_pdbs
 from cryojax_eo.simulator import DilatedMask
 from cryojax_eo.utils import ModelToVolumeAligner
 
@@ -71,7 +71,7 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
     # Load the initial walkers and reference structure
 
     logging.debug("Loading atomic models...")
-    atomic_models = read_atomic_models(
+    initial_walkers, variances, amplitudes = read_walkers_from_pdbs(
         config["path_to_atomic_models"],
         loads_b_factors=config["loads_b_factors"],
     )
@@ -82,14 +82,9 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
     ref_structure = ref_structure.center_coordinates(mass_weighted=True)
 
     atom_list = _make_atom_list(config["atom_selection"], ref_structure.topology)
+    variances = variances[atom_list]
+    amplitudes = amplitudes[atom_list]
 
-    initial_walkers = jnp.array([model["positions"] for model in atomic_models.values()])
-    variances = jnp.array([model["variances"] for model in atomic_models.values()])[
-        0, atom_list
-    ]
-    amplitudes = jnp.array([model["amplitudes"] for model in atomic_models.values()])[
-        0, atom_list
-    ]
     logging.debug("Atomic models loaded.")
 
     logging.debug("Loading experimental data...")
@@ -198,6 +193,7 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
     likelihood_optimizer = IterativeEnsembleLikelihoodOptimizer(
         step_size=config["likelihood_optimizer_params"]["step_size"],
         n_steps=config["likelihood_optimizer_params"]["n_steps"],
+        n_batches_per_step=config["likelihood_optimizer_params"]["n_batches_per_step"],
         ensemble_likelihood_fn=ensemble_likelihood_fn,
         pose_search=None,
     )

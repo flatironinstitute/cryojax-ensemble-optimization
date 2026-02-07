@@ -27,6 +27,13 @@ class EnsOptMDConfigOptimizationConfig(BaseModel, extra="forbid"):
     step_size: PositiveFloat = Field(
         description="Step size in Angstroms for the optimization process."
     )
+    n_batches_per_step: PositiveInt = Field(
+        default=1,
+        description="Number of batches to use for each optimization step. "
+        + "Using more batches will provide a better estimate of the gradients, "
+        + "but will also increase the computational cost. "
+        + "If set to 1, the optimization will be performed using the entire dataset.",
+    )
     batch_size: PositiveInt = Field(
         description="Batch size for SGD",
     )

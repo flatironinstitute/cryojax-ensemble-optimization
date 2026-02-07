@@ -10,7 +10,7 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax_dataloader as jdl
-from jaxtyping import Array, Float, Int
+from jaxtyping import Array, Float
 
 from .._pose_search import HierarchicalSO3GridSearch
 from . import ImagesToEnsembleLikelihoodFn
@@ -21,22 +21,26 @@ from .base_optimizer import AbstractEnsembleParameterOptimizer
 
 class IterativeEnsembleLikelihoodOptimizer(AbstractEnsembleParameterOptimizer):
     step_size: Float
-    n_steps: Int
+    n_steps: int
+    n_batches_per_step: int
     ensemble_likelihood_fn: ImagesToEnsembleLikelihoodFn
     pose_search: HierarchicalSO3GridSearch | None
 
     def __init__(
         self,
         step_size: Float,
-        n_steps: Int,
+        n_steps: int,
+        n_batches_per_step: int,
         ensemble_likelihood_fn: ImagesToEnsembleLikelihoodFn,
         pose_search: HierarchicalSO3GridSearch | None = None,
     ):
         assert step_size > 0, "Step size must be positive."
         assert n_steps > 0, "Number of steps must be positive."
+        assert n_batches_per_step > 0, "Number of batches per step must be positive."
 
         self.step_size = step_size
         self.n_steps = n_steps
+        self.n_batches_per_step = n_batches_per_step
         self.ensemble_likelihood_fn = ensemble_likelihood_fn
         self.pose_search = pose_search
 
@@ -49,31 +53,44 @@ class IterativeEnsembleLikelihoodOptimizer(AbstractEnsembleParameterOptimizer):
     ) -> tuple[float, Float[Array, "n_walkers n_atoms 3"], Float[Array, " n_walkers"]]:
         loss = 0.0
         for _ in range(self.n_steps):
+            gradients = jnp.zeros_like(walkers)
             weights = jnp.ones_like(weights) / weights.shape[0]
-            batch = next(iter(dataloader))
-            if self.pose_search is None:
-                poses_per_walker = jax.tree.map(
-                    lambda x: jnp.repeat(x[None, :], repeats=walkers.shape[0], axis=0),
-                    batch["particle_stack"]["parameters"]["pose"],
-                )
-                poses_per_walker = cast(cxs.EulerAnglePose, poses_per_walker)
-            else:
-                poses_per_walker = _estimate_poses_per_walker(
+            loss = 0.0
+            for _ in range(self.n_batches_per_step):
+                batch = next(iter(dataloader))
+                if self.pose_search is None:
+                    poses_per_walker = jax.tree.map(
+                        lambda x: jnp.repeat(
+                            x[None, :], repeats=walkers.shape[0], axis=0
+                        ),
+                        batch["particle_stack"]["parameters"]["pose"],
+                    )
+                    poses_per_walker = cast(cxs.EulerAnglePose, poses_per_walker)
+                else:
+                    poses_per_walker = _estimate_poses_per_walker(
+                        walkers,
+                        batch,
+                        self.ensemble_likelihood_fn,
+                        self.pose_search,
+                    )
+
+                tmp_loss, tmp_grads, tmp_weights = _compute_ensemble_gradients(
                     walkers,
-                    batch,
+                    weights,
+                    batch["particle_stack"]["images"],
+                    batch["particle_stack"]["parameters"]["image_config"],
+                    poses_per_walker,
+                    batch["particle_stack"]["parameters"]["transfer_theory"],
+                    batch["per_particle_args"],
                     self.ensemble_likelihood_fn,
-                    self.pose_search,
                 )
-            loss, gradients, weights = _compute_ensemble_gradients(
-                walkers,
-                weights,
-                batch["particle_stack"]["images"],
-                batch["particle_stack"]["parameters"]["image_config"],
-                poses_per_walker,
-                batch["particle_stack"]["parameters"]["transfer_theory"],
-                batch["per_particle_args"],
-                self.ensemble_likelihood_fn,
-            )
+                gradients += tmp_grads
+                weights += tmp_weights
+                loss += tmp_loss
+
+            gradients /= self.n_batches_per_step
+            weights /= self.n_batches_per_step
+            loss /= self.n_batches_per_step
 
             norms = jnp.linalg.norm(gradients, axis=(2), keepdims=True)
             norms = jnp.where(norms < 1e-12, 1.0, norms)

@@ -10,7 +10,7 @@ from cryojax_eo.ensemble_optimization import (
     compute_optimal_scale_and_offset,  # done
     make_image_model_from_gmm,  # done
 )
-from cryojax_eo.io import read_atomic_models
+from cryojax_eo.io import read_walkers_from_pdbs
 from cryojax_eo.simulator import DilatedMask
 
 
@@ -39,14 +39,12 @@ def simple_volume_mask(sample_path_to_starfile):
 
 
 def test_make_image_model_from_gmm(sample_path_to_pdb1, sample_relion_stack):
-    atomic_model = read_atomic_models(
-        [sample_path_to_pdb1], selection_string="not element H"
-    )[0]
+    walkers, amplitudes, variances = read_walkers_from_pdbs([sample_path_to_pdb1])
 
     make_image_model_from_gmm(
-        atomic_model["positions"],
-        atomic_model["amplitudes"],
-        atomic_model["variances"],
+        walkers[0],
+        amplitudes,
+        variances,
         sample_relion_stack["parameters"]["image_config"],
         sample_relion_stack["parameters"]["pose"],
         sample_relion_stack["parameters"]["transfer_theory"],
@@ -87,9 +85,7 @@ def test_likelihood_fn(
     use_dilated_mask,
     simple_volume_mask,
 ):
-    atomic_model = read_atomic_models(
-        [sample_path_to_pdb1], selection_string="not element H"
-    )[0]
+    walkers, amplitudes, variances = read_walkers_from_pdbs([sample_path_to_pdb1])
 
     relion_dataset = RelionParticleDataset(
         RelionParticleParameterFile(
@@ -106,14 +102,14 @@ def test_likelihood_fn(
         dilated_mask = None
 
     img_to_walker_likelihood_fn = image_to_walker_likelihood_fn(
-        amplitudes=atomic_model["amplitudes"],
-        variances=atomic_model["variances"],
+        amplitudes=amplitudes,
+        variances=variances,
         image_sign=1.0,
         dilated_mask=dilated_mask,
     )
     stack = relion_dataset[0]
     img_to_walker_likelihood_fn(
-        walker=atomic_model["positions"],
+        walker=walkers[0],
         image=stack["images"],
         image_config=stack["parameters"]["image_config"],
         pose=stack["parameters"]["pose"],

@@ -33,6 +33,7 @@ likelihood_optimizer_params:
   - 0.33
   n_steps: 10
   step_size: 2.0
+  n_batches_per_step: 5 # (*) Number of batches to use for each optimization step. Using more batches will provide a better estimate of the gradients, but will also increase the computational cost. Each batch has a size defined by batch_size. This allows to save memory and use small values of batch_size.
 
 atom_selection: ... # path to a txt/npy file, or a mdtraj-compatible selection string, e.g., "not element H"
 loads_b_factors: true # Load Debye-Waller b-factors from provided PDBs

@@ -4,7 +4,6 @@ import jax.numpy as jnp
 from cryojax.io import read_array_from_mrc
 from cryojax.ndimage import CircularCosineMask
 
-from cryojax_eo.io import load_gmm_volume_parametrization
 from cryojax_eo.simulator import DilatedMask, simulate_image_with_white_gaussian_noise
 
 
@@ -40,10 +39,17 @@ def test_image_simulation(sample_path_to_pdb1, sample_path_to_pdb2):
             amplitude_contrast_ratio=0.1,
         ),
     }
-    volumes = load_gmm_volume_parametrization(
-        [sample_path_to_pdb1, sample_path_to_pdb2],
-        selection_string="not element H",
-        loads_b_factors=True,
+
+    volumes = tuple(
+        [
+            cxs.load_tabulated_volume(
+                filename,
+                output_type=cxs.GaussianMixtureVolume,
+                include_b_factors=True,
+                selection_string="not element H",
+            )
+            for filename in [sample_path_to_pdb1, sample_path_to_pdb2]
+        ]
     )
 
     mask = CircularCosineMask(
