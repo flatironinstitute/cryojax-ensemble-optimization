@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 
 import cryojax.simulator as cxs
 import equinox as eqx
@@ -29,6 +29,23 @@ class AbstractImageToWalkerLogLikelihoodFn(eqx.Module, strict=True):
 
 
 class MargGaussianWhiteLogLikelihoodFn(AbstractImageToWalkerLogLikelihoodFn, strict=True):
+    """A log likelihood function that models the likelihood of an image given a walker
+    using a Gaussian noise model where the variance has been marginalized with
+    Jeffrey's prior. This is useful when the variance is not known.
+
+    **Arguments:**
+    - `amplitudes`:
+        The amplitudes for the GMM atomic volume representation.
+    - `variances`:
+        The variances for the GMM atomic volume representation.
+    - `image_sign`: Set to dark-on-light if the experimental images are dark particles on
+        a light background (most common for Relion stacks). Set to light-on-dark if the
+        experimental images are light particles on a dark background (most common for
+        cryoJAX generated data).
+    - `dilated_mask`:
+        An optional dilated mask to apply to the computed image and observed image.
+    """
+
     amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"]
     variances: Float[Array, "n_atoms n_gaussians_per_atom"]
     image_sign: Float[Array, ""]
@@ -38,11 +55,31 @@ class MargGaussianWhiteLogLikelihoodFn(AbstractImageToWalkerLogLikelihoodFn, str
         self,
         amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
         variances: Float[Array, "n_atoms n_gaussians_per_atom"],
-        image_sign: Float[Array, ""] | float,
+        data_sign: Literal["dark-on-light", "light-on-dark"],
         dilated_mask: DilatedMask | None = None,
     ):
+        """Init the MargGaussianWhiteLogLikelihoodFn.
+
+        **Arguments:**
+        - `amplitudes`:
+            The amplitudes for the GMM atomic volume representation.
+        - `variances`:
+            The variances for the GMM atomic volume representation.
+        - `data_sign`:
+            Set to dark-on-light if the experimental images are
+            dark particles on a light background (most common for Relion stacks).
+            Set to light-on-dark if the experimental images are light particles on a
+            dark background (most common for cryoJAX generated data).
+        - `dilated_mask`:
+            An optional dilated mask to apply to the computed image and observed image.
+        """
         assert (amplitudes > 0).all(), "Amplitudes must be positive."
         assert (variances > 0).all(), "Variances must be positive."
+        assert data_sign in [
+            "dark-on-light",
+            "light-on-dark",
+        ], "data_sign must be either 'dark-on-light' or 'light-on-dark'."
+        image_sign = -1.0 if data_sign == "dark-on-light" else 1.0
 
         self.variances = variances
         self.amplitudes = amplitudes
@@ -81,15 +118,35 @@ class GaussianWhiteLogLikelihoodFn(AbstractImageToWalkerLogLikelihoodFn, strict=
         self,
         amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
         variances: Float[Array, "n_atoms n_gaussians_per_atom"],
-        image_sign: Float[Array, ""],
+        data_sign: Literal["dark-on-light", "light-on-dark"],
         dilated_mask: DilatedMask | None = None,
     ):
+        """Init the GaussianWhiteLogLikelihoodFn.
+
+        **Arguments:**
+        - `amplitudes`:
+            The amplitudes for the GMM atomic volume representation.
+        - `variances`:
+            The variances for the GMM atomic volume representation.
+        - `data_sign`:
+            Set to dark-on-light if the experimental images are
+            dark particles on a light background (most common for Relion stacks).
+            Set to light-on-dark if the experimental images are light particles on a
+            dark background (most common for cryoJAX generated data).
+        - `dilated_mask`:
+            An optional dilated mask to apply to the computed image and observed image.
+        """
         assert (amplitudes > 0).all(), "Amplitudes must be positive."
         assert (variances > 0).all(), "Variances must be positive."
+        assert data_sign in [
+            "dark-on-light",
+            "light-on-dark",
+        ], "data_sign must be either 'dark-on-light' or 'light-on-dark'."
+        image_sign = -1.0 if data_sign == "dark-on-light" else 1.0
 
         self.variances = variances
         self.amplitudes = amplitudes
-        self.image_sign = image_sign
+        self.image_sign = jnp.asarray(image_sign)
         self.dilated_mask = dilated_mask
 
     def __call__(

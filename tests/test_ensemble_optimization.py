@@ -70,7 +70,7 @@ def test_ensemble_optimization_optimizer(
 
     relion_dataset = RelionParticleDataset(
         RelionParticleParameterFile(
-            sample_path_to_starfile, options=dict(broadcasts_image_config=True)
+            sample_path_to_starfile, options=dict(broadcasts_image_config=False)
         ),
         sample_path_to_relion_project,
     )
@@ -84,7 +84,10 @@ def test_ensemble_optimization_optimizer(
     )
 
     img_to_walker_likelihood_fn = MargGaussianWhiteLogLikelihoodFn(
-        amplitudes=amplitudes, variances=variances, image_sign=1.0, dilated_mask=None
+        amplitudes=amplitudes,
+        variances=variances,
+        data_sign="light-on-dark",
+        dilated_mask=None,
     )
     ensemble_likelihood_fn = ImagesToEnsembleLikelihoodFn(img_to_walker_likelihood_fn)
 

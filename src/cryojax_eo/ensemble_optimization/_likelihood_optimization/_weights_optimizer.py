@@ -91,6 +91,13 @@ def _compute_full_likelihood_matrix(
     Compute the full likelihood matrix for the given walkers and dataloader.
     """
 
+    compute_likelihood_matrix_fn = eqx.filter_jit(
+        ensemble_likelihood_fn.compute_log_likelihood_matrix
+    )
+    estimate_pose_fn = (
+        eqx.filter_jit(_estimate_poses) if pose_search is not None else None
+    )
+
     shuffle = dataloader.dataloader.shuffle  # save the original shuffle state
     dataloader.dataloader.shuffle = False
     # Compute the likelihood matrix for each batch in the dataloader
@@ -103,7 +110,9 @@ def _compute_full_likelihood_matrix(
             )
             poses_per_walker = cast(cxs.EulerAnglePose, poses_per_walker)
         else:
-            poses_per_walker = _estimate_poses(
+            assert estimate_pose_fn is not None
+
+            poses_per_walker = estimate_pose_fn(
                 walkers,
                 ensemble_likelihood_fn.image_to_walker_likelihood_fn.amplitudes,
                 ensemble_likelihood_fn.image_to_walker_likelihood_fn.variances,
@@ -115,7 +124,7 @@ def _compute_full_likelihood_matrix(
                 n_images_in_parallel=ensemble_likelihood_fn.n_images_in_parallel,
             )
 
-        lklhood_matrix = ensemble_likelihood_fn.compute_log_likelihood_matrix(
+        lklhood_matrix = compute_likelihood_matrix_fn(
             walkers,
             batch["particle_stack"]["images"],
             batch["particle_stack"]["parameters"]["image_config"],
