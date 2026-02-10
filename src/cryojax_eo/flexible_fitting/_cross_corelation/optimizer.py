@@ -7,25 +7,25 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float, Int
 
-from .model_to_volume_loss import ModelToVolumeLikelihoodFn
+from .model_to_volume_loss import ModelToVolumeCorrelationLossFn
 
 
 class SteepestDescWalkerFlexibleFitting(eqx.Module):
     step_size: Float
     n_steps: Int
-    model_to_vol_likelihood_fn: ModelToVolumeLikelihoodFn
+    model_to_vol_loss_fn: ModelToVolumeCorrelationLossFn
 
     def __init__(
         self,
         n_steps: Int,
         step_size: Float,
-        model_to_vol_likelihood_fn: ModelToVolumeLikelihoodFn,
+        model_to_vol_loss_fn: ModelToVolumeCorrelationLossFn,
     ):
         assert n_steps > 0, "n_steps must be positive"
         assert step_size >= 0, "step_size must be non-negative."
 
         self.n_steps = n_steps
-        self.model_to_vol_likelihood_fn = model_to_vol_likelihood_fn
+        self.model_to_vol_loss_fn = model_to_vol_loss_fn
         self.step_size = step_size
 
     def __call__(
@@ -39,7 +39,7 @@ class SteepestDescWalkerFlexibleFitting(eqx.Module):
                 walkers,
                 reference_volume,
                 self.step_size,
-                self.model_to_vol_likelihood_fn,
+                self.model_to_vol_loss_fn,
             )
 
         return loss, walkers
@@ -50,13 +50,13 @@ def _optimize_walkers_positions(
     walkers: Float[Array, "n_atoms 3"],
     reference_volume: Float[Array, "n_pixels n_pixels n_pixels"],
     step_size: Float,
-    likelihood_fn: ModelToVolumeLikelihoodFn,
+    model_to_vol_loss_fn: ModelToVolumeCorrelationLossFn,
 ) -> tuple[Float, Float[Array, "n_atoms 3"]]:
-    def _lklhood_fn(walker, ref_volume):
-        return likelihood_fn(walker, ref_volume)
+    def _loss_fn(walker, ref_volume):
+        return model_to_vol_loss_fn(walker, ref_volume)
 
     loss, gradients = jax.value_and_grad(
-        _lklhood_fn,
+        _loss_fn,
         argnums=0,
     )(
         walkers,

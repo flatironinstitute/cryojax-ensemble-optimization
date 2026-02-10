@@ -3,7 +3,12 @@ from typing import Literal, overload
 
 import yaml
 
-from ._config_validators import DatasetSimulatorConfig, EnsOptMDConfig, GMMFitConfig
+from ._config_validators import (
+    DatasetSimulatorConfig,
+    EnsOptMDConfig,
+    FlexibleFittingConfig,
+    GMMFitConfig,
+)
 
 
 @overload
@@ -25,32 +30,32 @@ def load_config(
     path_to_config: str | Path,
     config_mode: Literal["gmm fitting"],
 ) -> GMMFitConfig: ...
+@overload
+def load_config(
+    path_to_config: str | Path,
+    config_mode: Literal["flexible fitting"],
+) -> FlexibleFittingConfig: ...
 
 
 def load_config(
     path_to_config: str | Path,
-    config_mode: Literal["data simulation", "ensemble optimization", "gmm fitting"],
-) -> DatasetSimulatorConfig | EnsOptMDConfig | GMMFitConfig:
+    config_mode: Literal[
+        "data simulation", "ensemble optimization", "gmm fitting", "flexible fitting"
+    ],
+) -> DatasetSimulatorConfig | EnsOptMDConfig | GMMFitConfig | FlexibleFittingConfig:
     """
     Load a configuration file and parse it into the appropriate configuration object.
 
-    Parameters
-    ----------
-    path_to_config : str | Path
+    **Arguments:**
+    - `path_to_config`
         Path to the configuration file (YAML format).
-    config_mode : Literal["data simulation", "ensemble optimization", "gmm fitting"]
+    - `config_mode`
         Type of configuration to load. Must be one of "data simulation",
-        "ensemble optimization", or "gmm fitting".
+        "ensemble optimization", "gmm fitting", or "flexible fitting".
 
-    Returns
-    -------
-    DatasetSimulatorConfig | EnsOptMDConfig | GMMFitConfig
-        Parsed configuration object.
-
-    Raises
-    ------
-    ValueError
-        If the provided config_mode is not recognized.
+    **Returns:**
+    - Config Object
+        An instance of the appropriate configuration class based on the `config_mode`.
     """
     with open(path_to_config) as f:
         config_dict = yaml.safe_load(f)
@@ -61,8 +66,11 @@ def load_config(
         return EnsOptMDConfig(**config_dict)
     elif config_mode == "gmm fitting":
         return GMMFitConfig(**config_dict)
+    elif config_mode == "flexible fitting":
+        return FlexibleFittingConfig(**config_dict)
     else:
         raise ValueError(
             f"Unknown config_mode: {config_mode}. Must be one of"
-            + " 'data simulation', 'ensemble optimization', or 'gmm fitting'."
+            + " 'data simulation', 'ensemble optimization',"
+            " 'gmm fitting', or 'flexible fitting'."
         )
