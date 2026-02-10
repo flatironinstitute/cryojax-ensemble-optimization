@@ -35,7 +35,7 @@ def simple_volume_mask(sample_path_to_starfile):
 
     voxel_grid = jax.random.randint(jax.random.key(0), volume_shape, minval=0, maxval=2)
 
-    return DilatedMask(voxel_grid, image_config)
+    return DilatedMask(voxel_grid)
 
 
 def test_make_image_model_from_gmm(sample_path_to_pdb1, sample_relion_stack):

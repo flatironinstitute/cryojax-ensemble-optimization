@@ -213,7 +213,7 @@ def _likelihood_gaussian_white_noise(
     observed_image = jnp.asarray(image)
 
     if dilated_mask is not None:
-        mask2d = dilated_mask.project(pose)
+        mask2d = dilated_mask.project(pose, image_config)
     else:
         mask2d = jnp.ones_like(computed_image)
 
@@ -255,7 +255,7 @@ def _likelihood_isotropic_gaussian_marginalized(
     observed_image = jnp.asarray(image)
 
     if dilated_mask is not None:
-        mask2d = dilated_mask.project(pose)
+        mask2d = dilated_mask.project(pose, image_config)
     else:
         mask2d = jnp.ones_like(computed_image)
 

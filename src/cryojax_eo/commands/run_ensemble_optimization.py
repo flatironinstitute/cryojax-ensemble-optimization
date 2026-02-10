@@ -120,7 +120,7 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
                 mode="r",
             ).data
         ).copy()
-        dilated_mask = DilatedMask(mask, stack_dataset[0]["parameters"]["image_config"])  # type: ignore
+        dilated_mask = DilatedMask(mask)  # type: ignore
         logging.debug("Volumetric mask loaded.")
 
     else:
