@@ -35,7 +35,7 @@ def simple_volume_mask(sample_path_to_starfile):
 
     voxel_grid = jax.random.randint(jax.random.key(0), volume_shape, minval=0, maxval=2)
 
-    return DilatedMask(voxel_grid, image_config)
+    return DilatedMask(voxel_grid)
 
 
 def test_make_image_model_from_gmm(sample_path_to_pdb1, sample_relion_stack):
@@ -90,7 +90,7 @@ def test_likelihood_fn(
     relion_dataset = RelionParticleDataset(
         RelionParticleParameterFile(
             path_to_starfile=sample_path_to_starfile,
-            options=dict(broadcasts_image_config=True),
+            options=dict(broadcasts_image_config=False),
         ),
         path_to_relion_project=sample_path_to_relion_project,
         mode="r",
@@ -104,7 +104,7 @@ def test_likelihood_fn(
     img_to_walker_likelihood_fn = image_to_walker_likelihood_fn(
         amplitudes=amplitudes,
         variances=variances,
-        image_sign=1.0,
+        data_sign="light-on-dark",
         dilated_mask=dilated_mask,
     )
     stack = relion_dataset[0]

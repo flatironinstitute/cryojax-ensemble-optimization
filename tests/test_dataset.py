@@ -89,7 +89,7 @@ def test_create_dataloader(
 ):
     relion_stack_dataset = RelionParticleDataset(
         RelionParticleParameterFile(
-            sample_path_to_starfile, options=dict(broadcasts_image_config=True)
+            sample_path_to_starfile, options=dict(broadcasts_image_config=False)
         ),
         sample_path_to_relion_project,
     )

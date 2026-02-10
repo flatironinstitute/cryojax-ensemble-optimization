@@ -17,9 +17,9 @@ def test_dilated_mask_projection(sample_path_mrc_file):
     image_config = cxs.BasicImageConfig(
         shape=(32, 32), pixel_size=voxel_size, voltage_in_kilovolts=300.0
     )
-    dilated_mask = DilatedMask(voxel_grid, image_config=image_config)
+    dilated_mask = DilatedMask(voxel_grid)
 
-    proj_mask = dilated_mask.project(cxs.EulerAnglePose())
+    proj_mask = dilated_mask.project(cxs.EulerAnglePose(), image_config)
 
     assert (
         jnp.abs(proj_mask - mask.sum(0)).min() < 1e-5

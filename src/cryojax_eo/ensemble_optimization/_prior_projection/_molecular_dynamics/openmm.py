@@ -102,6 +102,7 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
                 "Please set to None or provide valid state file."
             )
             self.simulation.loadState(str(init_state))
+            self.simulation.step(1000)
             path_to_state_file = f"{self.base_state_file_path}0.xml"
             if os.path.exists(path_to_state_file):
                 if Path(init_state).samefile(path_to_state_file):
@@ -115,7 +116,7 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
         else:
             path_to_state_file = f"{self.base_state_file_path}0.xml"
             self.simulation.minimizeEnergy()
-            self.simulation.step(100)
+            self.simulation.step(1000)
 
         self.simulation.saveState(path_to_state_file)
 

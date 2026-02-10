@@ -29,7 +29,7 @@ def test_iterative_optimizer(
 
     relion_dataset = RelionParticleDataset(
         RelionParticleParameterFile(
-            sample_path_to_starfile, options=dict(broadcasts_image_config=True)
+            sample_path_to_starfile, options=dict(broadcasts_image_config=False)
         ),
         sample_path_to_relion_project,
     )
@@ -45,7 +45,7 @@ def test_iterative_optimizer(
     img_to_walker_likelihood_fn = MargGaussianWhiteLogLikelihoodFn(
         amplitudes=amplitudes,
         variances=variances,
-        image_sign=1.0,
+        data_sign="light-on-dark",
     )
 
     ensemble_likelihood_fn = ImagesToEnsembleLikelihoodFn(img_to_walker_likelihood_fn)
@@ -85,7 +85,7 @@ def test_weight_optimizer(
 
     relion_dataset = RelionParticleDataset(
         RelionParticleParameterFile(
-            sample_path_to_starfile, options=dict(broadcasts_image_config=True)
+            sample_path_to_starfile, options=dict(broadcasts_image_config=False)
         ),
         sample_path_to_relion_project,
     )
@@ -101,7 +101,7 @@ def test_weight_optimizer(
     img_to_walker_likelihood_fn = MargGaussianWhiteLogLikelihoodFn(
         amplitudes=amplitudes,
         variances=variances,
-        image_sign=1.0,
+        data_sign="light-on-dark",
     )
 
     ensemble_likelihood_fn = ImagesToEnsembleLikelihoodFn(img_to_walker_likelihood_fn)
