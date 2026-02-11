@@ -209,7 +209,7 @@ def main(args):
     )
 
     logging.info("Running ensemble optimization...")
-    _, _ = run_flexible_fitting(config)
+    run_flexible_fitting(config)
     logging.info("Ensemble optimization complete.")
 
     return
