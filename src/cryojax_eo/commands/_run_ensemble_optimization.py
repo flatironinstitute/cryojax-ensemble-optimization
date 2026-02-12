@@ -77,7 +77,7 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
     )
 
     ref_structure = mdtraj.load(
-        config["alignment_params"]["path_to_prealigned_atomic_model"]
+        str(config["alignment_params"]["path_to_prealigned_atomic_model"])
     )
     ref_structure = ref_structure.center_coordinates(mass_weighted=True)
 

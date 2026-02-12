@@ -66,7 +66,7 @@ def run_flexible_fitting(flexible_fitting_config: FlexibleFittingConfig):
         loads_b_factors=config["loads_b_factors"],
     )
 
-    ref_structure = mdtraj.load(config["path_to_prealigned_atomic_model"])
+    ref_structure = mdtraj.load(str(config["path_to_prealigned_atomic_model"]))
     ref_structure = ref_structure.center_coordinates(mass_weighted=True)
 
     atom_list = _make_atom_list(config["atom_selection"], ref_structure.topology)
@@ -163,7 +163,7 @@ def run_flexible_fitting(flexible_fitting_config: FlexibleFittingConfig):
             "bias_constant_in_kjpermol must be a float or a list of two floats."
         )
 
-    final_walker, _ = flexible_fitting_pipeline.run(
+    final_walker, md_state = flexible_fitting_pipeline.run(
         initial_walker=initial_walker,
         reference_volume=reference_volume,
         bias_constant_scheduler=bias_constant_scheduler,
@@ -176,7 +176,7 @@ def run_flexible_fitting(flexible_fitting_config: FlexibleFittingConfig):
         final_walker,
     )
 
-    return final_walker
+    return final_walker, md_state
 
 
 def main(args):

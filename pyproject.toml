@@ -90,7 +90,7 @@ reportIncompatibleVariableOverride = false  # Incompatible with eqx.AbstractVar
 include = ["cryojax_eo", "tests"]
 
 [project.scripts]
-run_ensemble_optimization = "cryojax_eo.commands.run_ensemble_optimization:main_cli"
-simulate_data = "cryojax_eo.commands.simulate_data:main_cli"
-fit_gmm_to_atoms = "cryojax_eo.commands.fit_gmm_to_atoms:main_cli"
-run_flexible_fitting = "cryojax_eo.commands.run_flexible_fitting:main_cli"
+run_ensemble_optimization = "cryojax_eo.commands._run_ensemble_optimization:main_cli"
+simulate_data = "cryojax_eo.commands._simulate_data:main_cli"
+fit_gmm_to_atoms = "cryojax_eo.commands._fit_gmm_to_atoms:main_cli"
+run_flexible_fitting = "cryojax_eo.commands._run_flexible_fitting:main_cli"
