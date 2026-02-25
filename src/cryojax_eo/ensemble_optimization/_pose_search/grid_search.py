@@ -44,7 +44,7 @@ def _loss_for_grid_search(
     correlation, optimal_offset = compute_correlation_at_optimal_offset(
         target_image,
         computed_image_no_shift,
-        image_config.coordinate_grid_in_angstroms,
+        image_config.get_coordinate_grid(physical=True),
     )
 
     return -correlation, optimal_offset

@@ -1,5 +1,4 @@
 import cryojax.simulator as cxs
-import jax.numpy as jnp
 from equinox import Module
 from jaxtyping import Array, Float
 
@@ -16,9 +15,7 @@ class DilatedMask(Module):
     def project(
         self, pose: cxs.AbstractPose, image_config: cxs.AbstractImageConfig
     ) -> Float[Array, "y x"]:
-        mask2d = cxs.make_image_model(
-            self.volume, image_config, pose.to_inverse_rotation()
-        ).simulate()
+        mask2d = cxs.make_image_model(self.volume, image_config, pose).simulate()
         mask2d /= mask2d.max()
-        mask2d = jnp.where(jnp.abs(mask2d) > 0.2, 1.0, 0.0)
+        # mask2d = jnp.where(jnp.abs(mask2d) > 0.2, 1.0, 0.0)
         return mask2d

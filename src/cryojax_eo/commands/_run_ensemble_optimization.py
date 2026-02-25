@@ -134,9 +134,6 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
             loads_grid_spacing=True,
         )
 
-        if mask is not None:
-            volume_for_alignment *= mask
-
         if config["alignment_params"]["reference_volume_voxel_size"] is not None:
             voxel_size = config["alignment_params"]["reference_volume_voxel_size"]
 

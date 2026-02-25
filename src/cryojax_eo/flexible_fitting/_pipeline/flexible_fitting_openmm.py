@@ -6,6 +6,7 @@ from typing import Any
 import equinox as eqx
 import jax.numpy as jnp
 import mdtraj
+import numpy as np
 import optax
 from jaxtyping import Array, Float, Int
 from mdtraj.formats import XTCTrajectoryFile
@@ -66,6 +67,10 @@ class FlexibleFittingPipeline(eqx.Module):
         md_state = self.prior_projector.initialize(initial_state_for_projector)
         logging.info("Projector initialized.")
 
+        unit_cell_vectors = np.array(
+            self.prior_projector.simulation.topology.getPeriodicBoxVectors()._value
+        )
+
         ref_positions = (
             jnp.asarray(self.prealigned_structure.xyz[0]) * 10.0
         )  # Convert from nm to Angstroms
@@ -123,16 +128,34 @@ class FlexibleFittingPipeline(eqx.Module):
 
             logging.info("Write trajectory to files...")
             writer.write(walker / 10.0)
+            _write_walker_to_pdb(
+                walker,
+                os.path.join(output_directory, "curr_walker.pdb"),
+                self.prealigned_structure.topology,
+                unit_cell_vectors,
+            )
 
             progress_bar.set_description(f"Flexible Fitting (C.C: {1 - loss:.4f})")
 
         writer.close()
-        mdtraj.Trajectory(
-            xyz=walker / 10.0,
-            topology=self.prealigned_structure.topology,
-        ).save_pdb(os.path.join(output_directory, "final_walker.pdb"))
+        _write_walker_to_pdb(
+            walker,
+            os.path.join(output_directory, "final_walker.pdb"),
+            self.prealigned_structure.topology,
+            unit_cell_vectors,
+        )
 
         return walker, md_state
+
+
+def _write_walker_to_pdb(walker, filename, topology, unit_cell_vectors):
+    walker_as_traj = mdtraj.Trajectory(
+        xyz=walker / 10.0,
+        topology=topology,
+    )
+    walker_as_traj.unitcell_vectors = unit_cell_vectors[None, ...]
+    walker_as_traj.save_pdb(filename)
+    return
 
 
 @eqx.filter_jit

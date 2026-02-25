@@ -17,12 +17,12 @@ def test_dilated_mask_projection(sample_path_mrc_file):
     image_config = cxs.BasicImageConfig(
         shape=(32, 32), pixel_size=voxel_size, voltage_in_kilovolts=300.0
     )
-    dilated_mask = DilatedMask(voxel_grid)
+    dilated_mask = DilatedMask(mask)
 
     proj_mask = dilated_mask.project(cxs.EulerAnglePose(), image_config)
 
     assert (
-        jnp.abs(proj_mask - mask.sum(0)).min() < 1e-5
+        jnp.abs(proj_mask - mask.sum(0) / mask.sum(0).max()).min() < 1e-5
     ), "Projected mask does not match expected mask"
 
     return
@@ -53,7 +53,7 @@ def test_image_simulation(sample_path_to_pdb1, sample_path_to_pdb2):
     )
 
     mask = CircularCosineMask(
-        particle_parameters["image_config"].coordinate_grid_in_pixels,
+        particle_parameters["image_config"].get_coordinate_grid(physical=False),
         radius=32 // 2,
         rolloff_width=1.0,
     )

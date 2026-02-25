@@ -1,11 +1,13 @@
-from typing import Any
+from typing import Any, cast
 
 import cryojax.simulator as cxs
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 from cryojax.jax_util import filter_bmap
+from jax_dataloader import DataLoader
 from jaxtyping import Array, Float
+from tqdm import tqdm
 
 from .single_likelihood import AbstractImageToWalkerLogLikelihoodFn
 
@@ -65,6 +67,59 @@ class ImagesToEnsembleLikelihoodFn(AbstractImagesToEnsembleLikelihoodFn):
             self.n_images_in_parallel,
         ).T
 
+    def compute_from_log_likelihood_matrix(
+        self,
+        log_likelihood_matrix: Float[Array, "n_images n_walkers"],
+        weights: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
+    ):
+        return jnp.mean(
+            jax.scipy.special.logsumexp(
+                a=log_likelihood_matrix, b=weights[None, :], axis=1
+            )
+        )
+
+    def compute_full_log_likelihood_matrix(
+        self,
+        walkers: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
+        dataloader: DataLoader,
+        *,
+        prints_progress=False,
+    ) -> Float[Array, "n_images n_walkers"]:
+        compute_likelihood_matrix_fn = eqx.filter_jit(self.compute_log_likelihood_matrix)
+
+        shuffle = dataloader.dataloader.shuffle  # save the original shuffle state
+        dataloader.dataloader.shuffle = False
+        # Compute the likelihood matrix for each batch in the dataloader
+        likelihood_matrix = []
+
+        iterable = (
+            dataloader
+            if not prints_progress
+            else tqdm(dataloader, desc="Computing full likelihood matrix", unit=" batch")
+        )
+        for batch in iterable:
+            poses_per_walker = jax.tree.map(
+                lambda x: jnp.repeat(x[None, :], repeats=walkers.shape[0], axis=0),
+                batch["particle_stack"]["parameters"]["pose"],
+            )
+            poses_per_walker = cast(cxs.EulerAnglePose, poses_per_walker)
+
+            lklhood_matrix = compute_likelihood_matrix_fn(
+                walkers,
+                batch["particle_stack"]["images"],
+                batch["particle_stack"]["parameters"]["image_config"],
+                poses_per_walker,
+                batch["particle_stack"]["parameters"]["transfer_theory"],
+                batch["per_particle_args"],
+            )
+            likelihood_matrix.append(lklhood_matrix)
+
+        # restore the original shuffle state
+        dataloader.dataloader.shuffle = shuffle
+
+        # Concatenate the likelihood matrices from all batches
+        return jnp.concatenate(likelihood_matrix, axis=0)
+
     def __call__(
         self,
         walkers: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
@@ -83,9 +138,7 @@ class ImagesToEnsembleLikelihoodFn(AbstractImagesToEnsembleLikelihoodFn):
             transfer_theories,
             per_particle_args,
         )
-        return jnp.mean(
-            jax.scipy.special.logsumexp(a=likelihood_matrix, b=weights[None, :], axis=1)
-        )
+        return self.compute_from_log_likelihood_matrix(likelihood_matrix, weights)
 
 
 def _compute_likelihoods_single_walker_bmap(
