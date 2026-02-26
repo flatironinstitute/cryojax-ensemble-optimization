@@ -180,7 +180,7 @@ def _compute_ensemble_gradients(
                 log_likelihood_matrix
             )
         )
-        return ensemble_likelihood_fn.compute_from_log_likelihood_matrix(
+        return -ensemble_likelihood_fn.compute_from_log_likelihood_matrix(
             log_likelihood_matrix, weights
         ), weights
 

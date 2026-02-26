@@ -100,7 +100,7 @@ def _optimize_weights(
     n_steps: Int = 500,
 ) -> Float[Array, " n_walkers"]:
     def loss_fn(w, llm):
-        return ensemble_likelihood_fn.compute_from_log_likelihood_matrix(llm, w)
+        return -ensemble_likelihood_fn.compute_from_log_likelihood_matrix(llm, w)
 
     pg = ProjectedGradient(
         fun=loss_fn,
