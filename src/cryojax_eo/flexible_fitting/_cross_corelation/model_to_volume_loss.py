@@ -4,18 +4,17 @@ import jax.numpy as jnp
 from jaxtyping import Array, Float, Int
 
 
-class ModelToVolumeLikelihoodFn(eqx.Module):
+class ModelToVolumeCorrelationLossFn(eqx.Module):
     variances: Float[Array, "n_atoms n_gaussians_per_atom"]
     amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"]
-    voxel_size: Float
-    batch_size_for_z_planes: Int
-    n_batches_of_atoms: Int
+    render_fn: cxs.GaussianMixtureRenderFn
 
     def __init__(
         self,
         amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
         variances: Float[Array, "n_atoms n_gaussians_per_atom"],
         voxel_size: Float,
+        volume_shape: tuple[int, int, int],
         *,
         batch_size_for_z_planes: Int = 1,
         n_batches_of_atoms: Int = 1,
@@ -29,24 +28,26 @@ class ModelToVolumeLikelihoodFn(eqx.Module):
         self.variances = variances
         self.amplitudes = amplitudes
 
-        self.voxel_size = voxel_size
-        self.batch_size_for_z_planes = int(batch_size_for_z_planes)
-        self.n_batches_of_atoms = int(n_batches_of_atoms)
+        self.render_fn = cxs.GaussianMixtureRenderFn(
+            shape=volume_shape,
+            voxel_size=voxel_size,
+            batch_options=dict(
+                batch_size=batch_size_for_z_planes, n_batches=n_batches_of_atoms
+            ),
+        )
 
     def __call__(
         self,
         walker: Float[Array, "n_atoms 3"],
         reference_volume: Float[Array, "dim dim dim"],
-    ) -> Float:
+    ) -> float:
         # Compute the model-to-volume loss
         return 1 - _model_to_volume_crosscorrelation(
             walker,
             self.amplitudes,
             self.variances,
             reference_volume,
-            self.voxel_size,
-            batch_size_for_z_planes=self.batch_size_for_z_planes,
-            n_batches_of_atoms=self.n_batches_of_atoms,
+            self.render_fn,
         )
 
 
@@ -55,24 +56,14 @@ def _model_to_volume_crosscorrelation(
     amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
     variances: Float[Array, "n_atoms n_gaussians_per_atom"],
     reference_volume: Float[Array, "dim dim dim"],
-    voxel_size: Float,
-    *,
-    batch_size_for_z_planes: int = 1,
-    n_batches_of_atoms: int = 1,
-) -> Float:
-    volume_shape = reference_volume.shape
-
-    comp_volume = cxs.GaussianMixtureVolume(
-        walker,
-        amplitudes,
-        variances,
-    ).to_real_voxel_grid(
-        volume_shape,  # type: ignore
-        voxel_size,
-        batch_options={
-            "batch_size": batch_size_for_z_planes,
-            "n_batches": n_batches_of_atoms,
-        },
+    render_fn: cxs.GaussianMixtureRenderFn,
+) -> float:
+    comp_volume = render_fn(
+        volume_representation=cxs.GaussianMixtureVolume(
+            walker,
+            amplitudes,
+            variances,
+        ),
     )
 
     cross_correlation = (

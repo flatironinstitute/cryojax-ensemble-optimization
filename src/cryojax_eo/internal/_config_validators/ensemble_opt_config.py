@@ -271,6 +271,11 @@ class EnsOptMDConfig(BaseModel, extra="forbid"):
             self.likelihood_optimizer_params["initial_weights"] = jnp.asarray(
                 [1.0 / n_atomic_models for _ in range(n_atomic_models)]
             )
+
+        else:
+            self.likelihood_optimizer_params["initial_weights"] = jnp.asarray(
+                [1.0 / n_atomic_models for _ in range(n_atomic_models)]
+            )
         return self
 
     @field_validator("path_to_atomic_models")

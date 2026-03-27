@@ -14,6 +14,7 @@ import warnings
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
+from typing import Any
 from typing_extensions import override
 
 import jax
@@ -102,6 +103,7 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
                 "Please set to None or provide valid state file."
             )
             self.simulation.loadState(str(init_state))
+            self.simulation.step(1000)
             path_to_state_file = f"{self.base_state_file_path}0.xml"
             if os.path.exists(path_to_state_file):
                 if Path(init_state).samefile(path_to_state_file):
@@ -115,7 +117,7 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
         else:
             path_to_state_file = f"{self.base_state_file_path}0.xml"
             self.simulation.minimizeEnergy()
-            self.simulation.step(100)
+            self.simulation.step(1000)
 
         self.simulation.saveState(path_to_state_file)
 
@@ -123,7 +125,12 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
 
     @override
     def __call__(
-        self, ref_walkers: Float[Array, "n_atoms 3"], state: str, bias_constant: float
+        self,
+        ref_walkers: Float[Array, "n_atoms 3"],
+        state: str,
+        bias_constant: float,
+        *,
+        reporter=None,
     ) -> tuple[Float[Array, "n_atoms 3"], str]:
         _assert_is_valid_state_file(state, self.base_state_file_path)
 
@@ -141,6 +148,10 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
 
         # print("Loading state")
         simulation.loadState(state)
+
+        # add Reporter
+        if reporter is not None:
+            simulation.reporters.append(reporter)
 
         # print("Running Simulation")
         simulation.step(self.n_steps)
@@ -163,6 +174,8 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
             .getPositions(asNumpy=True)
             .value_in_unit(openmm_unit.angstrom)
         )
+        if reporter is not None:
+            simulation.reporters.pop(-1)
         return jnp.array(positions), state
 
 
@@ -184,11 +197,15 @@ class EnsembleSteeredMDSimulator(AbstractEnsemblePriorProjector, strict=True):
         ref_positions: Float[Array, "n_walkers n_atoms 3"],
         states: list[str],
         bias_constant: float,
+        *,
+        reporters: list[Any] | None = None,
     ) -> tuple[Float[Array, "n_walkers n_atoms 3"], list[str]]:
         projected_walkers = np.zeros_like(ref_positions)
+        if reporters is None:
+            reporters = [None] * len(self.projectors)
         for i, projector in enumerate(self.projectors):
             projected_walkers[i], states[i] = projector(
-                ref_positions[i], states[i], bias_constant
+                ref_positions[i], states[i], bias_constant, reporter=reporters[i]
             )
         return jnp.array(projected_walkers), states
 

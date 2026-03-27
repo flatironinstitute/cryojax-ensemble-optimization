@@ -85,7 +85,9 @@ def simulate_relion_dataset(config: DatasetSimulatorConfig) -> RelionParticleDat
     )
 
     mask = CircularCosineMask(
-        coordinate_grid=parameter_file[0]["image_config"].coordinate_grid_in_pixels,
+        coordinate_grid=parameter_file[0]["image_config"].get_coordinate_grid(
+            physical=False
+        ),
         radius=config_dict["mask_radius"],
         rolloff_width=config_dict["mask_rolloff_width"],
     )

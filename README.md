@@ -45,7 +45,7 @@ See the [input documentation](docs/dataset_simulation.md)
 
 ## Reproducing Paper Results
 
-All the necessary data, atomic models, config files, and instructions to reproduce our results are available in [Zenodo](https://doi.org/10.5281/zenodo.17420048).
+All the necessary data, atomic models, config files, and instructions to reproduce our results are available in [Zenodo](https://doi.org/10.5281/zenodo.19224943).
 
 ## Contact
 

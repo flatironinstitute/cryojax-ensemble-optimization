@@ -77,7 +77,7 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
     )
 
     ref_structure = mdtraj.load(
-        config["alignment_params"]["path_to_prealigned_atomic_model"]
+        str(config["alignment_params"]["path_to_prealigned_atomic_model"])
     )
     ref_structure = ref_structure.center_coordinates(mass_weighted=True)
 
@@ -94,7 +94,7 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
             path_to_starfile=config["data_params"]["path_to_starfile"],
             options=dict(
                 loads_envelope=config["data_params"]["loads_envelope"],
-                broadcasts_image_config=True,
+                broadcasts_image_config=False,
             ),
         ),
         path_to_relion_project=config["data_params"]["path_to_relion_project"],
@@ -120,7 +120,7 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
                 mode="r",
             ).data
         ).copy()
-        dilated_mask = DilatedMask(mask, stack_dataset[0]["parameters"]["image_config"])  # type: ignore
+        dilated_mask = DilatedMask(mask)  # type: ignore
         logging.debug("Volumetric mask loaded.")
 
     else:
@@ -133,9 +133,6 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
             config["alignment_params"]["path_to_reference_volume"],
             loads_grid_spacing=True,
         )
-
-        if mask is not None:
-            volume_for_alignment *= mask
 
         if config["alignment_params"]["reference_volume_voxel_size"] is not None:
             voxel_size = config["alignment_params"]["reference_volume_voxel_size"]
@@ -173,12 +170,10 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
     md_projector = EnsembleSteeredMDSimulator(projector_list)
 
     # Construct likelihood optimizer
-    image_sign = -1.0 if config["data_params"]["data_sign"] == "dark-on-light" else 1.0
-
     img_to_walker_log_likelihood_fn = MargGaussianWhiteLogLikelihoodFn(
         amplitudes,
         variances,
-        image_sign=jnp.asarray(image_sign),
+        data_sign=config["data_params"]["data_sign"],
         dilated_mask=dilated_mask,
     )
     ensemble_likelihood_fn = ImagesToEnsembleLikelihoodFn(

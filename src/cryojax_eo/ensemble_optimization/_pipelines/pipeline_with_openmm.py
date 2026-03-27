@@ -75,6 +75,13 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
         md_states = self.prior_projector.initialize(initial_state_for_projector)
         logging.info("Projector initialized.")
 
+        # extract unit cell vectors from simulation
+        unit_cell_vectors = np.array(
+            self.prior_projector.projectors[0]
+            .simulation.topology.getPeriodicBoxVectors()
+            ._value
+        )
+
         ref_positions = (
             np.asarray(self.prealigned_structure.xyz[0]) * 10.0
         )  # Convert from nm to Angstroms
@@ -146,9 +153,16 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
                 )
                 logging.info("   Walkers aligned to volume.")
 
-            logging.info("   Writing trajectory to files...")
+            logging.info("   Writing trajectory to files and saving current walkers...")
             for j in range(walkers.shape[0]):
                 writers[j].write(walkers[j] / 10.0)
+
+                _write_walker_to_pdb(
+                    walkers[j],
+                    os.path.join(output_directory, f"curr_walker_{j}.pdb"),
+                    self.prealigned_structure.topology,
+                    unit_cell_vectors,
+                )
 
         logging.info("Optimization complete.")
 
@@ -156,10 +170,12 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
             writer.close()
 
         for i, walker in enumerate(walkers):
-            mdtraj.Trajectory(
-                xyz=walker / 10.0,
-                topology=self.prealigned_structure.topology,
-            ).save_pdb(os.path.join(output_directory, f"final_walker_{i}.pdb"))
+            _write_walker_to_pdb(
+                walker,
+                os.path.join(output_directory, f"final_walker_{i}.pdb"),
+                self.prealigned_structure.topology,
+                unit_cell_vectors,
+            )
 
         if self.runs_postprocessing:
             logging.info("Running postprocessing...")
@@ -192,6 +208,16 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
         )
 
         return walkers, weights
+
+
+def _write_walker_to_pdb(walker, filename, topology, unit_cell_vectors):
+    walker_as_traj = mdtraj.Trajectory(
+        xyz=walker / 10.0,
+        topology=topology,
+    )
+    walker_as_traj.unitcell_vectors = unit_cell_vectors[None, ...]
+    walker_as_traj.save_pdb(filename)
+    return
 
 
 def _align_walkers_to_reference(
