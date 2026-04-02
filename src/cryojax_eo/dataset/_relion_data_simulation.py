@@ -321,12 +321,11 @@ def _make_particle_parameters(key: PRNGKeyArray, config: dict) -> dict:
     return relion_particle_parameters
 
 
-
-
 def _sample_vmf_rotation(mu: Float[Array, "3"], kappa: float, key: PRNGKeyArray) -> SO3:
     """
-    Samples from a von Mises–Fisher distribution (gaussian normalized to the sphere) for the out-of-plane direction
-    and a uniform in-plane rotation.
+    Samples non-uniform rotations.
+    Out-of-plane is sampled from a von Mises-Fisher distribution
+    In-plane is sampled from a uniform distribution.
     """
     key_dir, key_in_plane = jax.random.split(key)
 
@@ -366,8 +365,6 @@ def _sample_vmf_rotation(mu: Float[Array, "3"], kappa: float, key: PRNGKeyArray)
     R_in_plane = SO3.exp(in_plane_angle * out_of_plane_direction).as_matrix()
 
     return SO3.from_matrix((R_in_plane @ R_align).T)
-
-
 
 
 def _sample_non_uniform_mixutre_rotation(

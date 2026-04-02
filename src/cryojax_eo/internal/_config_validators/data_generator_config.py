@@ -78,8 +78,11 @@ class DatasetSimulatorConfigRotations(BaseModel, extra="forbid"):
         default=0.5,
         ge=0.0,
         le=1.0,
-        description="Mixture weight between vMF and uniform rotations in [0, 1] - (1 means only vMF, 0 means only uniform)"
-        + "Only used if `rotation_distribution` is 'non-uniform'.",
+        description=(
+            "Mixture weight between vMF and uniform rotations in [0, 1] - "
+            "(1 means only vMF, 0 means only uniform). "
+            "Only used if `rotation_distribution` is 'non-uniform'."
+        ),
     )
 
     @field_validator("vmf_mu")
@@ -137,7 +140,7 @@ class DatasetSimulatorConfig(BaseModel, extra="forbid"):
     )
 
     rotations: dict = Field(
-        default_factory=lambda _ : dict(DatasetSimulatorConfigRotations().model_dump()),
+        default_factory=lambda _: dict(DatasetSimulatorConfigRotations().model_dump()),
         description="Rotation sampling configuration. Parsed by "
         + "`DatasetSimulatorConfigRotations`.",
     )
