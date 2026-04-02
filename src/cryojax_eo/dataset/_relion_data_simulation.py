@@ -210,7 +210,21 @@ def _make_particle_parameters(key: PRNGKeyArray, config: dict) -> dict:
     # ... instantiate rotations
     key, subkey = jax.random.split(key)  # split the key to use for the next random number
 
-    rotation = SO3.sample_uniform(subkey)
+    rotations_config = config["rotations"]
+    if rotations_config["rotation_distribution"] == "uniform":
+        rotation = SO3.sample_uniform(subkey)
+    elif rotations_config["rotation_distribution"] == "non-uniform":
+        rotation = _sample_non_uniform_mixutre_rotation(
+            mu=rotations_config["vmf_mu"],
+            kappa=rotations_config["vmf_kappa"],
+            alpha=rotations_config["vmf_alpha"],
+            key=subkey,
+        )
+    else:
+        raise ValueError(
+            "Unknown rotation distribution. "
+            f"Got {rotations_config['rotation_distribution']}."
+        )
     key, subkey = jax.random.split(key)  # do this everytime you use a key!!
 
     # ... now in-plane translation
@@ -305,3 +319,65 @@ def _make_particle_parameters(key: PRNGKeyArray, config: dict) -> dict:
         "transfer_theory": transfer_theory,
     }
     return relion_particle_parameters
+
+
+
+
+def _sample_vmf_rotation(mu: Float[Array, "3"], kappa: float, key: PRNGKeyArray) -> SO3:
+    """
+    Samples from a von Mises–Fisher distribution (gaussian normalized to the sphere) for the out-of-plane direction
+    and a uniform in-plane rotation.
+    """
+    key_dir, key_in_plane = jax.random.split(key)
+
+    # Approximate concentrated directional sampling around `mu`.
+    mu_unit = mu / jnp.linalg.norm(mu)
+    x = mu_unit + jax.random.normal(key_dir, (3,)) / jnp.sqrt(kappa)
+    out_of_plane_direction = x / jnp.linalg.norm(x)
+
+    z_axis = jnp.array([0.0, 0.0, 1.0])
+    c = jnp.dot(z_axis, out_of_plane_direction)
+
+    def _align_z_to_direction() -> Float[Array, "3 3"]:
+        axis = jnp.cross(z_axis, out_of_plane_direction)
+        sin_theta = jnp.linalg.norm(axis)
+        axis_unit = axis / jnp.maximum(sin_theta, 1e-12)
+        kx, ky, kz = axis_unit
+        K = jnp.array([[0.0, -kz, ky], [kz, 0.0, -kx], [-ky, kx, 0.0]])
+        return jnp.eye(3) + sin_theta * K + (1.0 - c) * (K @ K)
+
+    # Handle numerically unstable cases (where \abs{v^T z} is close to 1)
+    R_align = jax.lax.cond(
+        c > 1.0 - 1e-7,
+        lambda _: jnp.eye(3),
+        lambda _: jax.lax.cond(
+            c < -1.0 + 1e-7,
+            lambda __: SO3.from_x_radians(jnp.pi).as_matrix(),
+            lambda __: _align_z_to_direction(),
+            operand=None,
+        ),
+        operand=None,
+    )
+
+    # Uniform in-plane angle around the chosen viewing direction.
+    in_plane_angle = jax.random.uniform(
+        key_in_plane, shape=(), minval=0.0, maxval=2.0 * jnp.pi
+    )
+    R_in_plane = SO3.exp(in_plane_angle * out_of_plane_direction).as_matrix()
+
+    return SO3.from_matrix((R_in_plane @ R_align).T)
+
+
+
+
+def _sample_non_uniform_mixutre_rotation(
+    mu: Float[Array, "3"], kappa: float, alpha: float, key: PRNGKeyArray
+) -> SO3:
+    """
+    Samples rotations from a mixture of non-uniform (vMF) and uniform rotations.
+    """
+    key_bernoulli, key_uniform, key_vmf = jax.random.split(key, 3)
+    use_vmf = jax.random.bernoulli(key_bernoulli, p=alpha)
+    uniform = SO3.sample_uniform(key_uniform)
+    vmf = _sample_vmf_rotation(mu, kappa, key_vmf)
+    return jax.lax.cond(use_vmf, lambda _: vmf, lambda _: uniform, operand=None)
