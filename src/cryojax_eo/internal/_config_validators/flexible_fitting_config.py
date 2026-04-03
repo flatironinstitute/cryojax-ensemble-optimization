@@ -103,6 +103,13 @@ class RefVolFFConfig(BaseModel, extra="forbid"):
         + "If None, no alignment will be performed.",
     )
 
+    path_to_weights: FilePath | None = Field(
+        default=None,
+        description="Path to the weights for the weighted MSE loss. "
+        + "If None, the unweighted correlation loss will be used."
+        + "Can be obtained by running relion_reconstruct with --external_reconstruct",
+    )
+
     flexible_fitting_box_size: PositiveInt = Field(
         default=128,
         description="Box size to crop the volume for flexible fitting. "
