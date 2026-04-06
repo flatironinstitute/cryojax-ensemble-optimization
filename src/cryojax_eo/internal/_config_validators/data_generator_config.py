@@ -57,6 +57,51 @@ class DatasetSimulatorConfigAtomicModels(BaseModel, extra="forbid"):
         return _validate_files_with_type(v, file_types=[".pdb", ".npz"])
 
 
+class DatasetSimulatorConfigRotations(BaseModel, extra="forbid"):
+    rotation_distribution: Literal["uniform", "non-uniform"] = Field(
+        default="uniform",
+        description="Distribution of particle rotations. "
+        + "'uniform' for uniform rotations; "
+        + "'non-uniform' for mixture of uniform and von Mises-Fisher rotations.",
+    )
+    vmf_kappa: PositiveFloat | list[PositiveFloat] = Field(
+        default=1.0,
+        description="Kappa parameter for the von Mises-Fisher distribution (1/variance)"
+        + "Only used if `rotation_distribution` is 'non-uniform'.",
+    )
+    vmf_mu: list[float] = Field(
+        default=[0.0, 0.0, 1.0],
+        description="Mean direction for the von Mises-Fisher distribution. "
+        + "Only used if `rotation_distribution` is 'non-uniform'.",
+    )
+    vmf_alpha: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Mixture weight between vMF and uniform rotations in [0, 1] - "
+            "(1 means only vMF, 0 means only uniform). "
+            "Only used if `rotation_distribution` is 'non-uniform'."
+        ),
+    )
+
+    @field_validator("vmf_mu")
+    @classmethod
+    def validate_vmf_mu(cls, v):
+        arr = jnp.asarray(v, dtype=float)
+        if arr.shape != (3,):
+            raise ValueError("`rotations.vmf_mu` must be a 3-vector.")
+        norm = jnp.linalg.norm(arr)
+        if norm <= 0:
+            raise ValueError("`rotations.vmf_mu` must be non-zero.")
+        return arr
+
+    @field_serializer("vmf_mu")
+    def serialize_vmf_mu(self, v):
+        arr = jnp.asarray(v, dtype=float)
+        return arr / jnp.linalg.norm(arr)
+
+
 class DatasetSimulatorConfig(BaseModel, extra="forbid"):
     """
     Parameters for the data generation pipeline.
@@ -92,6 +137,12 @@ class DatasetSimulatorConfig(BaseModel, extra="forbid"):
     )
     offset_y_in_angstroms: float | list[float] = Field(
         0.0, description="Offset in y direction in Angstroms."
+    )
+
+    rotations: dict = Field(
+        default_factory=lambda _: dict(DatasetSimulatorConfigRotations().model_dump()),
+        description="Rotation sampling configuration. Parsed by "
+        + "`DatasetSimulatorConfigRotations`.",
     )
 
     # Transfer Theory
@@ -172,6 +223,11 @@ class DatasetSimulatorConfig(BaseModel, extra="forbid"):
         else:
             v = jnp.array(v)
         return v
+
+    @field_serializer("rotations")
+    @classmethod
+    def serialize_rotations(cls, v):
+        return dict(DatasetSimulatorConfigRotations(**v).model_dump())
 
     @field_serializer("defocus_in_angstroms")
     def serialize_defocus_in_angstroms(self, v):
