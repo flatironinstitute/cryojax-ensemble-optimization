@@ -7,19 +7,19 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float, Int
 
-from .model_to_volume_loss import ModelToVolumeCorrelationLossFn
+from .model_to_volume_loss import AbstractModelToVolumeLossFn
 
 
 class SteepestDescWalkerFlexibleFitting(eqx.Module):
     step_size: Float
     n_steps: Int
-    model_to_vol_loss_fn: ModelToVolumeCorrelationLossFn
+    model_to_vol_loss_fn: AbstractModelToVolumeLossFn
 
     def __init__(
         self,
         n_steps: Int,
         step_size: Float,
-        model_to_vol_loss_fn: ModelToVolumeCorrelationLossFn,
+        model_to_vol_loss_fn: AbstractModelToVolumeLossFn,
     ):
         assert n_steps > 0, "n_steps must be positive"
         assert step_size >= 0, "step_size must be non-negative."
@@ -50,7 +50,7 @@ def _optimize_walkers_positions(
     walkers: Float[Array, "n_atoms 3"],
     reference_volume: Float[Array, "n_pixels n_pixels n_pixels"],
     step_size: Float,
-    model_to_vol_loss_fn: ModelToVolumeCorrelationLossFn,
+    model_to_vol_loss_fn: AbstractModelToVolumeLossFn,
 ) -> tuple[Float, Float[Array, "n_atoms 3"]]:
     def _loss_fn(walker, ref_volume):
         return model_to_vol_loss_fn(walker, ref_volume)
