@@ -17,6 +17,7 @@ from cryojax_eo.ensemble_optimization import (
 )
 from cryojax_eo.utils import ModelToVolumeAligner, rigid_align_positions
 
+from .._cross_corelation.model_to_volume_loss import ModelToVolumeCorrelationLossFn
 from .._cross_corelation.optimizer import SteepestDescWalkerFlexibleFitting
 
 
@@ -86,6 +87,11 @@ class FlexibleFittingPipeline(eqx.Module):
         )
         logging.info("Walkers aligned.")
 
+        # Construct initial optimizer state
+        opt_state = self.walker_optimizer._initalize_opt_state(
+            walker[self.atom_indices_for_opt, :]
+        )
+
         progress_bar = tqdm(range(self.n_steps), desc="Flexible Fitting", leave=True)
         for i in progress_bar:
             """
@@ -95,9 +101,10 @@ class FlexibleFittingPipeline(eqx.Module):
             """
 
             logging.info("Likelihood Optimization: ")
-            loss, tmp_walker = self.walker_optimizer(
+            loss, tmp_walker, opt_state = self.walker_optimizer(
                 walker[self.atom_indices_for_opt, :],
                 reference_volume,
+                opt_state,
             )
 
             ref_walker = walker.at[self.atom_indices_for_opt, :].set(tmp_walker)
@@ -135,7 +142,15 @@ class FlexibleFittingPipeline(eqx.Module):
                 unit_cell_vectors,
             )
 
-            progress_bar.set_description(f"Flexible Fitting (C.C: {1 - loss:.4f})")
+            loss_str = (
+                f"C.C: {1 - loss:.4f}"
+                if isinstance(
+                    self.walker_optimizer.model_to_vol_loss_fn,
+                    ModelToVolumeCorrelationLossFn,
+                )
+                else f"MSE: {loss:.4f}"
+            )
+            progress_bar.set_description(f"Flexible Fitting ({loss_str})")
 
         writer.close()
         _write_walker_to_pdb(
