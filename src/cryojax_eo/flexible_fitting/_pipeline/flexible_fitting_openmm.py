@@ -18,7 +18,7 @@ from cryojax_eo.ensemble_optimization import (
 from cryojax_eo.utils import ModelToVolumeAligner, rigid_align_positions
 
 from .._cross_corelation.model_to_volume_loss import ModelToVolumeCorrelationLossFn
-from .._cross_corelation.optimizer import SteepestDescWalkerFlexibleFitting
+from .._cross_corelation.optimizer import AbstractWalkerOptimizer
 
 
 class FlexibleFittingPipeline(eqx.Module):
@@ -27,7 +27,7 @@ class FlexibleFittingPipeline(eqx.Module):
     """
 
     prior_projector: SteeredMDSimulator
-    walker_optimizer: SteepestDescWalkerFlexibleFitting
+    walker_optimizer: AbstractWalkerOptimizer
     n_steps: int
     prealigned_structure: mdtraj.Trajectory
     model_to_volume_aligner: ModelToVolumeAligner | None
@@ -36,7 +36,7 @@ class FlexibleFittingPipeline(eqx.Module):
     def __init__(
         self,
         prior_projector: SteeredMDSimulator,
-        walker_optimizer: SteepestDescWalkerFlexibleFitting,
+        walker_optimizer: AbstractWalkerOptimizer,
         n_steps: int,
         prealigned_structure: mdtraj.Trajectory,
         atom_indices_for_opt: Int[Array, " n_atoms_for_opt"],

@@ -17,6 +17,11 @@ from .utils import _validate_file_with_type, _validate_files_with_type
 
 
 class FFOptimizationConfig(BaseModel, extra="forbid"):
+    type: Literal["steepest_desc", "adam"] = Field(
+        default="steepest_desc",
+        description="Type of optimizer to use for the optimization process. "
+        + "Must be 'steepest_desc' or 'adam'.",
+    )
     n_steps: PositiveInt = Field(
         default=1, description="Number of steps for the optimization process."
     )

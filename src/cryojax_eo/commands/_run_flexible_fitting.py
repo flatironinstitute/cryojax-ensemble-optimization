@@ -20,6 +20,8 @@ from cryojax_eo.ensemble_optimization import (
     md_params_config_to_openmm_overrides,
 )
 from cryojax_eo.flexible_fitting import (
+    AbstractModelToVolumeLossFn,
+    AdamWalkerFlexibleFitting,
     FlexibleFittingPipeline,
     ModelToVolumeCorrelationLossFn,
     ModelToVolumeWeightedMSELossFn,
@@ -86,6 +88,24 @@ def _construct_model_to_volume_loss_fn(
         return ModelToVolumeWeightedMSELossFn(**loss_kwargs)
     else:
         return ModelToVolumeCorrelationLossFn(**loss_kwargs)
+
+
+def _construct_walker_optimizer(
+    config: dict, model_to_vol_loss_fn: AbstractModelToVolumeLossFn
+):
+    optimizer_kwargs = dict(
+        n_steps=config["walker_optimizer_params"]["n_steps"],
+        step_size=config["walker_optimizer_params"]["step_size"],
+        model_to_vol_loss_fn=model_to_vol_loss_fn,
+    )
+    if config["walker_optimizer_params"]["type"] == "steepest_desc":
+        return SteepestDescWalkerFlexibleFitting(**optimizer_kwargs)
+    elif config["walker_optimizer_params"]["type"] == "adam":
+        return AdamWalkerFlexibleFitting(**optimizer_kwargs)
+    else:
+        raise ValueError(
+            f"Invalid walker optimizer type: {config['walker_optimizer_params']['type']}"
+        )
 
 
 def run_flexible_fitting(flexible_fitting_config: FlexibleFittingConfig):
@@ -176,9 +196,8 @@ def run_flexible_fitting(flexible_fitting_config: FlexibleFittingConfig):
         config,
     )
 
-    walker_optimizer = SteepestDescWalkerFlexibleFitting(
-        n_steps=config["walker_optimizer_params"]["n_steps"],
-        step_size=config["walker_optimizer_params"]["step_size"],
+    walker_optimizer = _construct_walker_optimizer(
+        config=config,
         model_to_vol_loss_fn=model_to_vol_loss_fn,
     )
 
