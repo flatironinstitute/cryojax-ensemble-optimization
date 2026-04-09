@@ -12,6 +12,7 @@ n_images_in_parallel: 5000
 atom_selection: ... # path to a txt/npy file, or a mdtraj-compatible selection string, e.g., "not element H"
 loads_b_factors: true # Load Debye-Waller b-factors from provided PDBs
 max_iter: 500 # Maximum number of Proj. Grad. Descent iterations
+random_seed: 0
 
 path_to_structural_files: # Can be the same for each replica
 - path/to/structural_files/pdb_structural_file_0.pdb

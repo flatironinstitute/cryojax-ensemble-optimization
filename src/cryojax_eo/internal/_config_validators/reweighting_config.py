@@ -10,7 +10,6 @@ from pydantic import (
     PositiveFloat,
     PositiveInt,
     field_validator,
-    model_validator,
 )
 
 from .utils import _validate_file_with_type, _validate_files_with_type
@@ -97,43 +96,41 @@ class ReweightingConfig(BaseModel, extra="forbid"):
         + "but will also improve the computational performance. ",
     )
 
-    initial_weights: list[float] | None = Field(
-        default=None,
-        description="Initial weights for the models. "
-        "If None, will be set to uniform distribution.",
-    )
+    # initial_weights: list[float] | None = Field(
+    #     default=None,
+    #     description="Initial weights for the models. "
+    #     "If None, will be set to uniform distribution.",
+    # )
 
+    random_seed: int = Field(
+        default=0,
+        description="Random seed for the optimization. "
+        + "This is used for the pose estimation step. "
+        + "Using the same seed will ensure reproducibility of the optimization results.",
+    )
     max_volume_repr_resolution: PositiveFloat | None = Field(
         default=None,
         description="Maximum resolution to use for the volume representation. "
         "If None, no filtering will be applied.",
     )
-    """
-    estimates_pose: bool = Field(
-        default=False,
-        description="Whether to estimate the pose of the particles during optimization. "
-        + "If True, the pose will be estimated using the current weights of the ensemble."
-        + " If False, the pose will be estimated using uniform weights.",
-    )
-    """
 
-    @model_validator(mode="after")
-    def validate_config(self):
-        n_structures = len(self.path_to_structural_files)
+    # @model_validator(mode="after")
+    # def validate_config(self):
+    #     n_structures = len(self.path_to_structural_files)
 
-        if self.initial_weights is not None:
-            n_initial_weights = len(self.initial_weights)
-            if n_structures != n_initial_weights:
-                raise Warning(
-                    f"Number of initial weights {n_initial_weights} "
-                    + f"does not match number of atomic models {n_structures}."
-                    + " Setting initial weights to uniform distribution."
-                )
-            self.initial_weights = [1.0 / n_structures for _ in range(n_structures)]
+    #     if self.initial_weights is not None:
+    #         n_initial_weights = len(self.initial_weights)
+    #         if n_structures != n_initial_weights:
+    #             raise Warning(
+    #                 f"Number of initial weights {n_initial_weights} "
+    #                 + f"does not match number of atomic models {n_structures}."
+    #                 + " Setting initial weights to uniform distribution."
+    #             )
+    #         self.initial_weights = [1.0 / n_structures for _ in range(n_structures)]
 
-        else:
-            self.initial_weights = [1.0 / n_structures for _ in range(n_structures)]
-        return self
+    #     else:
+    #         self.initial_weights = [1.0 / n_structures for _ in range(n_structures)]
+    #     return self
 
     @field_validator("path_to_structural_files")
     @classmethod

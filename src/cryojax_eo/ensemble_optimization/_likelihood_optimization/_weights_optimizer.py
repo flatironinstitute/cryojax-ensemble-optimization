@@ -5,15 +5,15 @@ Weight and position optimizers for ensemble refinement.
 from typing_extensions import override
 
 import equinox as eqx
-import jax
 import jax.numpy as jnp
 import jax_dataloader as jdl
 from jaxopt import ProjectedGradient
 from jaxopt.projection import projection_simplex
-from jaxtyping import Array, Float, Int
+from jaxtyping import Array, Float, Int, PRNGKeyArray
 
 from .._pose_search import HierarchicalSO3GridSearch
 from . import ImagesToEnsembleLikelihoodFn
+from ._luke_weight_optimizer import multiplicative_gradient
 from .base_optimizer import AbstractEnsembleParameterOptimizer
 
 
@@ -111,23 +111,32 @@ def _optimize_weights(
     return pg.run(weights, llm=log_likelihood_matrix).params
 
 
-@eqx.filter_jit
 def optimize_weights(
+    key: PRNGKeyArray,
     log_likelihood_matrix: Float[Array, "n_images n_walkers"],
-    init_weights: None | Float[Array, " n_walkers"] = None,
     max_iter: Int = 500,
 ) -> Float[Array, " n_walkers"]:
-    if init_weights is None:
-        init_weights = (
-            jnp.ones(log_likelihood_matrix.shape[1]) / log_likelihood_matrix.shape[1]
-        )
+    # if init_weights is None:
+    #     init_weights = (
+    #         jnp.ones(log_likelihood_matrix.shape[1]) / log_likelihood_matrix.shape[1]
+    #     )
 
-    def _loss_fn(w, llm):
-        return -jnp.mean(jax.scipy.special.logsumexp(a=llm, b=w[None, :], axis=1))
+    # def _loss_fn(w, llm):
+    #     return -jnp.mean(jax.scipy.special.logsumexp(a=llm, b=w[None, :], axis=1))
 
-    pg = ProjectedGradient(
-        fun=_loss_fn,
-        projection=projection_simplex,
-        maxiter=max_iter,
+    # pg = ProjectedGradient(
+    #     fun=_loss_fn,
+    #     projection=projection_simplex,
+    #     maxiter=max_iter,
+    # )
+    # return pg.run(init_weights, llm=log_likelihood_matrix).params
+
+    weights, _ = multiplicative_gradient(
+        log_likelihood_matrix,
+        max_iterations=max_iter,
+        weights_frequency=1,
+        tol=1e-2,
+        train_test_key=key,
+        train_test=True,
     )
-    return pg.run(init_weights, llm=log_likelihood_matrix).params
+    return weights

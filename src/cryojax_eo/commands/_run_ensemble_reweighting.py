@@ -9,6 +9,7 @@ from typing import Literal
 import cryojax.ndimage as cxim
 import cryojax.simulator as cxs
 import equinox as eqx
+import jax
 import jax.numpy as jnp
 import mrcfile
 import numpy as np
@@ -104,7 +105,7 @@ def compute_likelihoods_for_structural_file(
             tabulation="peng",
             include_b_factors=True,
             selection_string=selection_string,
-            pdb_options=dict(center=False),
+            # pdb_options=dict(center=False),
         )
         voxel_grid = _gmm_volume_to_voxel_grid(gmm_volume, image_config)
 
@@ -209,10 +210,10 @@ def run_ensemble_reweighting(
         )
         likelihood_matrix[:, i] = np.asarray(likelihoods)
 
-    initial_weights = jnp.array(config["initial_weights"])
+    key = jax.random.key(config["random_seed"])
     weights = optimize_weights(
+        key=key,
         log_likelihood_matrix=jnp.array(likelihood_matrix),
-        init_weights=initial_weights,
         max_iter=config["max_iter"],
     )
     weight_dict = {}
@@ -221,12 +222,18 @@ def run_ensemble_reweighting(
     for i, file in enumerate(config["path_to_structural_files"]):
         weight_dict[file] = float(weights[i])
         logging.info(f"  Weight for {file}: {weights[i]:.4f}")
+        print(f"  Weight for {file}: {weights[i]:.4f}")
 
     # save the weights as a yaml file
     with open(
         os.path.join(config["path_to_output_dir"], "optimized_weights.yaml"), "w"
     ) as f:
         yaml.dump(weight_dict, f)
+
+    np.save(
+        os.path.join(config["path_to_output_dir"], "log_likelihood_matrix.npy"),
+        likelihood_matrix,
+    )
 
     return weights
 

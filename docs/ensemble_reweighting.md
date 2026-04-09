@@ -5,7 +5,7 @@ Note: This does NOT require OpenMM to be installed.
 If you already have a set of structures (atomic models or volumes), you can run ensemble reweighting through the command line:
 
 ```bash
-run_ensemble_optimization --config config_optimization.yaml
+run_ensemble_reweighting --config config_reweighting.yaml
 ```
 
 This pipeline is relatively more flexible, as PDBs do not need to have the same topology, and volumes in .mrc format are also supported. The main limitation, however, is that we assume these models are already aligned. This can be easily done manually in Chimera for PDBs, or through the volume alignment tools in CryoSPARC.
@@ -33,6 +33,7 @@ n_images_in_parallel: 5000
 atom_selection: ... # path to a txt/npy file, or a mdtraj-compatible selection string, e.g., "not element H"
 loads_b_factors: true # Load Debye-Waller b-factors from provided PDBs
 max_iter: 500 # Maximum number of Proj. Grad. Descent iterations
+random_seed: 0
 
 # Volumes loaded or generated from pdb/cif files will be
 # low pass filtered to match this resolution.
@@ -51,3 +52,4 @@ path_to_output_dir: ./reweighting_results/
 - `optimized_weights`: final weights for each structural file
 - A `log` file.
 - A copy of the input config file
+- log-likelihood matrix: log-likelihood computed for each pair of image, structural file
