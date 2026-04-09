@@ -5,6 +5,7 @@ Weight and position optimizers for ensemble refinement.
 from typing_extensions import override
 
 import equinox as eqx
+import jax
 import jax.numpy as jnp
 import jax_dataloader as jdl
 from jaxopt import ProjectedGradient
@@ -108,3 +109,25 @@ def _optimize_weights(
         maxiter=n_steps,
     )
     return pg.run(weights, llm=log_likelihood_matrix).params
+
+
+@eqx.filter_jit
+def optimize_weights(
+    log_likelihood_matrix: Float[Array, "n_images n_walkers"],
+    init_weights: None | Float[Array, " n_walkers"] = None,
+    max_iter: Int = 500,
+) -> Float[Array, " n_walkers"]:
+    if init_weights is None:
+        init_weights = (
+            jnp.ones(log_likelihood_matrix.shape[1]) / log_likelihood_matrix.shape[1]
+        )
+
+    def _loss_fn(w, llm):
+        return -jnp.mean(jax.scipy.special.logsumexp(a=llm, b=w[None, :], axis=1))
+
+    pg = ProjectedGradient(
+        fun=_loss_fn,
+        projection=projection_simplex,
+        maxiter=max_iter,
+    )
+    return pg.run(init_weights, llm=log_likelihood_matrix).params

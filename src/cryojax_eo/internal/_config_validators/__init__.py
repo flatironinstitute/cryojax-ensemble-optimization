@@ -2,3 +2,4 @@ from .data_generator_config import DatasetSimulatorConfig as DatasetSimulatorCon
 from .ensemble_opt_config import EnsOptMDConfig as EnsOptMDConfig
 from .flexible_fitting_config import FlexibleFittingConfig as FlexibleFittingConfig
 from .gmm_fit_config import GMMFitConfig as GMMFitConfig
+from .reweighting_config import ReweightingConfig as ReweightingConfig

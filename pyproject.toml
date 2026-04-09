@@ -94,3 +94,4 @@ run_ensemble_optimization = "cryojax_eo.commands._run_ensemble_optimization:main
 simulate_data = "cryojax_eo.commands._simulate_data:main_cli"
 fit_gmm_to_atoms = "cryojax_eo.commands._fit_gmm_to_atoms:main_cli"
 run_flexible_fitting = "cryojax_eo.commands._run_flexible_fitting:main_cli"
+run_ensemble_reweighting = "cryojax_eo.commands._run_ensemble_reweighting:main_cli"

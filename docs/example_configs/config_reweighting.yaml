@@ -1,0 +1,21 @@
+dataset_params:
+  path_to_relion_project: /path/to/relion/project/
+  path_to_starfile: /path/to/starfile.star
+  loads_envelope: True # (*) Default: false, loads envelope function parameters
+  data_sign: "dark-on-light" # Relion convention, dark particles on a light background
+  path_to_volumetric_mask: /path/to/volumetric_mask.mrc # (*) e.g., the mask from a refinement procedure
+
+# How many images are used to compute likelihoods in parallel
+# This can usually be a large value since Fourier Slice Extraction is memory efficient
+n_images_in_parallel: 5000
+
+atom_selection: ... # path to a txt/npy file, or a mdtraj-compatible selection string, e.g., "not element H"
+loads_b_factors: true # Load Debye-Waller b-factors from provided PDBs
+max_iter: 500 # Maximum number of Proj. Grad. Descent iterations
+
+path_to_structural_files: # Can be the same for each replica
+- path/to/structural_files/pdb_structural_file_0.pdb
+- path/to/structural_files/cif_structural_file_1.cif
+- path/to/structural_files/mrc_structural_file_2.mrc
+
+path_to_output_dir: ./reweighting_results/
