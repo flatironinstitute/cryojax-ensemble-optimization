@@ -9,12 +9,30 @@ dataset_params:
 # This can usually be a large value since Fourier Slice Extraction is memory efficient
 n_images_in_parallel: 5000
 
-atom_selection: ... # path to a txt/npy file, or a mdtraj-compatible selection string, e.g., "not element H"
-loads_b_factors: true # Load Debye-Waller b-factors from provided PDBs
-max_iter: 500 # Maximum number of Proj. Grad. Descent iterations
+# Maximum number of iterations for
+# reweighting algorithm
+max_iter: 500
+
+# Random seed for splitting data into
+# train and validation set
 random_seed: 0
 
-path_to_structural_files: # Can be the same for each replica
+
+##### Atomic model exclusive parameters #####
+# These will be ignored if no structural files have
+# pdb or cif format.
+
+# atom selection string in mdtraj convention
+# Examples: "all", "not element H", "name CA"
+atom_selection: "all"
+
+# Load Debye-Waller b-factors from provided PDBs
+loads_b_factors: true
+
+
+# A collection of structural files
+# can be any combination of pdb, cif, mrc files
+path_to_structural_files:
 - path/to/structural_files/pdb_structural_file_0.pdb
 - path/to/structural_files/cif_structural_file_1.cif
 - path/to/structural_files/mrc_structural_file_2.mrc
