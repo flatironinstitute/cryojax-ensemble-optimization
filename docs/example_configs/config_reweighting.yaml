@@ -17,8 +17,16 @@ max_iter: 500
 # train and validation set
 random_seed: 0
 
+# A collection of structural files
+# can be any combination of pdb, cif, mrc files
+path_to_structural_files:
+- path/to/structural_files/pdb_structural_file_0.pdb
+- path/to/structural_files/cif_structural_file_1.cif
+- path/to/structural_files/mrc_structural_file_2.mrc
 
-##### Atomic model exclusive parameters #####
+path_to_output_dir: ./reweighting_results/
+
+########### Atomic model exclusive parameters ###########
 # These will be ignored if no structural files have
 # pdb or cif format.
 
@@ -28,13 +36,4 @@ atom_selection: "all"
 
 # Load Debye-Waller b-factors from provided PDBs
 loads_b_factors: true
-
-
-# A collection of structural files
-# can be any combination of pdb, cif, mrc files
-path_to_structural_files:
-- path/to/structural_files/pdb_structural_file_0.pdb
-- path/to/structural_files/cif_structural_file_1.cif
-- path/to/structural_files/mrc_structural_file_2.mrc
-
-path_to_output_dir: ./reweighting_results/
+#########################################################
