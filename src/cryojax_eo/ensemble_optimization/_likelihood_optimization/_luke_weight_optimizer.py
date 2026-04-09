@@ -271,7 +271,7 @@ def multiplicative_gradient(
     # Do train test index picking
     if train_test:
         logging.info("Getting train test stopping index")
-        train_test_idx = multiplicative_gradient_train_test(
+        train_test_idx = _multiplicative_gradient_train_test(
             train_test_key,
             log_likelihood,
             wait_time=2,
@@ -340,7 +340,7 @@ def multiplicative_gradient(
     return weights, info
 
 
-def multiplicative_gradient_train_test(
+def _multiplicative_gradient_train_test(
     key,
     log_likelihood,
     wait_time=2,
@@ -385,6 +385,7 @@ def multiplicative_gradient_train_test(
     # Initialize train test procedure
     count = 0
     smoothed_val_loss = _compute_loss(weights, likelihood_test)
+    n_iter = 0
     for k in range(max_iterations):
         # Update grad
         grad = compute_grad(weights, likelihood_train)
@@ -411,7 +412,8 @@ def multiplicative_gradient_train_test(
             break
         weights = weights_new
         smoothed_val_loss = smoothed_val_loss_new
+        n_iter += 1
 
-    if k == max_iterations - 1:
+    if n_iter == max_iterations - 1:
         logging.info("NOTE: Train-test stopping criterion not reached.")
-    return k
+    return n_iter
