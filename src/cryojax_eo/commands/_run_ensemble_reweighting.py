@@ -9,7 +9,6 @@ from typing import Literal
 import cryojax.ndimage as cxim
 import cryojax.simulator as cxs
 import equinox as eqx
-import jax
 import jax.numpy as jnp
 import mrcfile
 import numpy as np
@@ -210,11 +209,10 @@ def run_ensemble_reweighting(
         )
         likelihood_matrix[:, i] = np.asarray(likelihoods)
 
-    key = jax.random.key(config["random_seed"])
     weights = optimize_weights(
-        key=key,
         log_likelihood_matrix=jnp.array(likelihood_matrix),
         max_iter=config["max_iter"],
+        tol=config["tol"],
     )
     weight_dict = {}
 

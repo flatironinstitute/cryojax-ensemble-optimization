@@ -89,6 +89,10 @@ class ReweightingConfig(BaseModel, extra="forbid"):
     max_iter: PositiveInt = Field(
         description="Maximum number of proj. gradient descent steps."
     )
+    tol: PositiveFloat = Field(
+        default=1e-2,
+        description="Tolerance for the stopping criteria of the optimization.",
+    )
     n_images_in_parallel: PositiveInt = Field(
         default=1,
         description="Number of images to use in parallel for computing the likelihoods. "
@@ -102,12 +106,6 @@ class ReweightingConfig(BaseModel, extra="forbid"):
     #     "If None, will be set to uniform distribution.",
     # )
 
-    random_seed: int = Field(
-        default=0,
-        description="Random seed for the optimization. "
-        + "This is used for the pose estimation step. "
-        + "Using the same seed will ensure reproducibility of the optimization results.",
-    )
     max_volume_repr_resolution: PositiveFloat | None = Field(
         default=None,
         description="Maximum resolution to use for the volume representation. "

@@ -13,9 +13,10 @@ n_images_in_parallel: 5000
 # reweighting algorithm
 max_iter: 500
 
-# Random seed for splitting data into
-# train and validation set
-random_seed: 0
+# Tolerance for stopping criteria
+# of the multiplicative gradient
+# weight optimization method
+tol: 1e-2
 
 # A collection of structural files
 # can be any combination of pdb, cif, mrc files
