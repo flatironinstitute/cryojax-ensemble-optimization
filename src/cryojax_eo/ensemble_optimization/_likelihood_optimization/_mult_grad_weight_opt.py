@@ -17,10 +17,6 @@ class _MultGradWeightCarry(eqx.Module):
     weights: Float[Array, " n_nodes"]
     gap: Float[Array, ""]
     n_iters: Int[Array, ""]
-    # these two are constants
-    likelihood: Float[Array, "n_data n_nodes"]
-    gap_scale: Float[Array, ""]
-    tol: Float[Array, ""]
 
 
 @eqx.filter_jit
@@ -53,20 +49,17 @@ def multiplicative_gradient(
     """
 
     def body_fn(carry: _MultGradWeightCarry):
-        grad = _compute_grad(carry.weights, carry.likelihood)
-        gap = _scaled_gap(grad, carry.weights, carry.gap_scale)
+        grad = _compute_grad(carry.weights, likelihood_matrix)
+        gap = _scaled_gap(grad, carry.weights, gap_scale)
         weights = _update_weights(carry.weights, grad)
         return _MultGradWeightCarry(
             weights=weights,
             gap=gap,
             n_iters=carry.n_iters + 1,
-            likelihood=carry.likelihood,
-            gap_scale=carry.gap_scale,
-            tol=carry.tol,
         )
 
     def cond_fn(carry: _MultGradWeightCarry):
-        cond1 = jnp.greater_equal(carry.gap, carry.tol)
+        cond1 = jnp.greater_equal(carry.gap, tol)
         cond2 = jnp.less(carry.n_iters, max_iter)
         return jnp.logical_and(cond1, cond2)
 
@@ -76,18 +69,15 @@ def multiplicative_gradient(
     weights = (1 / n_nodes) * jnp.ones(n_nodes)
 
     # Convert log likelihood to likelihood via "soft-max"-ish operation
-    likelihood = _normalize_log_likelihood_to_likelihood(log_likelihood_matrix)
+    likelihood_matrix = _normalize_log_likelihood_to_likelihood(log_likelihood_matrix)
 
     # Initialize scaling for gap stopping criteria
-    gap_scale = _scaled_gap(_compute_grad(weights, likelihood), weights, scale=1.0)
+    gap_scale = _scaled_gap(_compute_grad(weights, likelihood_matrix), weights, scale=1.0)
 
     carry = _MultGradWeightCarry(
         weights=weights,
         gap=gap_scale,
         n_iters=jnp.asarray(0),
-        likelihood=likelihood,
-        gap_scale=gap_scale,
-        tol=tol,
     )
 
     carry = jax.lax.while_loop(cond_fn, body_fn, carry)
