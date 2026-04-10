@@ -7,7 +7,6 @@ from jaxtyping import Array, Float
 
 from ....simulator._dilated_mask import DilatedMask
 from .common_functions import compute_optimal_scale_and_offset
-from .make_model_utils import make_image_model_from_gmm
 
 
 class AbstractImageToWalkerLogLikelihoodFn(eqx.Module, strict=True):
@@ -95,10 +94,13 @@ class MargGaussianWhiteLogLikelihoodFn(AbstractImageToWalkerLogLikelihoodFn, str
         transfer_theory: cxs.ContrastTransferTheory,
         per_particle_args: Any,
     ) -> Float:
-        return _likelihood_isotropic_gaussian_marginalized(
-            walker=walker,
-            amplitudes=self.amplitudes,
-            variances=self.variances,
+        volume = cxs.GaussianMixtureVolume(
+            walker,
+            self.amplitudes,
+            self.variances,
+        )
+        return likelihood_iso_gaussian_marg(
+            volume=volume,
             image=image,
             image_config=image_config,
             pose=pose,
@@ -158,10 +160,13 @@ class GaussianWhiteLogLikelihoodFn(AbstractImageToWalkerLogLikelihoodFn, strict=
         transfer_theory: cxs.ContrastTransferTheory,
         per_particle_args: Float[Array, ""],
     ) -> Float:
-        return _likelihood_gaussian_white_noise(
-            walker=walker,
-            amplitudes=self.amplitudes,
-            variances=self.variances,
+        volume = cxs.GaussianMixtureVolume(
+            walker,
+            self.amplitudes,
+            self.variances,
+        )
+        return likelihood_gaussian_white_noise(
+            volume=volume,
             image=image,
             image_config=image_config,
             pose=pose,
@@ -172,10 +177,8 @@ class GaussianWhiteLogLikelihoodFn(AbstractImageToWalkerLogLikelihoodFn, strict=
         )
 
 
-def _likelihood_gaussian_white_noise(
-    walker: Float[Array, "n_atoms 3"],
-    amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
-    variances: Float[Array, "n_atoms n_gaussians_per_atom"],
+def likelihood_gaussian_white_noise(
+    volume: cxs.AbstractVolumeRepresentation,
     image: Float[Array, "y x"],
     image_config: cxs.BasicImageConfig,
     pose: cxs.AbstractPose,
@@ -206,8 +209,12 @@ def _likelihood_gaussian_white_noise(
 
     noise_variance = per_particle_args
 
-    image_model = make_image_model_from_gmm(
-        walker, amplitudes, variances, image_config, pose, transfer_theory
+    image_model = cxs.make_image_model(
+        volume,
+        image_config,
+        pose,
+        transfer_theory,
+        normalizes_signal=True,
     )
     computed_image = image_model.simulate()
     observed_image = jnp.asarray(image)
@@ -227,10 +234,8 @@ def _likelihood_gaussian_white_noise(
     )
 
 
-def _likelihood_isotropic_gaussian_marginalized(
-    walker: Float[Array, "n_atoms 3"],
-    amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
-    variances: Float[Array, "n_atoms n_gaussians_per_atom"],
+def likelihood_iso_gaussian_marg(
+    volume: cxs.AbstractVolumeRepresentation,
     image: Float[Array, "y x"],
     image_config: cxs.BasicImageConfig,
     pose: cxs.AbstractPose,
@@ -248,8 +253,12 @@ def _likelihood_isotropic_gaussian_marginalized(
         per_particle_args is None
     ), "per_particle_args is not used in this function and should be None."
 
-    image_model = make_image_model_from_gmm(
-        walker, amplitudes, variances, image_config, pose, transfer_theory
+    image_model = cxs.make_image_model(
+        volume,
+        image_config,
+        pose,
+        transfer_theory,
+        normalizes_signal=True,
     )
     computed_image = image_model.simulate()
     observed_image = jnp.asarray(image)

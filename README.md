@@ -32,10 +32,16 @@ pip install cryojax_eo
 ```
 To find your CUDA version, you can run `nvidia-smi` in a terminal. The CUDA version will appear in the top right corner of the output.
 
+Note: OpenMM is not required for all our utilities. Data simulation and Ensemble Reweighting only require JAX!
+
 
 ## Cryo-EM Ensemble Optimization Input
 
 See the [input documentation](docs/ensemble_optimization.md)
+
+## Cryo-EM Ensemble Reweighting Input
+
+See the [input documentation](docs/ensemble_reweighting.md)
 
 
 ## Cryo-EM heterogeneous dataset simulation

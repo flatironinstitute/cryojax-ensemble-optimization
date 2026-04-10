@@ -8,7 +8,15 @@ from ._config_validators import (
     EnsOptMDConfig,
     FlexibleFittingConfig,
     GMMFitConfig,
+    ReweightingConfig,
 )
+
+
+@overload
+def load_config(
+    path_to_config: str | Path,
+    config_mode: Literal["reweighting"],
+) -> ReweightingConfig: ...
 
 
 @overload
@@ -40,9 +48,19 @@ def load_config(
 def load_config(
     path_to_config: str | Path,
     config_mode: Literal[
-        "data simulation", "ensemble optimization", "gmm fitting", "flexible fitting"
+        "data simulation",
+        "ensemble optimization",
+        "gmm fitting",
+        "flexible fitting",
+        "reweighting",
     ],
-) -> DatasetSimulatorConfig | EnsOptMDConfig | GMMFitConfig | FlexibleFittingConfig:
+) -> (
+    DatasetSimulatorConfig
+    | EnsOptMDConfig
+    | GMMFitConfig
+    | FlexibleFittingConfig
+    | ReweightingConfig
+):
     """
     Load a configuration file and parse it into the appropriate configuration object.
 
@@ -51,7 +69,7 @@ def load_config(
         Path to the configuration file (YAML format).
     - `config_mode`
         Type of configuration to load. Must be one of "data simulation",
-        "ensemble optimization", "gmm fitting", or "flexible fitting".
+        "ensemble optimization", "gmm fitting", "flexible fitting", or "reweighting".
 
     **Returns:**
     - Config Object
@@ -68,9 +86,11 @@ def load_config(
         return GMMFitConfig(**config_dict)
     elif config_mode == "flexible fitting":
         return FlexibleFittingConfig(**config_dict)
+    elif config_mode == "reweighting":
+        return ReweightingConfig(**config_dict)
     else:
         raise ValueError(
             f"Unknown config_mode: {config_mode}. Must be one of"
             + " 'data simulation', 'ensemble optimization',"
-            " 'gmm fitting', or 'flexible fitting'."
+            " 'gmm fitting', 'flexible fitting', or 'reweighting'."
         )

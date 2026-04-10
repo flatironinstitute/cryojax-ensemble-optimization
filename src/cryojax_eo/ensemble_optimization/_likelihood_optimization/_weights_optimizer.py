@@ -2,6 +2,7 @@
 Weight and position optimizers for ensemble refinement.
 """
 
+import logging
 from typing_extensions import override
 
 import equinox as eqx
@@ -13,6 +14,7 @@ from jaxtyping import Array, Float, Int
 
 from .._pose_search import HierarchicalSO3GridSearch
 from . import ImagesToEnsembleLikelihoodFn
+from ._mult_grad_weight_opt import multiplicative_gradient
 from .base_optimizer import AbstractEnsembleParameterOptimizer
 
 
@@ -108,3 +110,41 @@ def _optimize_weights(
         maxiter=n_steps,
     )
     return pg.run(weights, llm=log_likelihood_matrix).params
+
+
+def optimize_weights(
+    log_likelihood_matrix: Float[Array, "n_images n_walkers"],
+    max_iter: int = 500,
+    tol: float = 1e-2,
+) -> Float[Array, " n_walkers"]:
+    # if init_weights is None:
+    #     init_weights = (
+    #         jnp.ones(log_likelihood_matrix.shape[1]) / log_likelihood_matrix.shape[1]
+    #     )
+
+    # def _loss_fn(w, llm):
+    #     return -jnp.mean(jax.scipy.special.logsumexp(a=llm, b=w[None, :], axis=1))
+
+    # pg = ProjectedGradient(
+    #     fun=_loss_fn,
+    #     projection=projection_simplex,
+    #     maxiter=max_iter,
+    # )
+    # return pg.run(init_weights, llm=log_likelihood_matrix).params
+
+    weights, n_iter, final_gap = multiplicative_gradient(
+        log_likelihood_matrix,
+        max_iter=jnp.asarray(max_iter),
+        tol=jnp.asarray(tol),
+    )
+    if n_iter == max_iter:
+        logging.info(
+            f"Optimization did not converge after {max_iter} iterations. "
+            f"Final gap: {final_gap:.4f}. Consider increasing max_iter or tol."
+        )
+    else:
+        logging.info(
+            f"Optimization converged after {n_iter} iterations. "
+            f"Final gap: {final_gap:.4f}."
+        )
+    return weights

@@ -8,7 +8,6 @@ from cryojax_eo.ensemble_optimization import (
     GaussianWhiteLogLikelihoodFn,
     MargGaussianWhiteLogLikelihoodFn,  # done
     compute_optimal_scale_and_offset,  # done
-    make_image_model_from_gmm,  # done
 )
 from cryojax_eo.io import read_walkers_from_pdbs
 from cryojax_eo.simulator import DilatedMask
@@ -36,20 +35,6 @@ def simple_volume_mask(sample_path_to_starfile):
     voxel_grid = jax.random.randint(jax.random.key(0), volume_shape, minval=0, maxval=2)
 
     return DilatedMask(voxel_grid)
-
-
-def test_make_image_model_from_gmm(sample_path_to_pdb1, sample_relion_stack):
-    walkers, amplitudes, variances = read_walkers_from_pdbs([sample_path_to_pdb1])
-
-    make_image_model_from_gmm(
-        walkers[0],
-        amplitudes,
-        variances,
-        sample_relion_stack["parameters"]["image_config"],
-        sample_relion_stack["parameters"]["pose"],
-        sample_relion_stack["parameters"]["transfer_theory"],
-    )
-    return
 
 
 def test_compute_scale_and_offset():
