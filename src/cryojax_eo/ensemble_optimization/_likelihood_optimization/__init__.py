@@ -4,12 +4,16 @@ from ._loss_functions import (
     ImagesToEnsembleLikelihoodFn as ImagesToEnsembleLikelihoodFn,
     MargGaussianWhiteLogLikelihoodFn as MargGaussianWhiteLogLikelihoodFn,
     compute_optimal_scale_and_offset as compute_optimal_scale_and_offset,
-    make_image_model_from_gmm as make_image_model_from_gmm,
+    likelihood_gaussian_white_noise as likelihood_gaussian_white_noise,
+    likelihood_iso_gaussian_marg as likelihood_iso_gaussian_marg,
 )
 from ._walker_optimizers import (
     IterativeEnsembleLikelihoodOptimizer as IterativeEnsembleLikelihoodOptimizer,
 )
-from ._weights_optimizer import ProjGradDescWeightOptimizer as ProjGradDescWeightOptimizer
+from ._weights_optimizer import (
+    ProjGradDescWeightOptimizer as ProjGradDescWeightOptimizer,
+    optimize_weights as optimize_weights,
+)
 from .base_optimizer import (
     AbstractEnsembleParameterOptimizer as AbstractEnsembleParameterOptimizer,
 )

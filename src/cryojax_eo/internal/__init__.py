@@ -4,4 +4,5 @@ from ._config_validators import (
     EnsOptMDConfig as EnsOptMDConfig,
     FlexibleFittingConfig as FlexibleFittingConfig,
     GMMFitConfig as GMMFitConfig,
+    ReweightingConfig as ReweightingConfig,
 )

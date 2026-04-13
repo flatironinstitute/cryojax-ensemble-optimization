@@ -6,7 +6,9 @@ from ._likelihood_optimization import (
     MargGaussianWhiteLogLikelihoodFn as MargGaussianWhiteLogLikelihoodFn,
     ProjGradDescWeightOptimizer as ProjGradDescWeightOptimizer,
     compute_optimal_scale_and_offset as compute_optimal_scale_and_offset,
-    make_image_model_from_gmm as make_image_model_from_gmm,
+    likelihood_gaussian_white_noise as likelihood_gaussian_white_noise,
+    likelihood_iso_gaussian_marg as likelihood_iso_gaussian_marg,
+    optimize_weights as optimize_weights,
 )
 from ._pipelines import (
     AbstractEnsembleOptimizationPipeline as AbstractEnsembleOptimizationPipeline,

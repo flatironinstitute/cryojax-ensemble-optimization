@@ -7,8 +7,8 @@ import sys
 
 import yaml
 
-from ..dataset import simulate_relion_dataset
-from ..internal import DatasetSimulatorConfig
+from cryojax_eo.dataset import simulate_relion_dataset
+from cryojax_eo.internal import DatasetSimulatorConfig
 
 
 def add_args(parser):

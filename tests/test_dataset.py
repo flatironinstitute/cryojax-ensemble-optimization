@@ -17,6 +17,7 @@ from cryojax_eo.internal import DatasetSimulatorConfig
 
 @pytest.fixture
 def sample_simulator_config(
+    sample_rotations_config,
     sample_path_to_pdb1,
     sample_path_to_pdb2,
 ):
@@ -56,7 +57,24 @@ def sample_simulator_config(
         images_per_file=10,
         batch_size_for_generation=10,
         overwrite=True,
+        rotations=sample_rotations_config,
     )
+
+
+@pytest.fixture(
+    params=[
+        {},  # Uniform by default
+        {
+            "rotation_distribution": "non-uniform",
+            "vmf_kappa": 3.0,
+            "vmf_mu": [0.0, 0.0, 1.0],
+            "vmf_alpha": 0.5,
+        },
+    ],
+    ids=["uniform-rotations", "non-uniform-rotations"],
+)
+def sample_rotations_config(request):
+    return request.param
 
 
 def test_make_relion_parameter_file(sample_simulator_config):
