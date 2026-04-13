@@ -29,7 +29,7 @@ from cryojax_eo.flexible_fitting import (
 )
 from cryojax_eo.internal import FlexibleFittingConfig
 from cryojax_eo.io import read_walkers_from_pdbs
-from cryojax_eo.utils import ModelToVolumeAligner
+from cryojax_eo.utils import EarlyStopping, ModelToVolumeAligner
 
 
 def add_args(parser):
@@ -201,6 +201,16 @@ def run_flexible_fitting(flexible_fitting_config: FlexibleFittingConfig):
         model_to_vol_loss_fn=model_to_vol_loss_fn,
     )
 
+    early_stopping = (
+        EarlyStopping(
+            patience=config["early_stopping"]["patience"],
+            rtol=config["early_stopping"]["rtol"],
+            atol=config["early_stopping"]["atol"],
+        )
+        if config.get("early_stopping") is not None
+        else None
+    )
+
     # Construct the ensemble optimization pipeline
     flexible_fitting_pipeline = FlexibleFittingPipeline(
         prior_projector=prior_projector,
@@ -209,6 +219,7 @@ def run_flexible_fitting(flexible_fitting_config: FlexibleFittingConfig):
         prealigned_structure=ref_structure,
         atom_indices_for_opt=atom_list,
         model_to_volume_aligner=model_aligner,
+        early_stopping=early_stopping,
     )
 
     # Running the optimization

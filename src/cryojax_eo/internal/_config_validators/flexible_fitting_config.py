@@ -43,6 +43,23 @@ class FFOptimizationConfig(BaseModel, extra="forbid"):
     )
 
 
+class FFEarlyStoppingConfig(BaseModel, extra="forbid"):
+    patience: PositiveInt = Field(
+        description="Number of steps to wait before stopping the optimization. "
+        + "Must be a positive integer.",
+    )
+    rtol: PositiveFloat = Field(
+        default=1e-4,
+        description="Relative tolerance for the optimization. "
+        + "Must be a positive float.",
+    )
+    atol: PositiveFloat = Field(
+        default=1e-4,
+        description="Absolute tolerance for the optimization. "
+        + "Must be a positive float.",
+    )
+
+
 class FFProjectorConfig(BaseModel, extra="forbid"):
     n_steps: PositiveInt = Field(
         description="Number of steps for the MD sampler. Must be greater than 0."
@@ -200,6 +217,11 @@ class FlexibleFittingConfig(BaseModel, extra="forbid"):
         + "This is a dictionary formatted by "
         + "the `FFOptimizationConfig` class."
     )
+    early_stopping: dict | None = Field(
+        default=None,
+        description="Parameters for the early stopping. "
+        + "This is a dictionary formatted by the `FFEarlyStoppingConfig` class.",
+    )
     # Optimization
     n_steps: PositiveInt = Field(
         description="Number of steps of cryoJAX ensemble refinement to run."
@@ -224,6 +246,11 @@ class FlexibleFittingConfig(BaseModel, extra="forbid"):
     @classmethod
     def validate_ref_vol_config(cls, values):
         return dict(RefVolFFConfig(**values).model_dump())
+
+    @field_validator("early_stopping")
+    @classmethod
+    def validate_early_stopping_config(cls, values):
+        return dict(FFEarlyStoppingConfig(**values).model_dump())
 
     @field_validator("atom_selection")
     @classmethod

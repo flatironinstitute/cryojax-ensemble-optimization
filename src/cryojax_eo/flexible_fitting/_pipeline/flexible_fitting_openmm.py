@@ -15,7 +15,7 @@ from tqdm import tqdm
 from cryojax_eo.ensemble_optimization import (
     SteeredMDSimulator,
 )
-from cryojax_eo.utils import ModelToVolumeAligner, rigid_align_positions
+from cryojax_eo.utils import EarlyStopping, ModelToVolumeAligner, rigid_align_positions
 
 from .._cross_corelation.model_to_volume_loss import ModelToVolumeCorrelationLossFn
 from .._cross_corelation.optimizer import AbstractWalkerOptimizer
@@ -32,6 +32,7 @@ class FlexibleFittingPipeline(eqx.Module):
     prealigned_structure: mdtraj.Trajectory
     model_to_volume_aligner: ModelToVolumeAligner | None
     atom_indices_for_opt: Int[Array, " n_atoms_for_opt"]
+    early_stopping: EarlyStopping | None
 
     def __init__(
         self,
@@ -41,6 +42,7 @@ class FlexibleFittingPipeline(eqx.Module):
         prealigned_structure: mdtraj.Trajectory,
         atom_indices_for_opt: Int[Array, " n_atoms_for_opt"],
         model_to_volume_aligner: ModelToVolumeAligner | None = None,
+        early_stopping: EarlyStopping | None = None,
     ):
         assert n_steps > 0, "n_steps must be positive"
         assert atom_indices_for_opt.ndim == 1, "atom_indices_for_opt must be a 1D array."
@@ -54,6 +56,7 @@ class FlexibleFittingPipeline(eqx.Module):
         self.prealigned_structure = prealigned_structure
         self.atom_indices_for_opt = atom_indices_for_opt
         self.model_to_volume_aligner = model_to_volume_aligner
+        self.early_stopping = early_stopping
 
     def run(
         self,
@@ -90,6 +93,10 @@ class FlexibleFittingPipeline(eqx.Module):
         # Construct initial optimizer state
         opt_state = self.walker_optimizer._initalize_opt_state(
             walker[self.atom_indices_for_opt, :]
+        )
+
+        early_stopping_state = (
+            self.early_stopping.init() if self.early_stopping is not None else None
         )
 
         progress_bar = tqdm(range(self.n_steps), desc="Flexible Fitting", leave=True)
@@ -148,9 +155,17 @@ class FlexibleFittingPipeline(eqx.Module):
                     self.walker_optimizer.model_to_vol_loss_fn,
                     ModelToVolumeCorrelationLossFn,
                 )
-                else f"MSE: {loss:.4f}"
+                else f"MSE: {loss:.4e}"
             )
             progress_bar.set_description(f"Flexible Fitting ({loss_str})")
+
+            if self.early_stopping is not None and early_stopping_state is not None:
+                early_stopping_state, should_stop = self.early_stopping.step(
+                    early_stopping_state, loss
+                )
+                if should_stop:
+                    logging.info("Early stopping triggered. Stopping optimization.")
+                    break
 
         writer.close()
         _write_walker_to_pdb(
