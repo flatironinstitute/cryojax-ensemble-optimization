@@ -15,7 +15,7 @@ from .model_to_volume_loss import AbstractModelToVolumeLossFn
 
 class AbstractWalkerOptimizer(eqx.Module):
     step_size: Float
-    n_steps: Int
+    n_steps: Int = eqx.field(static=True)
     model_to_vol_loss_fn: AbstractModelToVolumeLossFn
 
     def __init__(
@@ -38,17 +38,18 @@ class AbstractWalkerOptimizer(eqx.Module):
         reference_volume: Float[Array, "n_pixels n_pixels n_pixels"],
         opt_state: optax.OptState,
     ) -> tuple[Float, Float[Array, "n_atoms 3"], optax.OptState]:
-        loss = jnp.inf
-        for _ in range(self.n_steps):
+        def step_fn(carry, _):
+            walkers, opt_state = carry
             loss, gradients = _compute_walker_gradients(
-                walkers,
-                reference_volume,
-                self.model_to_vol_loss_fn,
+                walkers, reference_volume, self.model_to_vol_loss_fn
             )
-
             walkers, opt_state = self._optimizer_step(walkers, gradients, opt_state)
+            return (walkers, opt_state), loss
 
-        return loss, walkers, opt_state
+        (walkers, opt_state), losses = jax.lax.scan(
+            step_fn, (walkers, opt_state), xs=None, length=self.n_steps
+        )
+        return losses[-1], walkers, opt_state
 
     @abc.abstractmethod
     def _initalize_opt_state(self, walkers: Float[Array, "n_atoms 3"]) -> optax.OptState:
