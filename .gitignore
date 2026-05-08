@@ -1,6 +1,9 @@
 .vscode/
 uv.lock
 
+# Docker / AppTainer
+*.sif
+
 *_version.py
 
 # Byte-compiled / optimized / DLL files

@@ -28,4 +28,5 @@ from ._prior_projection import (
     SteeredMDSimulator as SteeredMDSimulator,
     SteeredOverdampedLangevinSampler as SteeredOverdampedLangevinSampler,
     compute_harmonic_steering_force as compute_harmonic_steering_force,
+    md_params_config_to_openmm_overrides as md_params_config_to_openmm_overrides,
 )

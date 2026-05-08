@@ -11,7 +11,7 @@ from functools import partial
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jaxtyping import Array, Float, Int
+from jaxtyping import Array, Int
 
 from .healjax import pix2ang
 
@@ -61,14 +61,14 @@ def decompose_SO3(R, a=1, b=1, c=1):
 
 
 # Quaternion representation of SO(3) and Hopf Fibration grid
-def grid_s1(resol=1):
+def grid_s1(resol: int):
     Npix = 6 * 2**resol
     dt = 2 * np.pi / Npix
     grid = jnp.arange(Npix) * dt + dt / 2
     return grid
 
 
-def grid_s2(resol=1):
+def grid_s2(resol: int):
     Nside = 2**resol
     Npix = 12 * Nside * Nside
     theta, phi = pix2ang(Nside, np.arange(Npix))
@@ -264,7 +264,7 @@ def get_s2_neighbor(mini, curr_res):
 
 
 def get_base_ind(
-    ind: Int[Array, " n_indices"], base_resol: Float = 1.0
+    ind: Int[Array, " n_indices"], base_resol: int
 ) -> tuple[Int[Array, " n_indices"], Int[Array, " n_indices"]]:
     """
     Return the corresponding S2 and S1 grid index for an index on the base SO3 grid
@@ -300,7 +300,7 @@ def get_neighbor_SO3(quat, s2i, s1i, curr_res):
 
 
 # Loss based neighbor search
-def getbestneighbors_base_SO3(loss, base_quats, N=10, base_resol=1):
+def getbestneighbors_base_SO3(loss, base_quats, N, base_resol):
     _, bestN_index = jax.lax.top_k(-loss, k=N)
     best_quats = base_quats[bestN_index]
     s2_index, s1_index = get_base_ind(bestN_index, base_resol)
@@ -308,7 +308,7 @@ def getbestneighbors_base_SO3(loss, base_quats, N=10, base_resol=1):
     return allnb_quats.reshape(-1, 4), allnb_s2s1.reshape(-1, 2)
 
 
-def getbestneighbors_next_SO3(loss, quats, s2s1_arr, curr_res=2, N=50):
+def getbestneighbors_next_SO3(loss, quats, s2s1_arr, curr_res, N):
     _, bestN_index = jax.lax.top_k(-loss, k=N)
     best_quats = quats[bestN_index]
 

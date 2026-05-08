@@ -34,6 +34,32 @@ To find your CUDA version, you can run `nvidia-smi` in a terminal. The CUDA vers
 
 Note: OpenMM is not required for all our utilities. Data simulation and Ensemble Reweighting only require JAX!
 
+### Apptainer/Singularity Installation (HPC clusters)
+
+For HPC environments where conda is unavailable or installation is restricted, we provide an [Apptainer](https://apptainer.org/) definition file at `container/cryojax_eo.def`. Pre-built images are available as assets on the [GitHub Releases](https://github.com/flatironinstitute/cryojax-ensemble-optimization/releases) page.
+
+**Option 1 — Download a pre-built image:**
+```bash
+wget https://github.com/flatironinstitute/cryojax-ensemble-optimization/releases/download/vX.X/cryojax_eo.sif
+```
+
+**Option 2 — Build from the definition file:**
+```bash
+apptainer build --fakeroot container/cryojax_eo.sif container/cryojax_eo.def
+```
+
+**Running commands with the container:**
+```bash
+apptainer exec --nv --bind /path/to/data:/path/to/data path/to/container/cryojax_eo.sif \
+    run_ensemble_optimization --config config.yaml
+```
+
+The `--nv` flag exposes the host GPU to the container. The `--bind` flag mounts a directory from the host into the container, which is required if your data lives outside your home directory (e.g., on a scratch or Ceph filesystem). Replace `/path/to/data` with the relevant path on your system.
+
+To avoid typing `--bind` every time, you can set the following environment variable in your `~/.bashrc`:
+```bash
+export APPTAINER_BIND=/path/to/data:/path/to/data
+```
 
 ## Cryo-EM Ensemble Optimization Input
 

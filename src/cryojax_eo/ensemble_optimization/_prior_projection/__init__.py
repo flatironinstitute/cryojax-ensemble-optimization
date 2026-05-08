@@ -10,6 +10,7 @@ from ._langevin_dynamics import (
 from ._molecular_dynamics import (
     EnsembleSteeredMDSimulator as EnsembleSteeredMDSimulator,
     SteeredMDSimulator as SteeredMDSimulator,
+    md_params_config_to_openmm_overrides as md_params_config_to_openmm_overrides,
 )
 from .base_prior_projector import (
     AbstractEnsemblePriorProjector as AbstractEnsemblePriorProjector,

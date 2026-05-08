@@ -35,8 +35,18 @@ projector_params:
   platform: CUDA
   platform_properties:
     DeviceIndex: '0'
-# platform: CPU # CPU Version for defining the platform
-# Threads: "32" # Can be unreliable, OpenMM does not always use all the available threads
+  # platform: CPU # CPU version for defining the platform
+  # platform_properties:
+  #   Threads: "32" # Can be unreliable, OpenMM does not always use all available threads
+  md_params: # (*) Override default OpenMM simulation parameters. All fields are optional.
+    forcefield: amber14-all.xml       # (*) Default: amber14-all.xml
+    water_model: amber14/tip3p.xml    # (*) Default: amber14/tip3p.xml
+    nonbonded_method: CutoffNonPeriodic # (*) Options: PME, CutoffNonPeriodic, NoCutoff, CutoffPeriodic, Ewald, LJPME
+    nonbonded_cutoff_nm: 1.0          # (*) Default: 1.0 nm
+    constraints: HBonds               # (*) Options: HBonds, AllBonds, HAngles, null (no constraints)
+    temperature_K: 300.0              # (*) Default: 300 K
+    friction_per_ps: 1.0              # (*) Default: 1.0 ps^-1
+    timestep_ps: 0.002                # (*) Default: 0.002 ps (2 fs)
 
 likelihood_optimizer_params:
   batch_size: 50 # Batch size used for computing the log-likelihood in parallel
@@ -66,6 +76,8 @@ rng_seed: 0 # seed for all RNG operations
 First, alignment is crucial. Suppose during the optimization process, the structure is not aligned to the frame of reference of the cryo-EM particles. In that case, the likelihood won't be computed correctly, and the optimization will explode as the structure gets optimized towards noise. When possible, include a reference volume for alignment. This is particularly important for heterogeneous systems. This usually results in a `1s` delay to each iteration for volumes with a 32-pixel box size (you can downsample the volume through the `downsample_box_size` in `alignment params`). A dilated volumetric mask can also significantly help the optimization by helping reduce the overall noise in the images.
 
 The `path_to_initial_states` argument helps restart simulations or start from a previously equilibrated MD simulation. We recommend that each walker have a unique state file to avoid numerical issues with indistinguishable walkers.
+
+The optional `md_params` block inside `projector_params` lets you override any of the underlying OpenMM simulation parameters without touching the code. All fields are optional and fall back to built-in defaults when omitted. The `nonbonded_method` field accepts string aliases: `CutoffNonPeriodic` (default, for implicit/vacuum simulations), `PME` or `Ewald` (for explicit solvent with a periodic box), `CutoffPeriodic` (periodic box with a simple cutoff), `LJPME` (PME for both electrostatics and Lennard-Jones), and `NoCutoff` (no cutoff; very small systems only). Note that periodic methods require a simulation box defined in the PDB. The `constraints` field accepts `HBonds` (default, constrains bonds to hydrogen — compatible with a 2 fs timestep), `AllBonds`, `HAngles` (allows ~4 fs timesteps), or `null` to disable constraints entirely. Numeric fields use explicit unit suffixes: `_nm` for nanometers, `_K` for Kelvin, `_per_ps` for ps⁻¹, and `_ps` for picoseconds. The `platform` and `platform_properties` fields are set separately at the top level of `projector_params`.
 
 ## Outputs
 
