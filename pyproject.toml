@@ -53,6 +53,12 @@ dev = [
 tests = [
   "pytest"
 ]
+docs = [
+  "mkdocs",
+  "mkdocs-material",
+  "mkdocs-jupyter",
+  "pymdown-extensions",
+]
 
 
 [build-system]

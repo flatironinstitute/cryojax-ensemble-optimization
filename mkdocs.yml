@@ -1,0 +1,55 @@
+site_name: cryojax_eo
+site_url: https://flatironinstitute.github.io/cryojax-ensemble-optimization/
+repo_url: https://github.com/flatironinstitute/cryojax-ensemble-optimization
+repo_name: flatironinstitute/cryojax-ensemble-optimization
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - content.code.copy
+    - toc.follow
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+plugins:
+  - search
+  - mkdocs-jupyter:
+      execute: false
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.inlinehilite
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Usage:
+    - Ensemble Optimization: ensemble_optimization.md
+    - Ensemble Reweighting: ensemble_reweighting.md
+    - Dataset Simulation: dataset_simulation.md
+    - Flexible Fitting: flexible_fitting.md
+  - Tutorials:
+    - Ensemble Optimization: tutorial/ensemble_optimization/running_the_optimization.ipynb
+    - Dataset Simulation: tutorial/data_simulation/simulate_and_visualize_data.ipynb

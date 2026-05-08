@@ -27,6 +27,7 @@ from cryojax_eo.ensemble_optimization import (
     IterativeEnsembleLikelihoodOptimizer,
     MargGaussianWhiteLogLikelihoodFn,
     SteeredMDSimulator,
+    md_params_config_to_openmm_overrides,
 )
 from cryojax_eo.internal import EnsOptMDConfig
 from cryojax_eo.io import read_walkers_from_pdbs
@@ -152,16 +153,19 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
     # Construct prior projector
     projector_list = []
 
+    parameters_for_md = md_params_config_to_openmm_overrides(
+        config["projector_params"]["md_params"]
+    )
+    parameters_for_md["platform"] = config["projector_params"]["platform"]
+    parameters_for_md["properties"] = config["projector_params"]["platform_properties"]
+
     for i in range(initial_walkers.shape[0]):
         projector_list.append(
             SteeredMDSimulator(
                 path_to_initial_pdb=config["path_to_atomic_models"][i],
                 n_steps=config["projector_params"]["n_steps"],
                 restrain_atom_list=atom_list.tolist(),
-                parameters_for_md={
-                    "platform": config["projector_params"]["platform"],
-                    "properties": config["projector_params"]["platform_properties"],
-                },
+                parameters_for_md=parameters_for_md,
                 base_state_file_path=os.path.join(
                     config["path_to_output"], f"states_proj_{i}/state_"
                 ),

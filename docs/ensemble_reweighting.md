@@ -1,6 +1,7 @@
-# Cryo-EM Ensemble Reweighting Input
+# Cryo-EM Ensemble Reweighting
 
-Note: This does NOT require OpenMM to be installed.
+!!! note
+    This pipeline does not require OpenMM.
 
 If you already have a set of structures (atomic models or volumes), you can run ensemble reweighting through the command line:
 
@@ -8,13 +9,13 @@ If you already have a set of structures (atomic models or volumes), you can run 
 run_ensemble_reweighting --config config_reweighting.yaml
 ```
 
-This pipeline is relatively more flexible, as PDBs do not need to have the same topology, and volumes in .mrc format are also supported. The main limitation, however, is that we assume these models are already aligned. This can be easily done manually in Chimera for PDBs, or through the volume alignment tools in CryoSPARC.
+This pipeline is more flexible than ensemble optimization: input PDBs do not need to share the same topology, and volumetric files in `.mrc` format are also supported. The main requirement is that all structures are already aligned. Alignment can be done manually in ChimeraX for PDB files, or using the volume alignment tools in CryoSPARC.
 
-During the pipeline PDB and CIF files will be converte through volumes using `cryojax`. Since these volumes will be high resolution, we provide an option to apply a low-pass filter to all input structures. This is recommended when performing reweighting between .pdb/.cif and .mrc files.
+During the pipeline, PDB and CIF files are converted to volumes using `cryojax`. Because these volumes are high-resolution, we provide an option to apply a low-pass filter to all input structures. This is recommended when mixing `.pdb`/`.cif` and `.mrc` files.
 
 ## Input Format
 
-Cryo-EM Ensemble Reweighting uses a custom YAML input format. An example for a [config file](./example_configs/config_reweighting.yaml) for running the ensemble optimization using CUDA for three structural files is given below:
+Cryo-EM Ensemble Reweighting uses a custom YAML input format. A sample [config file](./example_configs/config_reweighting.yaml) for running ensemble reweighting with three structural files is shown below:
 
 ```yaml
 # Parameters marked with (*) are optional
@@ -30,13 +31,10 @@ dataset_params:
 # This can usually be a large value since Fourier Slice Extraction is memory efficient
 n_images_in_parallel: 5000
 
-# Maximum number of iterations for
-# reweighting algorithm
+# Maximum number of iterations for the reweighting algorithm
 max_iter: 500
 
-# Tolerance for stopping criteria
-# of the multiplicative gradient
-# weight optimization method
+# Convergence tolerance for the multiplicative gradient weight optimization
 tol: 1e-2
 
 # A collection of structural files
@@ -64,7 +62,7 @@ loads_b_factors: true
 
 ## Outputs
 
-- `optimized_weights`: final weights for each structural file
+- `optimized_weights`: final weights for each structural file.
 - A `log` file.
-- A copy of the input config file
-- log-likelihood matrix: log-likelihood computed for each pair of image, structural file
+- A copy of the input config file.
+- Log-likelihood matrix: log-likelihood computed for each image–structure pair.

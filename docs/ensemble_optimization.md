@@ -1,6 +1,6 @@
-# Cryo-EM Ensemble Optimization Input
+# Cryo-EM Ensemble Optimization
 
-You can run the ensemble optimization through our API, as shown in our [Tutorial](../tutorial/ensemble_optimization/running_the_optimization.ipynb), or through the command line:
+You can run the ensemble optimization through our API, as shown in our [Tutorial](tutorial/ensemble_optimization/running_the_optimization.ipynb), or through the command line:
 
 ```bash
 run_ensemble_optimization --config config_optimization.yaml
@@ -8,7 +8,7 @@ run_ensemble_optimization --config config_optimization.yaml
 
 ## Input Format
 
-Cryo-EM Ensemble Optimization uses a custom YAML input format. An example for a [config file](./example_configs/config_optimization.yaml) for running the ensemble optimization using CUDA for three walkers is given below:
+Cryo-EM Ensemble Optimization uses a custom YAML input format. A sample [config file](./example_configs/config_optimization.yaml) for running the ensemble optimization on a GPU with three walkers is shown below:
 
 ```yaml
 # Parameters marked with (*) are optional
@@ -35,8 +35,18 @@ projector_params:
   platform: CUDA
   platform_properties:
     DeviceIndex: '0'
-# platform: CPU # CPU Version for defining the platform
-# Threads: "32" # Can be unreliable, OpenMM does not always use all the available threads
+  # platform: CPU # CPU version for defining the platform
+  # platform_properties:
+  #   Threads: "32" # Can be unreliable, OpenMM does not always use all available threads
+  md_params: # (*) Override default OpenMM simulation parameters. All fields are optional.
+    forcefield: amber14-all.xml       # (*) Default: amber14-all.xml
+    water_model: amber14/tip3p.xml    # (*) Default: amber14/tip3p.xml
+    nonbonded_method: CutoffNonPeriodic # (*) Options: PME, CutoffNonPeriodic, NoCutoff, CutoffPeriodic, Ewald, LJPME
+    nonbonded_cutoff_nm: 1.0          # (*) Default: 1.0 nm
+    constraints: HBonds               # (*) Options: HBonds, AllBonds, HAngles, null (no constraints)
+    temperature_K: 300.0              # (*) Default: 300 K
+    friction_per_ps: 1.0              # (*) Default: 1.0 ps^-1
+    timestep_ps: 0.002                # (*) Default: 0.002 ps (2 fs)
 
 likelihood_optimizer_params:
   batch_size: 50 # Batch size used for computing the log-likelihood in parallel
@@ -46,7 +56,7 @@ likelihood_optimizer_params:
   - 0.33
   n_steps: 10
   step_size: 2.0
-  n_batches_per_step: 5 # allows for memory friendly computation of gradients
+  n_batches_per_step: 5 # allows for memory-friendly computation of gradients
 
 atom_selection: ... # path to a txt/npy file, or a mdtraj-compatible selection string, e.g., "not element H"
 loads_b_factors: true # Load Debye-Waller b-factors from provided PDBs
@@ -63,28 +73,26 @@ rng_seed: 0 # seed for all RNG operations
 
 ## Comments on the input parameters
 
-First, alignment is crucial. Suppose during the optimization process, the structure is not aligned to the frame of reference of the cryo-EM particles. In that case, the likelihood won't be computed correctly, and the optimization will explode as the structure gets optimized towards noise. When possible, include a reference volume for alignment. This is particularly important for heterogeneous systems. This usually results in a `1s` delay to each iteration for volumes with a 32-pixel box size (you can downsample the volume through the `downsample_box_size` in `alignment params`). A dilated volumetric mask can also significantly help the optimization by helping reduce the overall noise in the images.
+Alignment is crucial. If the structure is not aligned to the frame of reference of the cryo-EM particles, the likelihood will not be computed correctly and the optimization will diverge as the structure is driven toward noise. When possible, include a reference volume for alignment — this is particularly important for heterogeneous systems. Alignment typically adds about 1 second per iteration for volumes with a 32-pixel box size (controllable via `downsample_box_size` in `alignment_params`). A dilated volumetric mask can also help by reducing background noise in the images.
 
-The `path_to_initial_states` argument helps restart simulations or start from a previously equilibrated MD simulation. We recommend that each walker have a unique state file to avoid numerical issues with indistinguishable walkers.
+The `path_to_initial_states` argument is useful for restarting simulations or warm-starting from a previously equilibrated MD state. We recommend providing a unique state file for each walker to avoid numerical issues that arise when walkers are indistinguishable.
+
+The optional `md_params` block inside `projector_params` lets you override any of the underlying OpenMM simulation parameters without modifying the code. All fields are optional and fall back to built-in defaults when omitted. The `nonbonded_method` field accepts string aliases: `CutoffNonPeriodic` (default, for implicit/vacuum simulations), `PME` or `Ewald` (for explicit solvent with a periodic box), `CutoffPeriodic` (periodic box with a simple cutoff), `LJPME` (PME for both electrostatics and Lennard-Jones), and `NoCutoff` (no cutoff; very small systems only). Note that periodic methods require a simulation box defined in the PDB. The `constraints` field accepts `HBonds` (default, constrains bonds to hydrogen — compatible with a 2 fs timestep), `AllBonds`, `HAngles` (allows ~4 fs timesteps), or `null` to disable constraints entirely. Numeric fields use explicit unit suffixes: `_nm` for nanometers, `_K` for Kelvin, `_per_ps` for ps⁻¹, and `_ps` for picoseconds. The `platform` and `platform_properties` fields are set separately at the top level of `projector_params`.
 
 ## Outputs
 
 - `final_ensemble.npz`: final walker positions and weights.
-- `final_walker_*.pdb`, a PDB file for each final walker.
-- `traj_walker_*.xtc`, the trajectory followed by each walker during the optimization.
-- `states_proj_*/`, a directory with the OpenMM states at each iteration of the optimization. Useful for restarting.
+- `final_walker_*.pdb`: a PDB file for each final walker.
+- `traj_walker_*.xtc`: the trajectory followed by each walker during the optimization.
+- `states_proj_*/`: a directory containing the OpenMM states at each iteration. Useful for restarting.
 - A `log` file.
-
-
 
 # Known Issues
 
-
 ## Crashing OpenMM Simulations
 
-This is still an issue we are investigating, as it happens very rarely, and it is difficult to reproduce. Basically, sometimes the steered MD simulation with OpenMM will explore. Weirdly, this is solved by applying a random rotation and translation to the initial PDB. We suspect this is caused by the `RMSD 'energy term exploding when the structures are too close (division by zero during the gradient computation). We're currently discussing this with one of the OpenMM developers, and hopefully the fix will be simple.
+This issue occurs rarely and is difficult to reproduce. Occasionally, the steered MD simulation will explode during the optimization. In some cases this is caused by water molecules in the input PDB — make sure to exclude them using the `atom_selection` parameter. In other cases, changing the nonbonded interaction method can resolve the issue; try different values for `nonbonded_method` in the `md_params` block of the config file.
 
+## Corrupted CryoSPARC Datasets
 
-## Corrupted CryoSPARC datasets
-
-If your dataset contains picked Particles from CryoSPARC, we have found that sometimes the MRCs are padded with zeros, effectively containing zero-value particles that can cause numerical issues (division by zero when computing the likelihood). This can be easily fixed by preprocessing the dataset; we are working on providing a simple command-line script to do this.
+If your dataset contains particles picked in CryoSPARC, we have found that MRC files are sometimes padded with zeros, producing zero-value particles that cause numerical issues (division by zero when computing the likelihood). This can be fixed by preprocessing the dataset; we are working on providing a simple command-line script to do this.

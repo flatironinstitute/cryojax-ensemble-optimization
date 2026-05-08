@@ -13,7 +13,7 @@ alignment_params:
   downsample_box_size: 32 # (*) Downsample box size for reference volume
 
 projector_params:
-  bias_constant_in_kjpermol: 3.0e5 # Bias constant for the Steered MD projection (might require tunning)
+  bias_constant_in_kjpermol: 3.0e5 # Bias constant for the Steered MD projection (might require tuning)
   n_steps: 1000
   path_to_initial_states: # (*) Initial states for each replica, useful for continuing optimizations. Optional.
     - ./initial_state_0.xml # MUST BE DIFFERENT FOR EACH REPLICA if provided
@@ -22,8 +22,18 @@ projector_params:
   platform: CUDA
   platform_properties:
     DeviceIndex: '0'
-# platform: CPU # CPU Version for defining the platform
-# Threads: "32" # Can be unreliable, OpenMM does not always use all the available threads
+  # platform: CPU # CPU version for defining the platform
+  # platform_properties:
+  #   Threads: "32" # Can be unreliable, OpenMM does not always use all available threads
+  md_params: # (*) Override default OpenMM simulation parameters. All fields are optional.
+    forcefield: amber14-all.xml       # (*) Default: amber14-all.xml
+    water_model: amber14/tip3p.xml    # (*) Default: amber14/tip3p.xml
+    nonbonded_method: CutoffNonPeriodic # (*) Options: PME, CutoffNonPeriodic, NoCutoff, CutoffPeriodic, Ewald, LJPME
+    nonbonded_cutoff_nm: 1.0          # (*) Default: 1.0 nm
+    constraints: HBonds               # (*) Options: HBonds, AllBonds, HAngles, null (no constraints)
+    temperature_K: 300.0              # (*) Default: 300 K
+    friction_per_ps: 1.0              # (*) Default: 1.0 ps^-1
+    timestep_ps: 0.002                # (*) Default: 0.002 ps (2 fs)
 
 likelihood_optimizer_params:
   batch_size: 50 # Batch size used for computing the log-likelihood in parallel

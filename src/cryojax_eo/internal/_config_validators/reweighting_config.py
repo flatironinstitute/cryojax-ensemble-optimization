@@ -90,7 +90,7 @@ class ReweightingConfig(BaseModel, extra="forbid"):
         description="Maximum number of proj. gradient descent steps."
     )
     tol: PositiveFloat = Field(
-        default=1e-2,
+        default=1e-4,
         description="Tolerance for the stopping criteria of the optimization.",
     )
     n_images_in_parallel: PositiveInt = Field(
@@ -110,6 +110,15 @@ class ReweightingConfig(BaseModel, extra="forbid"):
         default=None,
         description="Maximum resolution to use for the volume representation. "
         "If None, no filtering will be applied.",
+    )
+    estimates_poses: bool = Field(
+        default=False,
+        description="Whether to estimate the poses of the particles for each model. "
+        "If True, the estimated poses will be saved in a new starfile"
+        "in the output directory. "
+        "This will significantly increase the computational cost of the optimization, "
+        "but it can also improve the performance of the optimization, "
+        " especially for low-resolution data.",
     )
 
     # @model_validator(mode="after")

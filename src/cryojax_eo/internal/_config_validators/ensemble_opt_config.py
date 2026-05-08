@@ -68,6 +68,64 @@ class EnsOptMDConfigOptimizationConfig(BaseModel, extra="forbid"):
         return v
 
 
+class MDParamsConfig(BaseModel, extra="forbid"):
+    """YAML-serializable overrides for OpenMM MD simulation parameters.
+
+    Omitted fields fall back to the defaults in ``_get_default_md_params()``.
+    Use ``md_params_config_to_openmm_overrides`` to convert this to an openmm dict.
+    """
+
+    forcefield: str = Field(
+        default="amber14-all.xml",
+        description="OpenMM forcefield XML file name.",
+    )
+    water_model: str = Field(
+        default="amber14/tip3p.xml",
+        description="OpenMM water model XML file name.",
+    )
+    nonbonded_method: Literal[
+        "PME",
+        "CutoffNonPeriodic",
+        "NoCutoff",
+        "CutoffPeriodic",
+        "Ewald",
+        "LJPME",
+    ] = Field(
+        default="CutoffNonPeriodic",
+        description=(
+            "Nonbonded method alias. "
+            "'PME', 'Ewald', 'CutoffPeriodic', and 'LJPME' require a periodic box. "
+            "'CutoffNonPeriodic' is the default for implicit/vacuum simulations. "
+            "'NoCutoff' disables any cutoff (slow; small systems only)."
+        ),
+    )
+    nonbonded_cutoff_nm: PositiveFloat = Field(
+        default=1.0,
+        description="Cutoff distance for nonbonded interactions, in nanometers.",
+    )
+    constraints: Literal["HBonds", "AllBonds", "HAngles"] | None = Field(
+        default="HBonds",
+        description=(
+            "Bond/angle constraints. 'HBonds' constrains bonds involving hydrogen "
+            "(recommended with a 2 fs timestep). 'AllBonds' constrains all bonds. "
+            "'HAngles' additionally constrains H–X–H angles, allowing ~4 fs timesteps. "
+            "Set to null to disable constraints entirely."
+        ),
+    )
+    temperature_K: PositiveFloat = Field(
+        default=300.0,
+        description="Langevin integrator temperature, in Kelvin.",
+    )
+    friction_per_ps: PositiveFloat = Field(
+        default=1.0,
+        description="Langevin integrator friction coefficient, in 1/picosecond.",
+    )
+    timestep_ps: PositiveFloat = Field(
+        default=0.002,
+        description="Integration timestep, in picoseconds.",
+    )
+
+
 class EnsOptMDConfigProjector(BaseModel, extra="forbid"):
     n_steps: PositiveInt = Field(
         description="Number of steps for the MD sampler. Must be greater than 0."
@@ -86,6 +144,13 @@ class EnsOptMDConfigProjector(BaseModel, extra="forbid"):
         description="Platform properties for OpenMM. "
         + "For CPU the default is {'Threads': '1'}"
         + " and for CUDA the default is {'DeviceIndex': '0'}.",
+    )
+    md_params: MDParamsConfig = Field(
+        default_factory=MDParamsConfig,
+        description="Overrides for OpenMM MD simulation parameters. "
+        + "Any omitted field falls back to the built-in default. "
+        + "Note: 'platform' and 'platform_properties' are set via the fields above, "
+        + "not here.",
     )
 
     path_to_initial_states: str | list[FilePath] | None = Field(
