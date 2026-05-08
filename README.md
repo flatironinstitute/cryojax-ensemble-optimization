@@ -6,6 +6,8 @@
 CryoJAX ensemble optimization is a module of the [cryoJAX](https://github.com/michael-0brien/cryojax) library, a [JAX](https://github.com/jax-ml/jax) and [Equinox](https://docs.kidger.site/equinox/)-based library for differentiable cryo-EM forward models. The purpose of this library is to provide a framework for optimizing structural ensembles, defined as a weighted discrete set of atomic structures, given a set of cryo-EM images. To do this, we implement an algorithm inspired by projected gradient descent, where the optimization step is performed by comparing the ensemble to the cryo-EM dataset, and the projection step is done through Steered Molecular Dynamics using the popular [OpenMM](https://openmm.org/) library. Details and results are available in our [preprint](https://www.biorxiv.org/content/10.64898/2025.12.02.691891v1). Instructions for reproducing the paper results are provided below.
 
 
+Full documentation is available at [flatironinstitute.github.io/cryojax-ensemble-optimization](https://flatironinstitute.github.io/cryojax-ensemble-optimization/).
+
 ## Installation
 
 Our library has been tested on the latest Ubuntu version. Availability for other platforms is dependent on the availability of OpenMM and JAX.
@@ -36,11 +38,11 @@ Note: OpenMM is not required for all our utilities. Data simulation and Ensemble
 
 ### Apptainer/Singularity Installation (HPC clusters)
 
-For HPC environments where conda is unavailable or installation is restricted, we provide an [Apptainer](https://apptainer.org/) definition file at `container/cryojax_eo.def`. Pre-built images are available as assets on the [GitHub Releases](https://github.com/flatironinstitute/cryojax-ensemble-optimization/releases) page.
+For HPC environments where conda is unavailable or installation is restricted, we provide an [Apptainer](https://apptainer.org/) definition file at `container/cryojax_eo.def`. Pre-built images are hosted on [Sylabs Cloud](https://cloud.sylabs.io/library/davidsilva27/default/cryojax_eo).
 
-**Option 1 — Download a pre-built image:**
+**Option 1 — Pull a pre-built image:**
 ```bash
-wget https://github.com/flatironinstitute/cryojax-ensemble-optimization/releases/download/vX.X/cryojax_eo.sif
+apptainer pull library://davidsilva27/default/cryojax_eo:latest
 ```
 
 **Option 2 — Build from the definition file:**
