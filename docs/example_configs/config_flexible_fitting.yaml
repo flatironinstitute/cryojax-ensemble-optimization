@@ -1,0 +1,37 @@
+# Parameters marked with (*) are optional
+
+path_to_atomic_model: /path/to/atomic_model.pdb                         # initial structure to refine (.pdb or .cif)
+path_to_prealigned_atomic_model: /path/to/prealigned_atomic_model.pdb   # reference structure aligned to the consensus map
+
+path_to_output: ./flexible_fitting_output/
+
+atom_selection: "not element H"  # (*) Default: "all". mdtraj selection string, or a .txt/.npy file of atom indices
+loads_b_factors: false            # (*) Default: false. Load Debye-Waller b-factors from the PDB
+
+reference_volume_params:
+  path_to_reference_volume: /path/to/reference_volume.mrc  # consensus map (.mrc) used for alignment and fitting
+  flexible_fitting_box_size: 128  # (*) Default: 128. Box size (pixels) for the cross-correlation loss
+  rigid_alignment_box_size: 32    # (*) Default: 32.  Box size (pixels) for rigid-body re-alignment
+  reference_volume_voxel_size:    # (*) Default: null. Override the voxel size stored in the MRC header
+
+projector_params:
+  n_steps: 1000                    # number of MD integration steps per iteration
+  bias_constant_in_kjpermol: 3.0e5 # biasing force constant (kJ/mol); might require tuning
+# bias_constant_in_kjpermol:       # linear schedule: ramps from start to end over n_steps iterations
+#   - 1.0e5                        #   start value
+#   - 5.0e5                        #   end value
+  platform: CUDA
+  platform_properties:
+    DeviceIndex: '0'
+# platform: CPU                    # CPU version
+# platform_properties:
+#   Threads: '32'                  # can be unreliable, OpenMM does not always use all available threads
+  path_to_initial_state:           # (*) Default: null. OpenMM state XML for warm-starting (e.g., from a prior run)
+
+walker_optimizer_params:
+  n_steps: 10           # (*) Default: 1. Number of gradient descent steps per iteration
+  step_size: 2.0        # step size in Angstroms
+  batch_size_for_z_planes: 1  # (*) Default: 1. Z-planes evaluated in parallel with jax.vmap
+  n_batches_of_atoms: 1       # (*) Default: 1. Increase to reduce GPU memory usage
+
+n_steps: 100  # total number of flexible fitting iterations

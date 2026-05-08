@@ -47,7 +47,8 @@ def _get_default_md_params() -> dict:
     return {
         "forcefield": "amber14-all.xml",
         "water_model": "amber14/tip3p.xml",
-        "nonbondedMethod": openmm_app.PME,
+        # "nonbondedMethod": openmm_app.PME,
+        "nonbondedMethod": openmm_app.CutoffNonPeriodic,
         "nonbondedCutoff": 1.0 * openmm_unit.nanometer,
         "constraints": openmm_app.HBonds,
         "temperature": 300.0 * openmm_unit.kelvin,

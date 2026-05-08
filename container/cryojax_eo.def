@@ -1,0 +1,56 @@
+Bootstrap: docker
+From: python:3.12
+
+%labels
+    Author David Silva Sanchez <david.silva@yale.edu>
+    Repository https://github.com/flatironinstitute/cryojax-ensemble-optimization
+    Description Cryo-EM Ensemble Optimization with JAX + OpenMM (CUDA 12.4)
+
+%post
+    # ── Miniforge (conda-forge only — no Anaconda licensing issues) ───────────
+    wget -q "https://github.com/conda-forge/miniforge/releases/download/24.11.3-2/Miniforge3-24.11.3-2-Linux-x86_64.sh" \
+        -O /tmp/miniforge.sh
+    bash /tmp/miniforge.sh -b -p /opt/miniforge3
+    rm /tmp/miniforge.sh
+
+    MAMBA=/opt/miniforge3/bin/mamba
+
+    # ── Conda environment: pin python=3.11 explicitly ─────────────────────────
+    # Without this, Miniforge defaults to its own Python version (3.12 as of 24.11)
+    $MAMBA create -n cryojax_eo python=3.12 -y
+
+    PIP=/opt/miniforge3/envs/cryojax_eo/bin/pip
+
+    # ── OpenMM with CUDA 12.4 (mirrors README GPU installation exactly) ─────
+    $MAMBA install -n cryojax_eo -c conda-forge openmm "cuda-version==12.6" -y
+    $MAMBA clean -afy
+
+    # ── JAX with CUDA 12 ──────────────────────────────────────────────────────
+    $PIP install "jax[cuda12]"
+
+    # ── cryojax_eo and all dependencies ───────────────────────────────────────
+    $PIP install \
+        "cryojax_eo @ git+https://github.com/flatironinstitute/cryojax-ensemble-optimization.git"
+
+    $PIP cache purge
+
+%environment
+    export PATH=/opt/miniforge3/envs/cryojax_eo/bin:$PATH
+    export LD_LIBRARY_PATH=/opt/miniforge3/envs/cryojax_eo/lib:$LD_LIBRARY_PATH
+
+%runscript
+    exec "$@"
+
+%test
+    echo "--- Testing OpenMM ---"
+    python -c "import openmm; print(f'OpenMM {openmm.__version__} OK')"
+
+    echo "--- Testing cryojax_eo ---"
+    python -c "import cryojax_eo; print('cryojax_eo OK')"
+
+    echo "--- Testing JAX (GPU errors are expected at build time) ---"
+    python -c "import jax; print(f'JAX {jax.__version__} OK')"
+
+    echo "--- CLI entry points ---"
+    run_ensemble_optimization --help > /dev/null && echo 'run_ensemble_optimization OK'
+    run_ensemble_reweighting  --help > /dev/null && echo 'run_ensemble_reweighting  OK'

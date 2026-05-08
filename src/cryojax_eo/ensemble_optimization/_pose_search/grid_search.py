@@ -4,6 +4,7 @@ import cryojax.simulator as cxs
 import equinox as eqx
 import jax
 import jax.numpy as jnp
+from cryojax.jax_util import filter_bmap
 from jaxtyping import Array, Float
 
 from .geometry import (
@@ -29,7 +30,9 @@ def _loss_for_grid_search(
     The function outputs the negative correlation as this is a loss function.
     """
     pose = cxs.QuaternionPose(
-        offset_x_in_angstroms=0.0, offset_y_in_angstroms=0.0, wxyz=quat
+        offset_x_in_angstroms=0.0,
+        offset_y_in_angstroms=0.0,
+        wxyz=quat,
     )
 
     computed_image_no_shift = cxs.make_image_model(
@@ -46,7 +49,6 @@ def _loss_for_grid_search(
         computed_image_no_shift,
         image_config.get_coordinate_grid(physical=True),
     )
-
     return -correlation, optimal_offset
 
 
@@ -126,13 +128,18 @@ class HierarchicalSO3GridSearch(eqx.Module):
         """
 
         image = jnp.asarray(image)
-        losses, offsets = _loss_for_grid_search(
-            self.base_quats,
-            volume,
-            image,
-            image_config,
-            transfer_theory,
+        losses, offsets = filter_bmap(
+            lambda x: _loss_for_grid_search(
+                x,
+                volume,
+                image,
+                image_config,
+                transfer_theory,
+            ),
+            xs=self.base_quats,
+            batch_size=10,
         )
+        # jax.debug.print("Iter: 1. Best loss: {loss}", loss=losses.min())
 
         if self.n_rounds == 0:
             best_index = jnp.argmin(losses)
@@ -151,11 +158,7 @@ class HierarchicalSO3GridSearch(eqx.Module):
                 base_resol=self.base_grid_res,
             )
             losses, offsets = _loss_for_grid_search(
-                quats,
-                volume,
-                image,
-                image_config,
-                transfer_theory,
+                quats, volume, image, image_config, transfer_theory
             )
             carry = _HierSO3GriSearchCarry(
                 losses=losses,
@@ -169,7 +172,12 @@ class HierarchicalSO3GridSearch(eqx.Module):
                 lower=2,
                 upper=self.n_rounds,
                 body_fun=lambda _, x: _run_global_SO3_step(
-                    x, self.n_candidates, volume, image, image_config, transfer_theory
+                    x,
+                    self.n_candidates,
+                    volume,
+                    image,
+                    image_config,
+                    transfer_theory,
                 ),
                 init_val=carry,
             )
@@ -196,14 +204,16 @@ def _run_global_SO3_step(
         hier_grid_search_carry.quats,
         hier_grid_search_carry.grid_indices,
         N=n_candidates,
+        curr_res=hier_grid_search_carry.curr_resolution,
     )
     losses, offsets = _loss_for_grid_search(
-        quats,
-        volume,
-        image,
-        image_config,
-        transfer_theory,
+        quats, volume, image, image_config, transfer_theory
     )
+    # jax.debug.print(
+    #     "Iter: {iter}. Best loss: {loss}",
+    #     iter=hier_grid_search_carry.curr_resolution,
+    #     loss=losses.min(),
+    # )
     return _HierSO3GriSearchCarry(
         losses=losses,
         quats=quats,

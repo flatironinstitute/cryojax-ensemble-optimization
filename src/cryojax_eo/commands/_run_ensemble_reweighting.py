@@ -14,6 +14,7 @@ import mrcfile
 import numpy as np
 import yaml
 from cryojax.io import read_array_from_mrc
+from cryojax.jax_util import filter_bmap
 from cryospax import (
     RelionParticleDataset,
     RelionParticleParameterFile,
@@ -23,6 +24,7 @@ from tqdm import tqdm
 
 import cryojax_eo as cxeo
 from cryojax_eo.ensemble_optimization import (
+    HierarchicalSO3GridSearch,
     likelihood_iso_gaussian_marg,
     optimize_weights,
 )
@@ -74,6 +76,7 @@ def _gmm_volume_to_voxel_grid(
 @eqx.filter_jit
 @eqx.filter_vmap(in_axes=(None, RELION_DATASET_IN_AXES, None, None))
 def _compute_likelihoods_fn(volume, relion_stack, dilated_mask, image_sign):
+    # return likelihood_iso_gaussian_marg(
     return likelihood_iso_gaussian_marg(
         volume=volume,
         image=relion_stack["images"],
@@ -86,6 +89,34 @@ def _compute_likelihoods_fn(volume, relion_stack, dilated_mask, image_sign):
     )
 
 
+@eqx.filter_vmap(in_axes=(None, 0, None, eqx.if_array(0), None))
+def _estimate_pose(
+    volume: cxs.AbstractVolumeRepresentation,
+    image: Float[Array, "y_dim x_dim"],
+    image_config: cxs.BasicImageConfig,
+    transfer_theory: cxs.ContrastTransferTheory,
+    pose_search: HierarchicalSO3GridSearch,
+) -> cxs.QuaternionPose:
+    return pose_search(volume, image, image_config, transfer_theory)
+
+
+@eqx.filter_jit
+def estimate_poses(
+    volume: cxs.AbstractVolumeRepresentation,
+    images: Float[Array, "y_dim x_dim"],
+    image_config: cxs.BasicImageConfig,
+    transfer_theory: cxs.ContrastTransferTheory,
+    pose_search: HierarchicalSO3GridSearch,
+    *,
+    n_images_in_parallel: int,
+) -> cxs.QuaternionPose:
+    return filter_bmap(
+        lambda x: _estimate_pose(volume, x[0], image_config, x[1], pose_search),
+        xs=(images, transfer_theory),
+        batch_size=n_images_in_parallel,
+    )
+
+
 def compute_likelihoods_for_structural_file(
     path_to_structure: str | Path,
     relion_dataset: RelionParticleDataset,
@@ -94,6 +125,8 @@ def compute_likelihoods_for_structural_file(
     data_sign: Literal["dark-on-light", "light-on-dark"],
     n_images_in_parallel: int,
     max_volume_repr_resolution: float | None,
+    estimates_poses: bool,
+    path_to_outputdir: str,
 ) -> Float[Array, " n_images"]:
     image_sign = -1.0 if data_sign == "dark-on-light" else 1.0
     image_config = relion_dataset.parameter_file[0]["image_config"]
@@ -139,11 +172,47 @@ def compute_likelihoods_for_structural_file(
         batch_size=n_images_in_parallel,
         shuffle=False,
     )
-    for batch in dataloader:
+    pose_search = HierarchicalSO3GridSearch(base_grid_res=1, n_rounds=5, n_candidates=80)
+    image_config = relion_dataset.parameter_file[0]["image_config"]
+    mask = cxim.CircularCosineMask(
+        image_config.get_coordinate_grid(physical=False),
+        radius=image_config.shape[0] // 2,
+        rolloff_width=1.0,
+    )
+
+    if estimates_poses:
+        path_to_starfile = os.path.join(
+            path_to_outputdir, Path(path_to_structure).stem + "_starfile.star"
+        )
+        new_parameter_file = RelionParticleParameterFile(
+            path_to_starfile=path_to_starfile, mode="w", exist_ok=True
+        )
+    for batch in tqdm(dataloader, desc="batches"):
+        if estimates_poses:
+            poses = estimate_poses(
+                volume=voxel_volume,
+                images=batch["particle_stack"]["images"] * mask.get()[None, ...],
+                image_config=batch["particle_stack"]["parameters"]["image_config"],
+                transfer_theory=batch["particle_stack"]["parameters"]["transfer_theory"],
+                pose_search=pose_search,
+                n_images_in_parallel=10,
+            )
+            batch["particle_stack"]["parameters"]["pose"] = poses
+            new_parameter_file.append(batch["particle_stack"]["parameters"])
+
         batch_likelihoods = _compute_likelihoods_fn(
-            voxel_volume, batch["particle_stack"], dilated_mask, image_sign
+            voxel_volume,
+            batch["particle_stack"],
+            dilated_mask,
+            image_sign,
         )
         likelihoods.append(batch_likelihoods)
+
+    if estimates_poses:
+        new_parameter_file.starfile_data["particles"]["rlnImageName"] = (
+            relion_dataset.parameter_file.starfile_data["particles"]["rlnImageName"]
+        )
+        new_parameter_file.save(overwrite=True)
 
     return jnp.concatenate(likelihoods)
 
@@ -166,6 +235,15 @@ def run_ensemble_reweighting(
         path_to_relion_project=config["data_params"]["path_to_relion_project"],
     )
     logging.debug("Experimental data loaded.")
+
+    logging.debug("Computing whitening filter...")
+    image_config = relion_dataset.parameter_file[0]["image_config"]
+    mask = cxim.CircularCosineMask(
+        image_config.get_coordinate_grid(physical=False),
+        radius=image_config.shape[0] // 2,
+        rolloff_width=1.0,
+    )
+    logging.debug("Whitening filter computed.")
 
     if config["data_params"]["path_to_volumetric_mask"] is not None:
         logging.debug("Loading volumetric mask...")
@@ -206,6 +284,8 @@ def run_ensemble_reweighting(
             n_images_in_parallel=config["n_images_in_parallel"],
             data_sign=config["data_params"]["data_sign"],
             max_volume_repr_resolution=config["max_volume_repr_resolution"],
+            estimates_poses=config["estimates_poses"],
+            path_to_outputdir=config["path_to_output_dir"],
         )
         likelihood_matrix[:, i] = np.asarray(likelihoods)
 
