@@ -19,6 +19,7 @@ jobs:
       - name: Login to Sylabs
         run: |
           echo "${{ secrets.SYLABS_TOKEN }}" > /tmp/sylabs_token
+          apptainer remote add --no-login SylabsCloud https://cloud.sylabs.io
           apptainer remote login --tokenfile /tmp/sylabs_token SylabsCloud
           rm /tmp/sylabs_token
 
