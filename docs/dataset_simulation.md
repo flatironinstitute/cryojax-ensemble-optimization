@@ -8,7 +8,7 @@ simulate_data --config config_simulation.yaml
 
 ## Input Format
 
-The simulating data command uses a custom YAML input format. An example for a [config file](./example_configs/config_simulation.yaml) for image simulation is shown below:
+The `simulate_data` command uses a custom YAML input format. A sample [config file](./example_configs/config_simulation.yaml) is shown below:
 
 ```yaml
 # Parameters marked with (*) are optional
@@ -47,9 +47,9 @@ envelope_b_factor:
   - min_value
   - max_value
 
-# Noise is added by normalizing the variance of the signal
-# the following sets the region in the image used to compute the variance
-# We recommend half the box size (can vary with pixel sizes and range of offset)
+# Noise is added by normalizing the variance of the signal.
+# The following sets the region in the image used to compute the variance.
+# We recommend half the box size (may vary with pixel size and offset range).
 mask_radius: 64
 mask_rolloff_width: 1.0 # smooths the edge of the mask
 noise_snr:
@@ -72,23 +72,22 @@ overwrite: true
 path_to_relion_project: output/directory/for/mrcs/files/
 path_to_starfile: path/to/starfile.star
 
-
-rng_seed: 0 # seed for the noise and parameter generation
+rng_seed: 0 # seed for noise and parameter generation
 ```
 
 ## Comments on the input parameters
 
-If multiple models are provided, all the models will be aligned to the first model in the list (or the first model in alphabetic order if a wildcard is used). This is to ensure that no additional heterogeneity is created by misaligned models in the case the true poses are used for reconstruction. All models must have the same topology. Lastly, parameters given in a range will be sampled uniformly in the given range.
+When multiple models are provided, all structures are aligned to the first model in the list (or the first in alphabetical order if a wildcard is used). This ensures that no spurious heterogeneity is introduced by misaligned models when the true poses are used for reconstruction. All models must share the same topology. Parameters specified as a range are sampled uniformly over that range.
 
 ## Outputs
 
-- `*.mrcs`: particle images in .mrcs format.
-- A starfile containing the pose and CTF information.
-- A copy of the config file used is provided inside the `path_to_relion_project` directory.
+- `*.mrcs`: particle images in `.mrcs` format.
+- A STAR file containing pose and CTF information.
+- A copy of the config file, written to the `path_to_relion_project` directory.
 
 ## Loading the data
 
-The data can be easily visualized through the [cryoJAX](https://michael-0brien.github.io/cryojax/) API:
+The simulated data can be visualized using the [cryoJAX](https://michael-0brien.github.io/cryojax/) API:
 
 ```python
 from cryospax import (
@@ -110,4 +109,5 @@ relion_dataset[0:100]
 )
 
 ```
-where the inputs for `RelionParticleStackDataset` should match the inputs in the config file. For more details, we recommend reading the cryoJAX Tutorial on [Loading Cryo-EM Images](https://michael-0brien.github.io/cryojax/examples/read-dataset/).
+
+The inputs for `RelionParticleStackDataset` should match the corresponding fields in the config file. For more details, see the cryoJAX tutorial on [Loading Cryo-EM Images](https://michael-0brien.github.io/cryojax/examples/read-dataset/).

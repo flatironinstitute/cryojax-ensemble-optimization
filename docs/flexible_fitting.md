@@ -1,4 +1,4 @@
-# Cryo-EM Flexible Fitting Input
+# Cryo-EM Flexible Fitting
 
 Flexible fitting refines a single atomic model against a consensus cryo-EM density map using steered MD. Unlike ensemble optimization, there are no particle images or ensemble weights — the loss is a real-space cross-correlation between the projected model density and the reference volume.
 

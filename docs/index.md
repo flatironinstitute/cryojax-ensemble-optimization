@@ -10,7 +10,7 @@ Details and results are available in our [preprint](https://www.biorxiv.org/cont
 
 ## Capabilities
 
-- **Ensemble Optimization** — refine a weighted ensemble of atomic structures against cryo-EM particle images using Steered MD projections
+- **Ensemble Optimization** — optimize a weighted ensemble of atomic structures against cryo-EM particle images using Steered Molecular Dynamics
 - **Ensemble Reweighting** — compute optimal weights for an existing set of structures or volumes against cryo-EM images (no OpenMM required)
 - **Dataset Simulation** — generate synthetic heterogeneous cryo-EM datasets from multiple atomic models
 - **Flexible Fitting** — fit a single atomic model to a consensus density map using steered MD
