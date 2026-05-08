@@ -31,12 +31,12 @@ To find your CUDA version, run `nvidia-smi` — the version appears in the top-r
 
 ## Apptainer/Singularity Installation (HPC clusters)
 
-For HPC environments where conda is unavailable or installation is restricted, we provide an [Apptainer](https://apptainer.org/) definition file at `container/cryojax_eo.def`. Pre-built images are available as assets on the [GitHub Releases](https://github.com/flatironinstitute/cryojax-ensemble-optimization/releases) page.
+For HPC environments where conda is unavailable or installation is restricted, we provide an [Apptainer](https://apptainer.org/) definition file at `container/cryojax_eo.def`. Pre-built images are hosted on [Sylabs Cloud](https://cloud.sylabs.io/library/davidsilva27/default/cryojax_eo).
 
-**Option 1 — Download a pre-built image:**
+**Option 1 — Pull a pre-built image:**
 
 ```bash
-wget https://github.com/flatironinstitute/cryojax-ensemble-optimization/releases/download/vX.X/cryojax_eo.sif
+apptainer pull library://davidsilva27/default/cryojax_eo:latest
 ```
 
 **Option 2 — Build from the definition file:**
