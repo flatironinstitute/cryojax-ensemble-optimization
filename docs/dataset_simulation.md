@@ -1,6 +1,6 @@
 # Cryo-EM Heterogeneous Dataset Simulation
 
-You can simulate a heterogeneous dataset from multiple PDBs through our API, as shown in our [Tutorial](../tutorial/data_simulation/simulate_and_visualize_data.ipynb), or through the command line:
+You can simulate a heterogeneous dataset from multiple PDBs through our API, as shown in our [Tutorial](tutorial/data_simulation/simulate_and_visualize_data.ipynb), or through the command line:
 
 ```bash
 simulate_data --config config_simulation.yaml

@@ -1,6 +1,6 @@
 # Cryo-EM Ensemble Optimization
 
-You can run the ensemble optimization through our API, as shown in our [Tutorial](../tutorial/ensemble_optimization/running_the_optimization.ipynb), or through the command line:
+You can run the ensemble optimization through our API, as shown in our [Tutorial](tutorial/ensemble_optimization/running_the_optimization.ipynb), or through the command line:
 
 ```bash
 run_ensemble_optimization --config config_optimization.yaml

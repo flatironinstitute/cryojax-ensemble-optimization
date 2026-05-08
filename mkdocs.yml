@@ -24,6 +24,11 @@ theme:
         icon: material/brightness-4
         name: Switch to light mode
 
+plugins:
+  - search
+  - mkdocs-jupyter:
+      execute: false
+
 markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
@@ -45,3 +50,6 @@ nav:
     - Ensemble Reweighting: ensemble_reweighting.md
     - Dataset Simulation: dataset_simulation.md
     - Flexible Fitting: flexible_fitting.md
+  - Tutorials:
+    - Ensemble Optimization: tutorial/ensemble_optimization/running_the_optimization.ipynb
+    - Dataset Simulation: tutorial/data_simulation/simulate_and_visualize_data.ipynb

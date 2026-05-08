@@ -1,4 +1,4 @@
-# cryojax_eo
+# CryoJAX Ensemble Optimization
 
 **Cryo-electron microscopy ensemble optimization using individual particles and physical constraints**
 
