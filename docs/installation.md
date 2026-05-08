@@ -42,6 +42,10 @@ apptainer pull library://davidsilva27/default/cryojax_eo:latest
 **Option 2 — Build from the definition file:**
 
 ```bash
+# Use sudo if available
+sudo apptainer build container/cryojax_eo.sif container/cryojax_eo.def
+
+# On HPC clusters where sudo is not available, use --fakeroot instead
 apptainer build --fakeroot container/cryojax_eo.sif container/cryojax_eo.def
 ```
 

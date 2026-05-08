@@ -24,7 +24,7 @@ jobs:
           rm /tmp/sylabs_token
 
       - name: Build container
-        run: apptainer build --remote container/cryojax_eo.sif container/cryojax_eo.def
+        run: sudo apptainer build container/cryojax_eo.sif container/cryojax_eo.def
 
       - name: Push to Sylabs (latest and version tag)
         run: |
