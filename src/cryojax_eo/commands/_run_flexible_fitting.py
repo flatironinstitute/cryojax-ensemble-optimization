@@ -13,7 +13,10 @@ import yaml
 from cryojax.io import read_array_from_mrc
 from cryojax.ndimage import fourier_crop_to_shape
 
-from cryojax_eo.ensemble_optimization import SteeredMDSimulator
+from cryojax_eo.ensemble_optimization import (
+    SteeredMDSimulator,
+    md_params_config_to_openmm_overrides,
+)
 from cryojax_eo.flexible_fitting import (
     FlexibleFittingPipeline,
     ModelToVolumeCorrelationLossFn,
@@ -104,14 +107,17 @@ def run_flexible_fitting(flexible_fitting_config: FlexibleFittingConfig):
     logging.debug("Reference volume loaded.")
 
     # Construct prior projector
+    parameters_for_md = md_params_config_to_openmm_overrides(
+        config["projector_params"]["md_params"]
+    )
+    parameters_for_md["platform"] = config["projector_params"]["platform"]
+    parameters_for_md["properties"] = config["projector_params"]["platform_properties"]
+
     prior_projector = SteeredMDSimulator(
         path_to_initial_pdb=config["path_to_atomic_model"],
         n_steps=config["projector_params"]["n_steps"],
         restrain_atom_list=atom_list.tolist(),
-        parameters_for_md={
-            "platform": config["projector_params"]["platform"],
-            "properties": config["projector_params"]["platform_properties"],
-        },
+        parameters_for_md=parameters_for_md,
         base_state_file_path=os.path.join(config["path_to_output"], "states_proj/state_"),
     )
 

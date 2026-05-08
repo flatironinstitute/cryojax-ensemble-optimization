@@ -33,6 +33,9 @@ try:
 
 except ImportError:
     _HAS_OPENMM = False
+    openmm = None  # type: ignore[assignment]
+    openmm_app = None  # type: ignore[assignment]
+    openmm_unit = None  # type: ignore[assignment]
     warnings.warn(
         "OpenMM is not installed. Please install OpenMM if using any features "
         + "that use molecular dynamics, e.g., ensemble optimization "
@@ -41,6 +44,64 @@ except ImportError:
 
 
 from ..base_prior_projector import AbstractEnsemblePriorProjector, AbstractPriorProjector
+
+
+def md_params_config_to_openmm_overrides(md_params_config: dict) -> dict:
+    """Convert a serialized ``MDParamsConfig`` dict to openmm-compatible overrides.
+
+    The returned dict can be passed directly to ``_validate_and_set_params_for_md``.
+    Keys ``platform`` and ``properties`` are intentionally excluded here; wire them
+    separately from ``EnsOptMDConfigProjector.platform`` and ``platform_properties``.
+    """
+    if openmm_app is None or openmm_unit is None:
+        raise ImportError(
+            "OpenMM is not installed. Please install OpenMM if using any features "
+            "that use molecular dynamics."
+        )
+
+    _nonbonded_method_aliases = {
+        "PME": openmm_app.PME,
+        "CutoffNonPeriodic": openmm_app.CutoffNonPeriodic,
+        "NoCutoff": openmm_app.NoCutoff,
+        "CutoffPeriodic": openmm_app.CutoffPeriodic,
+        "Ewald": openmm_app.Ewald,
+        "LJPME": openmm_app.LJPME,
+    }
+    _constraints_aliases = {
+        "HBonds": openmm_app.HBonds,
+        "AllBonds": openmm_app.AllBonds,
+        "HAngles": openmm_app.HAngles,
+        None: None,
+    }
+
+    overrides: dict = {}
+    if "forcefield" in md_params_config:
+        overrides["forcefield"] = md_params_config["forcefield"]
+    if "water_model" in md_params_config:
+        overrides["water_model"] = md_params_config["water_model"]
+    if "nonbonded_method" in md_params_config:
+        overrides["nonbondedMethod"] = _nonbonded_method_aliases[
+            md_params_config["nonbonded_method"]
+        ]
+    if "nonbonded_cutoff_nm" in md_params_config:
+        overrides["nonbondedCutoff"] = (
+            md_params_config["nonbonded_cutoff_nm"] * openmm_unit.nanometer  # type: ignore[attr-defined]
+        )
+    if "constraints" in md_params_config:
+        overrides["constraints"] = _constraints_aliases[md_params_config["constraints"]]
+    if "temperature_K" in md_params_config:
+        overrides["temperature"] = (
+            md_params_config["temperature_K"] * openmm_unit.kelvin  # type: ignore[attr-defined]
+        )
+    if "friction_per_ps" in md_params_config:
+        overrides["friction"] = (
+            md_params_config["friction_per_ps"] / openmm_unit.picosecond  # type: ignore[attr-defined]
+        )
+    if "timestep_ps" in md_params_config:
+        overrides["timestep"] = (
+            md_params_config["timestep_ps"] * openmm_unit.picoseconds  # type: ignore[attr-defined]
+        )
+    return overrides
 
 
 def _get_default_md_params() -> dict:

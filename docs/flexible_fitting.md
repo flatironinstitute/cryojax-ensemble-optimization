@@ -38,6 +38,15 @@ projector_params:
 # platform_properties:
 #   Threads: '32'                       # number of CPU threads (OpenMM does not always respect this)
   path_to_initial_state:                # (*) Default: null. Path to an OpenMM state XML for warm-starting
+  md_params:                            # (*) Override default OpenMM simulation parameters. All fields are optional.
+    forcefield: amber14-all.xml           # (*) Default: amber14-all.xml
+    water_model: amber14/tip3p.xml        # (*) Default: amber14/tip3p.xml
+    nonbonded_method: CutoffNonPeriodic   # (*) Options: PME, CutoffNonPeriodic, NoCutoff, CutoffPeriodic, Ewald, LJPME
+    nonbonded_cutoff_nm: 1.0              # (*) Default: 1.0 nm
+    constraints: HBonds                   # (*) Options: HBonds, AllBonds, HAngles, null (no constraints)
+    temperature_K: 300.0                  # (*) Default: 300 K
+    friction_per_ps: 1.0                  # (*) Default: 1.0 ps^-1
+    timestep_ps: 0.002                    # (*) Default: 0.002 ps (2 fs)
 
 walker_optimizer_params:
   n_steps: 10           # (*) Default: 1. Number of gradient steps per iteration
@@ -57,6 +66,8 @@ n_steps: 100  # total number of flexible fitting iterations
 **Bias constant.** The `bias_constant_in_kjpermol` controls how strongly the MD simulation is steered toward the gradient direction. A single float applies a constant force; a two-element list `[start, end]` applies a linear schedule from `start` to `end` over all `n_steps` iterations. This parameter typically requires tuning for each system. Values that are too large cause the simulation to explode; values that are too small produce no structural change.
 
 **Warm-starting.** The `path_to_initial_state` accepts an OpenMM state XML file (e.g., saved from a previous run or a pre-equilibrated simulation) and can improve convergence by starting from a well-equilibrated configuration.
+
+**MD simulation parameters.** The optional `md_params` block lets you override any of the underlying OpenMM simulation parameters directly from the YAML config. All fields are optional and fall back to built-in defaults when omitted. The `nonbonded_method` field accepts string aliases: `CutoffNonPeriodic` (default, for implicit/vacuum simulations), `PME` or `Ewald` (explicit solvent with a periodic box), `CutoffPeriodic` (periodic box with a simple cutoff), `LJPME` (PME for both electrostatics and Lennard-Jones), and `NoCutoff` (no cutoff; very small systems only). The `constraints` field accepts `HBonds` (default, compatible with a 2 fs timestep), `AllBonds`, `HAngles` (allows ~4 fs timesteps), or `null` to disable constraints. Numeric fields use explicit unit suffixes: `_nm` for nanometers, `_K` for Kelvin, `_per_ps` for ps⁻¹, and `_ps` for picoseconds. The `platform` and `platform_properties` fields are set at the top level of `projector_params` and do not belong inside `md_params`.
 
 ## Outputs
 

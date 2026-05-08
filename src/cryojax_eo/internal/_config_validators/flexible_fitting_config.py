@@ -12,6 +12,7 @@ from pydantic import (
     model_validator,
 )
 
+from .ensemble_opt_config import MDParamsConfig as MDParamsConfig
 from .utils import _validate_file_with_type, _validate_files_with_type
 
 
@@ -61,6 +62,13 @@ class FFProjectorConfig(BaseModel, extra="forbid"):
         default=None,
         description="Path to the initial openMM state. "
         + "If None, the projector will be initialized with a random state. ",
+    )
+    md_params: MDParamsConfig = Field(
+        default_factory=MDParamsConfig,
+        description="Overrides for OpenMM MD simulation parameters. "
+        + "Any omitted field falls back to the built-in default. "
+        + "Note: 'platform' and 'platform_properties' are set via the fields above, "
+        + "not here.",
     )
 
     @model_validator(mode="after")

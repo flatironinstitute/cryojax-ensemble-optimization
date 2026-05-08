@@ -27,6 +27,15 @@ projector_params:
 # platform_properties:
 #   Threads: '32'                  # can be unreliable, OpenMM does not always use all available threads
   path_to_initial_state:           # (*) Default: null. OpenMM state XML for warm-starting (e.g., from a prior run)
+  md_params:                       # (*) Override default OpenMM simulation parameters. All fields are optional.
+    forcefield: amber14-all.xml       # (*) Default: amber14-all.xml
+    water_model: amber14/tip3p.xml    # (*) Default: amber14/tip3p.xml
+    nonbonded_method: CutoffNonPeriodic # (*) Options: PME, CutoffNonPeriodic, NoCutoff, CutoffPeriodic, Ewald, LJPME
+    nonbonded_cutoff_nm: 1.0          # (*) Default: 1.0 nm
+    constraints: HBonds               # (*) Options: HBonds, AllBonds, HAngles, null (no constraints)
+    temperature_K: 300.0              # (*) Default: 300 K
+    friction_per_ps: 1.0              # (*) Default: 1.0 ps^-1
+    timestep_ps: 0.002                # (*) Default: 0.002 ps (2 fs)
 
 walker_optimizer_params:
   n_steps: 10           # (*) Default: 1. Number of gradient descent steps per iteration
