@@ -28,7 +28,7 @@ jobs:
 
       - name: Import signing key
         run: |
-          echo "${{ secrets.APPTAINER_PRIVATE_KEY }}" > /tmp/private.key
+          printf '%s\n' "${{ secrets.APPTAINER_PRIVATE_KEY }}" > /tmp/private.key
           apptainer key import /tmp/private.key
           rm /tmp/private.key
 
