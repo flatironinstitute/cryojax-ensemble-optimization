@@ -26,6 +26,17 @@ jobs:
       - name: Build container
         run: sudo apptainer build container/cryojax_eo.sif container/cryojax_eo.def
 
+      - name: Import signing key
+        run: |
+          echo "${{ secrets.APPTAINER_PRIVATE_KEY }}" > /tmp/private.key
+          apptainer key import /tmp/private.key
+          rm /tmp/private.key
+
+      - name: Sign container
+        env:
+          APPTAINER_KEY_PASSPHRASE: ${{ secrets.APPTAINER_KEY_PASSPHRASE }}
+        run: apptainer sign container/cryojax_eo.sif
+
       - name: Push to Sylabs (latest and version tag)
         run: |
           apptainer push container/cryojax_eo.sif library://davidsilva27/default/cryojax_eo:latest
