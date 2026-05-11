@@ -49,6 +49,14 @@ sudo apptainer build container/cryojax_eo.sif container/cryojax_eo.def
 apptainer build --fakeroot container/cryojax_eo.sif container/cryojax_eo.def
 ```
 
+!!! warning "CUDA version requirement"
+    The pre-built image requires a CUDA driver version ≥ 12.6. To check your version, run `nvidia-smi` — the version appears in the top-right corner of the output.
+
+    If your cluster has an older driver, build from the definition file and replace `cuda-version==12.6` with your installed version:
+    ```bash
+    mamba install -n cryojax_eo -c conda-forge openmm cuda-version==<your-version>
+    ```
+
 **Running commands with the container:**
 
 ```bash
