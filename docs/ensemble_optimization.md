@@ -13,7 +13,7 @@ Cryo-EM Ensemble Optimization uses a custom YAML input format. A sample [config 
 ```yaml
 # Parameters marked with (*) are optional
 
-dataset_params:
+data_params:
   path_to_relion_project: /path/to/relion/project/
   path_to_starfile: /path/to/starfile.star
   loads_envelope: True # (*) Default: false, loads envelope function parameters
