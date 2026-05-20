@@ -87,7 +87,7 @@ See the [input documentation](docs/dataset_simulation.md)
 
 ## Reproducing Paper Results
 
-All the necessary data, atomic models, config files, and instructions to reproduce our results are available in [Zenodo](https://doi.org/10.5281/zenodo.19224943).
+All the necessary data, atomic models, config files, and instructions to reproduce our results are available in [Zenodo](https://doi.org/10.5281/zenodo.19224943). These results were obtained with version `0.2.3` of `cryojax-eo`.
 
 ## Contact
 
