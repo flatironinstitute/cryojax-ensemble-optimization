@@ -40,10 +40,14 @@ Note: OpenMM is not required for all our utilities. Data simulation and Ensemble
 
 For HPC environments where conda is unavailable or installation is restricted, we provide an [Apptainer](https://apptainer.org/) definition file at `container/cryojax_eo.def`. Pre-built images are hosted on [Sylabs Cloud](https://cloud.sylabs.io/library/davidsilva27/default/cryojax_eo).
 
+> **Note:** On most HPC clusters, Apptainer or Singularity must be loaded as an environment module before use: `module load apptainer` (or `module load singularity`). If neither works, check availability with `module spider apptainer` or contact your system administrator.
+
 **Option 1 — Pull a pre-built image:**
 ```bash
-apptainer pull library://davidsilva27/default/cryojax_eo:latest
+apptainer pull --library https://library.sylabs.io library://davidsilva27/default/cryojax_eo:latest
 ```
+
+> **Note:** The `--library` flag is required because newer versions of Apptainer/Singularity no longer include Sylabs Cloud as the default endpoint. Replace `apptainer` with `singularity` if that is what your cluster provides.
 
 **Option 2 — Build from the definition file:**
 ```bash
