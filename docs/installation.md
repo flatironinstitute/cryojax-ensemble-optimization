@@ -33,11 +33,21 @@ To find your CUDA version, run `nvidia-smi` — the version appears in the top-r
 
 For HPC environments where conda is unavailable or installation is restricted, we provide an [Apptainer](https://apptainer.org/) definition file at `container/cryojax_eo.def`. Pre-built images are hosted on [Sylabs Cloud](https://cloud.sylabs.io/library/davidsilva27/default/cryojax_eo).
 
+!!! note "Loading Apptainer/Singularity on HPC clusters"
+    On most HPC clusters, Apptainer or Singularity is available as an environment module and must be loaded before use:
+    ```bash
+    module load apptainer   # or: module load singularity
+    ```
+    If neither works, check what is available with `module spider apptainer` or `module spider singularity`, or contact your system administrator.
+
 **Option 1 — Pull a pre-built image:**
 
 ```bash
-apptainer pull library://davidsilva27/default/cryojax_eo:latest
+apptainer pull --library https://library.sylabs.io library://davidsilva27/default/cryojax_eo:latest
 ```
+
+!!! note
+    The `--library` flag is required because newer versions of Apptainer/Singularity no longer include Sylabs Cloud as the default endpoint. If you are using Singularity instead of Apptainer, replace `apptainer` with `singularity` in all commands.
 
 **Option 2 — Build from the definition file:**
 

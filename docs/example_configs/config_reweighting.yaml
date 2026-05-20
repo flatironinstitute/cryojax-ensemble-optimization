@@ -16,7 +16,11 @@ max_iter: 500
 # Tolerance for stopping criteria
 # of the multiplicative gradient
 # weight optimization method
-tol: 1e-2
+tol: 1e-4
+
+# ab initio version, ignores starfile poses
+# default is false
+estimates_poses: true
 
 # A collection of structural files
 # can be any combination of pdb, cif, mrc files

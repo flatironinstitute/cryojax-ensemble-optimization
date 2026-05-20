@@ -44,6 +44,19 @@ def add_args(parser):
     parser.add_argument(
         "--config", type=str, help="Path to the config (yaml) file", required=True
     )
+    parser.add_argument(
+        "--from-likelihoods",
+        nargs="?",
+        const=True,
+        default=None,
+        metavar="PATH",
+        help=(
+            "Skip likelihood computation and re-optimize weights from a pre-computed "
+            "log_likelihood_matrix.npz. If PATH is omitted, looks for the file in "
+            "the output directory specified by the config. "
+            "Useful for tuning max_iter or tol without recomputing likelihoods."
+        ),
+    )
     return parser
 
 
@@ -187,7 +200,7 @@ def compute_likelihoods_for_structural_file(
         new_parameter_file = RelionParticleParameterFile(
             path_to_starfile=path_to_starfile, mode="w", exist_ok=True
         )
-    for batch in tqdm(dataloader, desc="batches"):
+    for batch in tqdm(dataloader, desc="batches", leave=False):
         if estimates_poses:
             poses = estimate_poses(
                 volume=voxel_volume,
@@ -217,7 +230,7 @@ def compute_likelihoods_for_structural_file(
     return jnp.concatenate(likelihoods)
 
 
-def run_ensemble_reweighting(
+def run_ensemble_reweighting_from_scratch(
     ensemble_opt_config: ReweightingConfig,
 ) -> Float[Array, " n_models"]:
     config = dict(ensemble_opt_config.model_dump())
@@ -273,6 +286,7 @@ def run_ensemble_reweighting(
     progress_bar = tqdm(
         range(len(config["path_to_structural_files"])), desc="Computing likelihoods"
     )
+    likelihoods_dict = {}
     for i in progress_bar:
         file = config["path_to_structural_files"][i]
         logging.info(f"Computing likelihoods for {file}...")
@@ -287,6 +301,9 @@ def run_ensemble_reweighting(
             estimates_poses=config["estimates_poses"],
             path_to_outputdir=config["path_to_output_dir"],
         )
+        # make the key in the dictionary the filename without the path and extension
+        dict_key = Path(file).stem
+        likelihoods_dict[dict_key] = likelihoods
         likelihood_matrix[:, i] = np.asarray(likelihoods)
 
     weights = optimize_weights(
@@ -297,10 +314,10 @@ def run_ensemble_reweighting(
     weight_dict = {}
 
     logging.info("Final weights:")
-    for i, file in enumerate(config["path_to_structural_files"]):
-        weight_dict[file] = float(weights[i])
-        logging.info(f"  Weight for {file}: {weights[i]:.4f}")
-        print(f"  Weight for {file}: {weights[i]:.4f}")
+    for key, w in zip(likelihoods_dict.keys(), weights):
+        weight_dict[key] = float(w)
+        logging.info(f"  {key}: {w:.4f}")
+        print(f"  {key}: {w:.4f}")
 
     # save the weights as a yaml file
     with open(
@@ -308,10 +325,59 @@ def run_ensemble_reweighting(
     ) as f:
         yaml.dump(weight_dict, f)
 
-    np.save(
-        os.path.join(config["path_to_output_dir"], "log_likelihood_matrix.npy"),
-        likelihood_matrix,
+    np.savez(
+        os.path.join(config["path_to_output_dir"], "log_likelihood_matrix.npz"),
+        **likelihoods_dict,
     )
+
+    return weights
+
+
+def run_ensemble_reweighting_from_likelihoods(
+    ensemble_opt_config: ReweightingConfig,
+    path_to_npz: str | None = None,
+) -> Float[Array, " n_models"]:
+    config = dict(ensemble_opt_config.model_dump())
+
+    if path_to_npz is None:
+        path_to_npz = os.path.join(
+            config["path_to_output_dir"], "log_likelihood_matrix.npz"
+        )
+    if not os.path.exists(path_to_npz):
+        raise FileNotFoundError(
+            f"No pre-computed likelihoods found at {path_to_npz}. "
+            "Run without --from-likelihoods first to compute them."
+        )
+
+    logging.info(f"Loading pre-computed likelihoods from {path_to_npz}...")
+    data = np.load(path_to_npz)
+
+    keys = [Path(f).stem for f in config["path_to_structural_files"]]
+    try:
+        likelihood_matrix = np.column_stack([data[k] for k in keys])
+    except KeyError as e:
+        raise KeyError(
+            f"Key {e} not found in {path_to_npz}. "
+            "Ensure path_to_structural_files matches the original run."
+        ) from e
+
+    weights = optimize_weights(
+        log_likelihood_matrix=jnp.array(likelihood_matrix),
+        max_iter=config["max_iter"],
+        tol=config["tol"],
+    )
+
+    weight_dict = {}
+    logging.info("Final weights:")
+    for key, w in zip(keys, weights):
+        weight_dict[key] = float(w)
+        logging.info(f"  {key}: {w:.4f}")
+        print(f"  {key}: {w:.4f}")
+
+    with open(
+        os.path.join(config["path_to_output_dir"], "optimized_weights.yaml"), "w"
+    ) as f:
+        yaml.dump(weight_dict, f)
 
     return weights
 
@@ -345,9 +411,15 @@ def main(args):
         f"to {os.path.join(config.path_to_output_dir, config_fname)}"
     )
 
-    logging.info("Running ensemble optimization...")
-    run_ensemble_reweighting(config)
-    logging.info("Ensemble optimization complete.")
+    if args.from_likelihoods is not None:
+        path = None if args.from_likelihoods is True else args.from_likelihoods
+        logging.info("Re-computing weights from pre-computed likelihoods...")
+        run_ensemble_reweighting_from_likelihoods(config, path_to_npz=path)
+        logging.info("Weight optimization complete.")
+    else:
+        logging.info("Running ensemble reweighting from scratch...")
+        run_ensemble_reweighting_from_scratch(config)
+        logging.info("Ensemble reweighting complete.")
 
     return
 
