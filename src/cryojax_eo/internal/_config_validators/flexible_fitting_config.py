@@ -250,7 +250,11 @@ class FlexibleFittingConfig(BaseModel, extra="forbid"):
     @field_validator("early_stopping")
     @classmethod
     def validate_early_stopping_config(cls, values):
-        return dict(FFEarlyStoppingConfig(**values).model_dump())
+        return (
+            dict(FFEarlyStoppingConfig(**values).model_dump())
+            if values is not None
+            else {}
+        )
 
     @field_validator("atom_selection")
     @classmethod
