@@ -28,7 +28,7 @@ jobs:
         run: |
           uv venv --python=${{ matrix.python-version }}
           uv pip install --upgrade pip
-          uv pip install -e '.[dev, tests]'
+          uv pip install -e '.[dev, tests, docs]'
 
       - name: Checks with pre-commit
         run: |
@@ -37,3 +37,7 @@ jobs:
       - name: Run tests
         run: |
           uv run --no-sync pytest tests/
+
+      - name: Check that documentation can be built.
+        run: |
+          uv run --no-sync mkdocs build
