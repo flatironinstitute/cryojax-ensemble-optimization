@@ -29,7 +29,7 @@ def test_iterative_optimizer(
 
     relion_dataset = RelionParticleDataset(
         RelionParticleParameterFile(
-            sample_path_to_starfile, options=dict(broadcasts_image_config=False)
+            sample_path_to_starfile,
         ),
         sample_path_to_relion_project,
     )
@@ -85,7 +85,7 @@ def test_weight_optimizer(
 
     relion_dataset = RelionParticleDataset(
         RelionParticleParameterFile(
-            sample_path_to_starfile, options=dict(broadcasts_image_config=False)
+            sample_path_to_starfile,
         ),
         sample_path_to_relion_project,
     )

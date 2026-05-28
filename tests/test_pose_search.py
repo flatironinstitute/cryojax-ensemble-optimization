@@ -19,7 +19,7 @@ def test_global_SO3_hier_search(
 
     relion_dataset = RelionParticleDataset(
         RelionParticleParameterFile(
-            sample_path_to_starfile, options=dict(broadcasts_image_config=False)
+            sample_path_to_starfile,
         ),
         sample_path_to_relion_project,
     )
