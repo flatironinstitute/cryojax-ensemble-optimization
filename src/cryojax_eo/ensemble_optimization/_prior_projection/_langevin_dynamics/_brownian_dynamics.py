@@ -55,12 +55,12 @@ class OverdampedLangevinSampler(AbstractPriorProjector):
         """
         key, initial_walker = init_state
 
-        assert (
-            initial_walker.ndim == 2 and initial_walker.shape[1] == 3
-        ), "initial_walker must be a 2D array with shape (n_atoms, 3)"
-        assert jnp.isdtype(
-            initial_walker.dtype, "real floating"
-        ), "initial_walker must be a real floating point array"
+        assert initial_walker.ndim == 2 and initial_walker.shape[1] == 3, (
+            "initial_walker must be a 2D array with shape (n_atoms, 3)"
+        )
+        assert jnp.isdtype(initial_walker.dtype, "real floating"), (
+            "initial_walker must be a real floating point array"
+        )
 
         return init_state
 
@@ -142,12 +142,12 @@ class SteeredOverdampedLangevinSampler(AbstractPriorProjector):
         """
         key, initial_walker = init_state
 
-        assert (
-            initial_walker.ndim == 2 and initial_walker.shape[1] == 3
-        ), "initial_walker must be a 2D array with shape (n_atoms, 3)"
-        assert jnp.isdtype(
-            initial_walker.dtype, "real floating"
-        ), "initial_walker must be a real floating point array"
+        assert initial_walker.ndim == 2 and initial_walker.shape[1] == 3, (
+            "initial_walker must be a 2D array with shape (n_atoms, 3)"
+        )
+        assert jnp.isdtype(initial_walker.dtype, "real floating"), (
+            "initial_walker must be a real floating point array"
+        )
 
         return init_state
 
@@ -232,12 +232,12 @@ class ParallelSteeredOverdampedLangevinSampler(AbstractPriorProjector):
         """
         key, initial_walker = init_state
 
-        assert (
-            initial_walker.ndim == 3 and initial_walker.shape[2] == 3
-        ), "initial_walker must be a 2D array with shape (n_atoms, 3)"
-        assert jnp.isdtype(
-            initial_walker.dtype, "real floating"
-        ), "initial_walker must be a real floating point array"
+        assert initial_walker.ndim == 3 and initial_walker.shape[2] == 3, (
+            "initial_walker must be a 2D array with shape (n_atoms, 3)"
+        )
+        assert jnp.isdtype(initial_walker.dtype, "real floating"), (
+            "initial_walker must be a real floating point array"
+        )
 
         return init_state
 

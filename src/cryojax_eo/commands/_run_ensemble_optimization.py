@@ -95,7 +95,6 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
             path_to_starfile=config["data_params"]["path_to_starfile"],
             options=dict(
                 loads_envelope=config["data_params"]["loads_envelope"],
-                broadcasts_image_config=False,
             ),
         ),
         path_to_relion_project=config["data_params"]["path_to_relion_project"],

@@ -7,7 +7,7 @@ import cryojax.simulator as cxs
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from cryojax.ndimage import CircularCosineMask, FourierGaussian
+from cryojax.ndimage import CircularCosineMask
 from cryojax.rotations import SO3
 from cryospax import (
     RelionParticleDataset,
@@ -41,22 +41,25 @@ def make_relion_parameter_file(
 
     config_dict = dict(config.model_dump())
     logging.info("Generating Starfile...")
-    key, *subkeys = jax.random.split(key, config_dict["number_of_images"] + 1)
-    particle_parameters = _make_particle_parameters(jnp.array(subkeys), config_dict)
+    keys = jax.random.split(key, config_dict["number_of_images"])
+    pose, transfer_theory, image_config = _make_particle_parameters(
+        jnp.array(keys), config_dict
+    )
 
     logging.info(
         "Starfile generated. Saved to {}".format(config_dict["path_to_starfile"])
     )
 
-    parameter_file = RelionParticleParameterFile(
+    parameter_file = RelionParticleParameterFile.empty(
         path_to_starfile=config_dict["path_to_starfile"],
-        mode="w",
+        num_particles=config_dict["number_of_images"],
         exist_ok=config_dict["overwrite"],
-        options=dict(
-            broadcasts_image_config=True
-        ),  # Change to False when cryospax is updated
     )
-    parameter_file.append(particle_parameters)
+    parameter_file[:] = dict(
+        pose=pose,
+        transfer_theory=transfer_theory,
+        image_config=image_config,
+    )
 
     return parameter_file
 
@@ -175,7 +178,7 @@ def _simulate_relion_dataset(
         parameter_file=parameter_file,
         path_to_relion_project=path_to_relion_project,
         mode="w",
-        mrcfile_settings={"overwrite": overwrite},
+        mrcfile_options={"overwrite": overwrite},
     )
 
     simulate_particle_stack(
@@ -192,8 +195,10 @@ def _simulate_relion_dataset(
     return relion_dataset
 
 
-@partial(eqx.filter_vmap, in_axes=(0, None))
-def _make_particle_parameters(key: PRNGKeyArray, config: dict) -> dict:
+@partial(eqx.filter_vmap, in_axes=(0, None), out_axes=(0, 0, None))
+def _make_particle_parameters(
+    key: PRNGKeyArray, config: dict
+) -> tuple[cxs.EulerAnglePose, cxs.ContrastTransferTheory, cxs.BasicImageConfig]:
     """
     WARNING: this function assumes the `config` has been validated
     by `cryojax_ensemble_refinement.internal.GeneratorConfig`.
@@ -295,10 +300,12 @@ def _make_particle_parameters(key: PRNGKeyArray, config: dict) -> dict:
     # now generate your non-random values
     spherical_aberration_in_mm = config["spherical_aberration_in_mm"]
     amplitude_contrast_ratio = config["amplitude_contrast_ratio"]
-    ctf_scale_factor = config["ctf_scale_factor"]
+    # ctf_scale_factor = config["ctf_scale_factor"]
 
     b_factor = jnp.clip(b_factor, 1e-16, None)
-    envelope = FourierGaussian(b_factor=b_factor, amplitude=ctf_scale_factor)
+    # envelope = FourierGaussian(b_factor=b_factor, amplitude=ctf_scale_factor)
+    # envelope = cxs.C
+    # envelope = FourierConstant(value=ctf_scale_factor)
 
     # ... build the CTF
     transfer_theory = cxs.ContrastTransferTheory(
@@ -310,15 +317,10 @@ def _make_particle_parameters(key: PRNGKeyArray, config: dict) -> dict:
         ),
         amplitude_contrast_ratio=amplitude_contrast_ratio,
         phase_shift=phase_shift,
-        envelope=envelope,
+        # envelope=envelope,
     )
 
-    relion_particle_parameters = {
-        "image_config": image_config,
-        "pose": pose,
-        "transfer_theory": transfer_theory,
-    }
-    return relion_particle_parameters
+    return pose, transfer_theory, image_config
 
 
 def _sample_vmf_rotation(mu: Float[Array, "3"], kappa: float, key: PRNGKeyArray) -> SO3:

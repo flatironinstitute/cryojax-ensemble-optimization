@@ -29,7 +29,7 @@ def test_iterative_optimizer(
 
     relion_dataset = RelionParticleDataset(
         RelionParticleParameterFile(
-            sample_path_to_starfile, options=dict(broadcasts_image_config=False)
+            sample_path_to_starfile,
         ),
         sample_path_to_relion_project,
     )
@@ -60,9 +60,9 @@ def test_iterative_optimizer(
     weights = jnp.array([0.5, 0.5])
     _, new_positions, new_weights = optimizer(walkers, weights, dataloader)
 
-    assert (
-        new_positions.shape == walkers.shape
-    ), "Optimized positions have incorrect shape"
+    assert new_positions.shape == walkers.shape, (
+        "Optimized positions have incorrect shape"
+    )
     assert new_weights.shape == weights.shape, "Optimized weights have incorrect shape"
 
     return
@@ -85,7 +85,7 @@ def test_weight_optimizer(
 
     relion_dataset = RelionParticleDataset(
         RelionParticleParameterFile(
-            sample_path_to_starfile, options=dict(broadcasts_image_config=False)
+            sample_path_to_starfile,
         ),
         sample_path_to_relion_project,
     )

@@ -21,9 +21,9 @@ def test_dilated_mask_projection(sample_path_mrc_file):
 
     proj_mask = dilated_mask.project(cxs.EulerAnglePose(), image_config)
 
-    assert (
-        jnp.abs(proj_mask - mask.sum(0) / mask.sum(0).max()).min() < 1e-5
-    ), "Projected mask does not match expected mask"
+    assert jnp.abs(proj_mask - mask.sum(0) / mask.sum(0).max()).min() < 1e-5, (
+        "Projected mask does not match expected mask"
+    )
 
     return
 

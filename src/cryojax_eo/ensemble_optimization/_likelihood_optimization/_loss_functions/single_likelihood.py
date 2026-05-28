@@ -249,9 +249,9 @@ def likelihood_iso_gaussian_marg(
     isotropic Gaussian likelihood function where the variance has been marginalized.
     This is useful when the variance is not known or is not fixed.
     """
-    assert (
-        per_particle_args is None
-    ), "per_particle_args is not used in this function and should be None."
+    assert per_particle_args is None, (
+        "per_particle_args is not used in this function and should be None."
+    )
 
     image_model = cxs.make_image_model(
         volume,

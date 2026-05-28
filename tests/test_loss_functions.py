@@ -75,7 +75,6 @@ def test_likelihood_fn(
     relion_dataset = RelionParticleDataset(
         RelionParticleParameterFile(
             path_to_starfile=sample_path_to_starfile,
-            options=dict(broadcasts_image_config=False),
         ),
         path_to_relion_project=sample_path_to_relion_project,
         mode="r",
