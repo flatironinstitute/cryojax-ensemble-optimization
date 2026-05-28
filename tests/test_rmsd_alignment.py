@@ -26,10 +26,10 @@ def test_rigid_align_positions(n_atoms):
 
     print(f"Test with {n_atoms} atoms:")
     print(random_translation, displacement)
-    assert jnp.allclose(
-        aligned_points, random_points, atol=1e-5
-    ), "Aligned points do not match reference points"
-    assert jnp.allclose(
-        rot_matrix @ random_rotation, jnp.eye(3), atol=1e-5
-    ), "Rotation matrices do not match"
+    assert jnp.allclose(aligned_points, random_points, atol=1e-5), (
+        "Aligned points do not match reference points"
+    )
+    assert jnp.allclose(rot_matrix @ random_rotation, jnp.eye(3), atol=1e-5), (
+        "Rotation matrices do not match"
+    )
     assert jnp.allclose(displacement, -random_translation), "Translations do not match"

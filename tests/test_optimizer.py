@@ -60,9 +60,9 @@ def test_iterative_optimizer(
     weights = jnp.array([0.5, 0.5])
     _, new_positions, new_weights = optimizer(walkers, weights, dataloader)
 
-    assert (
-        new_positions.shape == walkers.shape
-    ), "Optimized positions have incorrect shape"
+    assert new_positions.shape == walkers.shape, (
+        "Optimized positions have incorrect shape"
+    )
     assert new_weights.shape == weights.shape, "Optimized weights have incorrect shape"
 
     return

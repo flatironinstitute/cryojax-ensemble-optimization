@@ -33,9 +33,9 @@ def test_fit_gmm_to_density(sample_path_gmm_model, sample_path_mrc_file):
     fitted_volume = render_fn(fitted_gmm)
     loss_fitted = jnp.linalg.norm(target_volume - fitted_volume)
 
-    assert (
-        loss_fitted < loss_initial
-    ), "Fitted GMM should have lower loss than initial GMM"
+    assert loss_fitted < loss_initial, (
+        "Fitted GMM should have lower loss than initial GMM"
+    )
     return
 
 
@@ -50,9 +50,9 @@ def test_make_gmm_model_from_atomic_model(sample_path_groel_pdb):
     assert gmm_model.positions.ndim == 2, "GMM positions should be a 2D array"
     assert gmm_model.amplitudes.ndim == 2, "GMM amplitudes should be a 2D array"
     assert gmm_model.variances.ndim == 2, "GMM variances should be a 2D array"
-    assert isinstance(
-        gmm_model, cxs.GaussianMixtureVolume
-    ), "GMM model should be a GaussianMixtureVolume"
+    assert isinstance(gmm_model, cxs.GaussianMixtureVolume), (
+        "GMM model should be a GaussianMixtureVolume"
+    )
 
     return
 

@@ -43,9 +43,9 @@ class FlexibleFittingPipeline(eqx.Module):
     ):
         assert n_steps > 0, "n_steps must be positive"
         assert atom_indices_for_opt.ndim == 1, "atom_indices_for_opt must be a 1D array."
-        assert (
-            len(atom_indices_for_opt) > 0
-        ), "atom_indices_for_opt must contain at least one index."
+        assert len(atom_indices_for_opt) > 0, (
+            "atom_indices_for_opt must contain at least one index."
+        )
 
         self.prior_projector = prior_projector
         self.walker_optimizer = walker_optimizer
