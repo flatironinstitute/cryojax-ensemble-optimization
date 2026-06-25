@@ -3,7 +3,7 @@
 
 ## Summary
 
-CryoJAX ensemble optimization is a module of the [cryoJAX](https://github.com/michael-0brien/cryojax) library, a [JAX](https://github.com/jax-ml/jax) and [Equinox](https://docs.kidger.site/equinox/)-based library for differentiable cryo-EM forward models. The purpose of this library is to provide a framework for optimizing structural ensembles, defined as a weighted discrete set of atomic structures, given a set of cryo-EM images. To do this, we implement an algorithm inspired by projected gradient descent, where the optimization step is performed by comparing the ensemble to the cryo-EM dataset, and the projection step is done through Steered Molecular Dynamics using the popular [OpenMM](https://openmm.org/) library. Details and results are available in our [preprint](https://www.biorxiv.org/content/10.64898/2025.12.02.691891v1). Instructions for reproducing the paper results are provided below.
+CryoJAX ensemble optimization is a module of the [cryoJAX](https://github.com/michael-0brien/cryojax) library, a [JAX](https://github.com/jax-ml/jax) and [Equinox](https://docs.kidger.site/equinox/)-based library for differentiable cryo-EM forward models. The purpose of this library is to provide a framework for optimizing structural ensembles, defined as a weighted discrete set of atomic structures, given a set of cryo-EM images. To do this, we implement an algorithm inspired by projected gradient descent, where the optimization step is performed by comparing the ensemble to the cryo-EM dataset, and the projection step is done through Steered Molecular Dynamics using the popular [OpenMM](https://openmm.org/) library. Details and results are available in our [JCTC paper](https://pubs.acs.org/doi/10.1021/acs.jctc.6c00053). Instructions for reproducing the paper results are provided below.
 
 
 Full documentation is available at [flatironinstitute.github.io/cryojax-ensemble-optimization](https://flatironinstitute.github.io/cryojax-ensemble-optimization/).
@@ -87,7 +87,7 @@ See the [input documentation](docs/dataset_simulation.md)
 
 ## Reproducing Paper Results
 
-All the necessary data, atomic models, config files, and instructions to reproduce our results are available in [Zenodo](https://doi.org/10.5281/zenodo.19224943). These results were obtained with version `0.2.3` of `cryojax-eo`.
+All the necessary data, atomic models, config files, and instructions to reproduce our results are available in [Zenodo](https://doi.org/10.5281/zenodo.19224943) and [Dryad](https://datadryad.org/dataset/doi:10.5061/dryad.j6q573nwc). These results were obtained with version `0.2.3` of `cryojax-eo`.
 
 ## Contact
 
