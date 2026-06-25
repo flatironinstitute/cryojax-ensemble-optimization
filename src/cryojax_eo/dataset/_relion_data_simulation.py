@@ -52,13 +52,15 @@ def make_relion_parameter_file(
 
     parameter_file = RelionParticleParameterFile.empty(
         path_to_starfile=config_dict["path_to_starfile"],
-        num_particles=config_dict["number_of_images"],
+        num_particles=0,
         exist_ok=config_dict["overwrite"],
     )
-    parameter_file[:] = dict(
-        pose=pose,
-        transfer_theory=transfer_theory,
-        image_config=image_config,
+    parameter_file.append(
+        dict(
+            pose=pose,
+            transfer_theory=transfer_theory,
+            image_config=image_config,
+        )
     )
 
     return parameter_file
