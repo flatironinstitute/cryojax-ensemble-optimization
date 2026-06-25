@@ -242,7 +242,6 @@ def run_ensemble_reweighting_from_scratch(
             path_to_starfile=config["data_params"]["path_to_starfile"],
             options=dict(
                 loads_envelope=config["data_params"]["loads_envelope"],
-                broadcasts_image_config=False,
             ),
         ),
         path_to_relion_project=config["data_params"]["path_to_relion_project"],

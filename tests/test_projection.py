@@ -33,9 +33,9 @@ def test_steered_md_simulator(sample_path_to_pdb1):
     state = simulator.initialize()
     new_positions, state = simulator(ref_positions, state, 10.0)
 
-    assert (
-        ref_positions.shape == new_positions.shape
-    ), "Positions after projection have the wrong shape"
+    assert ref_positions.shape == new_positions.shape, (
+        "Positions after projection have the wrong shape"
+    )
     shutil.rmtree(os.path.join(os.path.dirname(__file__), "outputs/"))
     return
 
@@ -54,8 +54,8 @@ def test_ensemble_steered_md_simulator(sample_path_to_pdb1, sample_path_to_pdb2)
     state = simulator.initialize()
     new_positions, state = simulator(ref_positions, state, 10.0)
 
-    assert (
-        ref_positions.shape == new_positions.shape
-    ), "Positions after projection have the wrong shape"
+    assert ref_positions.shape == new_positions.shape, (
+        "Positions after projection have the wrong shape"
+    )
     shutil.rmtree(os.path.join(os.path.dirname(__file__), "outputs/"))
     return

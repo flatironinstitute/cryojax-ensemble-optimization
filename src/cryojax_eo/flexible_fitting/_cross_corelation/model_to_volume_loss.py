@@ -8,6 +8,7 @@ class ModelToVolumeCorrelationLossFn(eqx.Module):
     variances: Float[Array, "n_atoms n_gaussians_per_atom"]
     amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"]
     render_fn: cxs.GaussianMixtureRenderFn
+    vol_mask: Float[Array, "dim_z dim_y dim_x"]
 
     def __init__(
         self,
@@ -15,6 +16,7 @@ class ModelToVolumeCorrelationLossFn(eqx.Module):
         variances: Float[Array, "n_atoms n_gaussians_per_atom"],
         voxel_size: Float,
         volume_shape: tuple[int, int, int],
+        vol_mask: Float[Array, "dim_z dim_y dim_x"] | None = None,
         *,
         batch_size_for_z_planes: Int = 1,
         n_batches_of_atoms: Int = 1,
@@ -27,6 +29,8 @@ class ModelToVolumeCorrelationLossFn(eqx.Module):
 
         self.variances = variances
         self.amplitudes = amplitudes
+
+        self.vol_mask = jnp.ones(volume_shape) if vol_mask is None else vol_mask
 
         self.render_fn = cxs.GaussianMixtureRenderFn(
             shape=volume_shape,
@@ -48,6 +52,7 @@ class ModelToVolumeCorrelationLossFn(eqx.Module):
             self.variances,
             reference_volume,
             self.render_fn,
+            self.vol_mask,
         )
 
 
@@ -57,6 +62,7 @@ def _model_to_volume_crosscorrelation(
     variances: Float[Array, "n_atoms n_gaussians_per_atom"],
     reference_volume: Float[Array, "dim dim dim"],
     render_fn: cxs.GaussianMixtureRenderFn,
+    vol_mask: Float[Array, "dim dim dim"],
 ) -> float:
     comp_volume = render_fn(
         volume_representation=cxs.GaussianMixtureVolume(
@@ -65,6 +71,9 @@ def _model_to_volume_crosscorrelation(
             variances,
         ),
     )
+
+    comp_volume = comp_volume * vol_mask
+    reference_volume = reference_volume * vol_mask
 
     cross_correlation = (
         jnp.sum(comp_volume * reference_volume)

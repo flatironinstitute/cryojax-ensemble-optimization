@@ -70,7 +70,7 @@ def test_ensemble_optimization_optimizer(
 
     relion_dataset = RelionParticleDataset(
         RelionParticleParameterFile(
-            sample_path_to_starfile, options=dict(broadcasts_image_config=False)
+            sample_path_to_starfile,
         ),
         sample_path_to_relion_project,
     )
@@ -133,3 +133,56 @@ def test_ensemble_optimization_optimizer(
     shutil.rmtree(os.path.join(os.path.dirname(__file__), "outputs/"))
 
     return
+
+
+def test_run_ensemble_optimization_from_config(
+    sample_path_to_pdb1,
+    sample_path_to_pdb2,
+    sample_path_to_relion_project,
+    sample_path_to_starfile,
+    tmp_path,
+):
+    import argparse
+
+    import yaml
+
+    from cryojax_eo.commands._run_ensemble_optimization import main
+
+    output_directory = str(tmp_path / "script_output")
+
+    config = {
+        "path_to_atomic_models": [sample_path_to_pdb1, sample_path_to_pdb2],
+        "path_to_output": output_directory,
+        "atom_selection": "not element H",
+        "loads_b_factors": False,
+        "n_steps": 2,
+        "rng_seed": 0,
+        "data_params": {
+            "path_to_starfile": sample_path_to_starfile,
+            "path_to_relion_project": sample_path_to_relion_project,
+            "loads_envelope": False,
+            "data_sign": "light-on-dark",
+        },
+        "projector_params": {
+            "n_steps": 10,
+            "bias_constant_in_kjpermol": 1000.0,
+            "platform": "CPU",
+        },
+        "likelihood_optimizer_params": {
+            "n_steps": 2,
+            "step_size": 1.0,
+            "n_batches_per_step": 2,
+            "batch_size": 2,
+        },
+        "alignment_params": {
+            "path_to_prealigned_atomic_model": sample_path_to_pdb1,
+        },
+    }
+
+    config_path = str(tmp_path / "test_config.yaml")
+    with open(config_path, "w") as f:
+        yaml.dump(config, f)
+
+    main(argparse.Namespace(config=config_path))
+
+    assert os.path.exists(os.path.join(output_directory, "final_ensemble.npz"))

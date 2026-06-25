@@ -104,6 +104,21 @@ def run_flexible_fitting(flexible_fitting_config: FlexibleFittingConfig):
     reference_volume = fourier_crop_to_shape(
         reference_volume, (box_size_ff, box_size_ff, box_size_ff)
     )
+
+    if config["reference_volume_params"]["path_to_volumetric_mask"] is not None:
+        logging.debug("Loading volumetric mask...")
+        vol_mask = read_array_from_mrc(
+            config["reference_volume_params"]["path_to_volumetric_mask"],
+            loads_grid_spacing=False,
+        )
+        vol_mask = fourier_crop_to_shape(
+            jnp.asarray(vol_mask), (box_size_ff, box_size_ff, box_size_ff)
+        )
+        logging.debug("Volumetric mask loaded.")
+
+    else:
+        vol_mask = None
+
     logging.debug("Reference volume loaded.")
 
     # Construct prior projector
@@ -127,6 +142,7 @@ def run_flexible_fitting(flexible_fitting_config: FlexibleFittingConfig):
         variances=variances,
         voxel_size=voxel_size_ff,
         volume_shape=(box_size_ff, box_size_ff, box_size_ff),
+        vol_mask=vol_mask,
         batch_size_for_z_planes=config["walker_optimizer_params"][
             "batch_size_for_z_planes"
         ],

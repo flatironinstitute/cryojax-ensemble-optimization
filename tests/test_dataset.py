@@ -82,18 +82,18 @@ def test_make_relion_parameter_file(sample_simulator_config):
         jax.random.key(0), sample_simulator_config
     )
 
-    assert (
-        len(parameter_file) == sample_simulator_config.number_of_images
-    ), "Number of entries in parameter file different from requested"
+    assert len(parameter_file) == sample_simulator_config.number_of_images, (
+        "Number of entries in parameter file different from requested"
+    )
     return
 
 
 def test_simulate_relion_dataset(sample_simulator_config):
     relion_dataset = simulate_relion_dataset(sample_simulator_config)
 
-    assert (
-        len(relion_dataset) == sample_simulator_config.number_of_images
-    ), "Number of images simulated different from requested"
+    assert len(relion_dataset) == sample_simulator_config.number_of_images, (
+        "Number of images simulated different from requested"
+    )
     shutil.rmtree(relion_dataset.path_to_relion_project)
     return
 
@@ -107,7 +107,7 @@ def test_create_dataloader(
 ):
     relion_stack_dataset = RelionParticleDataset(
         RelionParticleParameterFile(
-            sample_path_to_starfile, options=dict(broadcasts_image_config=False)
+            sample_path_to_starfile,
         ),
         sample_path_to_relion_project,
     )
@@ -127,7 +127,7 @@ def test_create_dataloader(
     assert "particle_stack" in batch, "Batch does not contain particle_stack"
     assert "per_particle_args" in batch, "Batch does not contain per_particle_args"
     assert batch["particle_stack"]["images"].shape[0] == 2, "Batch size is incorrect"
-    assert (
-        batch["per_particle_args"].shape[0] == 2
-    ), "Batch size of per_particle_args is incorrect"
+    assert batch["per_particle_args"].shape[0] == 2, (
+        "Batch size of per_particle_args is incorrect"
+    )
     return
