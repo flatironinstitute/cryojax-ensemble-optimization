@@ -27,6 +27,7 @@ reference_volume_params:
   flexible_fitting_box_size: 128  # (*) Default: 128. Box size (in pixels) used for the fitting loss
   rigid_alignment_box_size: 32    # (*) Default: 32.  Box size (in pixels) used for rigid-body alignment
   reference_volume_voxel_size:    # (*) Default: null. Overrides the voxel size in the MRC header
+  path_to_volumetric_mask:        # (*) Default: null. Path to a mask (.mrc) applied to the cross-correlation loss
 
 projector_params:
   n_steps: 1000                         # number of MD steps per iteration
@@ -62,6 +63,8 @@ n_steps: 100  # total number of flexible fitting iterations
 **Alignment.** The `path_to_prealigned_atomic_model` must be aligned to the frame of reference of the consensus map. This reference structure is used only for rigid-body re-alignment at each iteration; the structure being optimized is `path_to_atomic_model`. Providing a `path_to_reference_volume` enables this alignment and is strongly recommended. The `rigid_alignment_box_size` controls the resolution of the alignment step — a value of 32 typically adds about 1 second per iteration.
 
 **Flexible fitting box size.** The `flexible_fitting_box_size` sets the resolution at which the cross-correlation loss is computed. Larger boxes capture more detail but require more GPU memory. For memory-constrained settings, increase `n_batches_of_atoms` to spread atom contributions across sequential evaluations, and increase `batch_size_for_z_planes` to parallelize over z-planes with `jax.vmap`.
+
+**Volumetric mask.** The optional `path_to_volumetric_mask` accepts a `.mrc` mask file (e.g., the dilated solvent mask from a homogeneous refinement job). It is Fourier-cropped to `flexible_fitting_box_size` and applied to the cross-correlation loss, focusing the fitting on a specific region of the map and suppressing noise outside the mask. If omitted, the loss is computed over the full volume.
 
 **Bias constant.** The `bias_constant_in_kjpermol` controls how strongly the MD simulation is steered toward the gradient direction. A single float applies a constant force; a two-element list `[start, end]` applies a linear schedule from `start` to `end` over all `n_steps` iterations. This parameter typically requires tuning for each system. Values that are too large cause the simulation to explode; values that are too small produce no structural change.
 

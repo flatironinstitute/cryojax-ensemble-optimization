@@ -122,9 +122,23 @@ class RefVolFFConfig(BaseModel, extra="forbid"):
         + " If None, the voxel size from the MRC header will be used.",
     )
 
+    path_to_volumetric_mask: FilePath | None = Field(
+        default=None,
+        description="Path to a volumetric mask (.mrc). "
+        + "If provided, it will be cropped to `flexible_fitting_box_size` "
+        + "and applied to the cross-correlation loss. "
+        + "If None, no mask will be applied.",
+    )
+
     @field_validator("path_to_reference_volume")
     @classmethod
     def validate_path_to_reference_volume(cls, v):
+        if v is not None:
+            return _validate_file_with_type(v, file_type=".mrc")
+
+    @field_validator("path_to_volumetric_mask")
+    @classmethod
+    def validate_path_to_volumetric_mask(cls, v):
         if v is not None:
             return _validate_file_with_type(v, file_type=".mrc")
 
