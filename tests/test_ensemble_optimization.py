@@ -173,6 +173,11 @@ def test_run_ensemble_optimization_from_config(
             "step_size": 1.0,
             "n_batches_per_step": 2,
             "batch_size": 2,
+            "volume_integrator_backend": {
+                "enable_pallas": False,
+                "spread_mode": "exact",
+                "sampling_mode": "average",
+            },
         },
         "alignment_params": {
             "path_to_prealigned_atomic_model": sample_path_to_pdb1,

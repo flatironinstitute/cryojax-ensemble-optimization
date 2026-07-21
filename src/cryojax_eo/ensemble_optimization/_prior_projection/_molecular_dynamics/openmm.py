@@ -7,6 +7,8 @@ run_md_openmm
     Run MD simulations using OpenMM
 """
 
+from __future__ import annotations
+
 import os
 import pathlib
 import shutil
@@ -54,7 +56,7 @@ def md_params_config_to_openmm_overrides(md_params_config: dict) -> dict:
     separately from ``EnsOptMDConfigProjector.platform`` and ``platform_properties``.
     """
     if openmm_app is None or openmm_unit is None:
-        raise ImportError(
+        raise ModuleNotFoundError(
             "OpenMM is not installed. Please install OpenMM if using any features "
             "that use molecular dynamics."
         )
@@ -137,7 +139,7 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
         make_simulation_fn: Callable | None = None,
     ):
         if not _HAS_OPENMM:
-            raise ImportError(
+            raise ModuleNotFoundError(
                 "OpenMM is not installed. Please install OpenMM if using any features "
                 + "that use molecular dynamics, e.g., the ensemble optimization pipeline "
                 + "or flexible fitting."
@@ -246,7 +248,7 @@ class EnsembleSteeredMDSimulator(AbstractEnsemblePriorProjector, strict=True):
 
     def __init__(self, md_simulators: list[SteeredMDSimulator]):
         if not _HAS_OPENMM:
-            raise ImportError(
+            raise ModuleNotFoundError(
                 "OpenMM is not installed. Please install OpenMM if using any features "
                 + "that use molecular dynamics, e.g., the ensemble optimization pipeline "
                 + "or flexible fitting."
@@ -285,7 +287,7 @@ def compute_biasing_constant(
     parameters_for_md: dict = {},
 ):
     if not _HAS_OPENMM:
-        raise ImportError(
+        raise ModuleNotFoundError(
             "OpenMM is not installed. Please install OpenMM if using any features "
             + "that use molecular dynamics, e.g., the ensemble optimization pipeline "
             + "or flexible fitting."

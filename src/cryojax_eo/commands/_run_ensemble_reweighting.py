@@ -96,6 +96,7 @@ def _compute_likelihoods_fn(volume, relion_stack, dilated_mask, image_sign):
         image_config=relion_stack["parameters"]["image_config"],
         pose=relion_stack["parameters"]["pose"],
         transfer_theory=relion_stack["parameters"]["transfer_theory"],
+        integrator=cxs.AutoVolumeProjection(),
         dilated_mask=dilated_mask,
         image_sign=image_sign,
         per_particle_args=None,

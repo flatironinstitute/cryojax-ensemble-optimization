@@ -154,15 +154,15 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
                 logging.info("   Walkers aligned to volume.")
 
             logging.info("   Writing trajectory to files and saving current walkers...")
-            for j in range(walkers.shape[0]):
-                writers[j].write(walkers[j] / 10.0)
+            # for j in range(walkers.shape[0]):
+            #     writers[j].write(walkers[j] / 10.0)
 
-                _write_walker_to_pdb(
-                    walkers[j],
-                    os.path.join(output_directory, f"curr_walker_{j}.pdb"),
-                    self.prealigned_structure.topology,
-                    unit_cell_vectors,
-                )
+            # _write_walker_to_pdb(
+            #     walkers[j],
+            #     os.path.join(output_directory, f"curr_walker_{j}.pdb"),
+            #     self.prealigned_structure.topology,
+            #     unit_cell_vectors,
+            # )
 
         logging.info("Optimization complete.")
 
