@@ -2,24 +2,27 @@
 Weight and position optimizers for ensemble refinement.
 """
 
+import abc
+
 import equinox as eqx
 import jax
 import jax.numpy as jnp
+import optax
 from jaxtyping import Array, Float, Int
 
-from .model_to_volume_loss import ModelToVolumeCorrelationLossFn
+from .model_to_volume_loss import AbstractModelToVolumeLossFn
 
 
-class SteepestDescWalkerFlexibleFitting(eqx.Module):
+class AbstractWalkerOptimizer(eqx.Module):
     step_size: Float
-    n_steps: Int
-    model_to_vol_loss_fn: ModelToVolumeCorrelationLossFn
+    n_steps: Int = eqx.field(static=True)
+    model_to_vol_loss_fn: AbstractModelToVolumeLossFn
 
     def __init__(
         self,
         n_steps: Int,
         step_size: Float,
-        model_to_vol_loss_fn: ModelToVolumeCorrelationLossFn,
+        model_to_vol_loss_fn: AbstractModelToVolumeLossFn,
     ):
         assert n_steps > 0, "n_steps must be positive"
         assert step_size >= 0, "step_size must be non-negative."
@@ -28,29 +31,89 @@ class SteepestDescWalkerFlexibleFitting(eqx.Module):
         self.model_to_vol_loss_fn = model_to_vol_loss_fn
         self.step_size = step_size
 
+    @eqx.filter_jit
     def __call__(
         self,
-        walkers,
-        reference_volume,
-    ) -> tuple[Float, Float[Array, "n_atoms 3"]]:
-        loss = jnp.inf
-        for _ in range(self.n_steps):
-            loss, walkers = _optimize_walkers_positions(
-                walkers,
-                reference_volume,
-                self.step_size,
-                self.model_to_vol_loss_fn,
+        walkers: Float[Array, "n_atoms 3"],
+        reference_volume: Float[Array, "n_pixels n_pixels n_pixels"],
+        opt_state: optax.OptState,
+    ) -> tuple[Float, Float[Array, "n_atoms 3"], optax.OptState]:
+        def step_fn(carry, _):
+            walkers, opt_state = carry
+            loss, gradients = _compute_walker_gradients(
+                walkers, reference_volume, self.model_to_vol_loss_fn
             )
+            walkers, opt_state = self._optimizer_step(walkers, gradients, opt_state)
+            return (walkers, opt_state), loss
 
-        return loss, walkers
+        (walkers, opt_state), losses = jax.lax.scan(
+            step_fn, (walkers, opt_state), xs=None, length=self.n_steps
+        )
+        return losses[-1], walkers, opt_state
+
+    @abc.abstractmethod
+    def _initalize_opt_state(self, walkers: Float[Array, "n_atoms 3"]) -> optax.OptState:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def _optimizer_step(
+        self,
+        walkers: Float[Array, "n_atoms 3"],
+        gradients: Float[Array, "n_atoms 3"],
+        opt_state: optax.OptState,
+    ) -> tuple[Float[Array, "n_atoms 3"], optax.OptState]:
+        raise NotImplementedError
 
 
-@eqx.filter_jit
-def _optimize_walkers_positions(
+class SteepestDescWalkerFlexibleFitting(AbstractWalkerOptimizer):
+    def _optimizer_step(
+        self,
+        walkers: Float[Array, "n_atoms 3"],
+        gradients: Float[Array, "n_atoms 3"],
+        opt_state: optax.OptState,
+    ) -> tuple[Float[Array, "n_atoms 3"], optax.OptState]:
+        norms = jnp.linalg.norm(gradients, axis=(1), keepdims=True)
+        # set small norms to 1 (avoid making small gradients large!)
+        norms = jnp.where(norms < 1e-12, 1.0, norms)
+        gradients = gradients / norms
+
+        new_walkers = walkers - self.step_size * gradients
+        return new_walkers, opt_state
+
+    def _initalize_opt_state(self, walkers: Float[Array, "n_atoms 3"]) -> optax.OptState:
+        return None
+
+
+class AdamWalkerFlexibleFitting(AbstractWalkerOptimizer):
+    optimizer: optax.GradientTransformationExtraArgs
+
+    def __init__(
+        self,
+        n_steps: Int,
+        step_size: Float,
+        model_to_vol_loss_fn: AbstractModelToVolumeLossFn,
+    ):
+        super().__init__(n_steps, step_size, model_to_vol_loss_fn)
+        self.optimizer = optax.adam(learning_rate=self.step_size)
+
+    def _optimizer_step(
+        self,
+        walkers: Float[Array, "n_atoms 3"],
+        gradients: Float[Array, "n_atoms 3"],
+        opt_state: optax.OptState,
+    ) -> tuple[Float[Array, "n_atoms 3"], optax.OptState]:
+        updates, opt_state = self.optimizer.update(gradients, opt_state)
+        new_walkers = optax.apply_updates(walkers, updates)
+        return new_walkers, opt_state
+
+    def _initalize_opt_state(self, walkers: Float[Array, "n_atoms 3"]) -> optax.OptState:
+        return self.optimizer.init(walkers)
+
+
+def _compute_walker_gradients(
     walkers: Float[Array, "n_atoms 3"],
     reference_volume: Float[Array, "n_pixels n_pixels n_pixels"],
-    step_size: Float,
-    model_to_vol_loss_fn: ModelToVolumeCorrelationLossFn,
+    model_to_vol_loss_fn: AbstractModelToVolumeLossFn,
 ) -> tuple[Float, Float[Array, "n_atoms 3"]]:
     def _loss_fn(walker, ref_volume):
         return model_to_vol_loss_fn(walker, ref_volume)
@@ -63,9 +126,4 @@ def _optimize_walkers_positions(
         reference_volume,
     )
 
-    norms = jnp.linalg.norm(gradients, axis=(1), keepdims=True)
-    # set small norms to 1 (avoid making small gradients large!)
-    norms = jnp.where(norms < 1e-12, 1.0, norms)
-    gradients /= norms
-
-    return loss, walkers - step_size * gradients
+    return loss, gradients
