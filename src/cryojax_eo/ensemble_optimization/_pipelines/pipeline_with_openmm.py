@@ -36,6 +36,7 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
     model_to_volume_aligner: ModelToVolumeAligner | None
     atom_indices_for_opt: Int[Array, " n_atoms_for_opt"]
     runs_postprocessing: bool
+    write_buffer_size: int
 
     def __init__(
         self,
@@ -47,6 +48,7 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
         model_to_volume_aligner: ModelToVolumeAligner | None = None,
         *,
         runs_postprocessing: bool = True,
+        write_buffer_size: int = 10,
     ):
         self.prior_projector = prior_projector
         self.likelihood_optimizer = likelihood_optimizer
@@ -55,6 +57,7 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
         self.model_to_volume_aligner = model_to_volume_aligner
         self.atom_indices_for_opt = atom_indices_for_opt
         self.runs_postprocessing = runs_postprocessing
+        self.write_buffer_size = write_buffer_size
 
     @override
     def run(
@@ -108,6 +111,24 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
         )
         logging.info("Walkers aligned.")
 
+        # Buffer trajectory frames on the host and flush them to the XTC writers in
+        # batches, rather than writing (and forcing a device->host transfer) every
+        # step. Shape: (buffer_size, n_walkers, n_atoms, 3), stored in nm.
+        n_walkers, n_atoms = walkers.shape[0], walkers.shape[1]
+        xtc_buffer = np.empty(
+            (self.write_buffer_size, n_walkers, n_atoms, 3), dtype=np.float32
+        )
+        buffer_count = 0
+
+        # Reusable single-frame Trajectory for the per-step PDB snapshots: set the
+        # topology and unit cell once, then only swap the coordinates each write
+        # (avoids rebuilding a Trajectory and re-attaching the topology every step).
+        pdb_snapshot_traj = mdtraj.Trajectory(
+            xyz=np.zeros((1, n_atoms, 3), dtype=np.float32),
+            topology=self.prealigned_structure.topology,
+        )
+        pdb_snapshot_traj.unitcell_vectors = unit_cell_vectors[None, ...]
+
         progress_bar = tqdm(range(self.n_steps), desc="Optimization Progress")
         # make the tqdm progress bar show the current neg_log_likelihood at each step
         for i in progress_bar:
@@ -153,28 +174,41 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
                 )
                 logging.info("   Walkers aligned to volume.")
 
-            logging.info("   Writing trajectory to files and saving current walkers...")
-            # for j in range(walkers.shape[0]):
-            #     writers[j].write(walkers[j] / 10.0)
+            logging.info("   Buffering trajectory frame and writing snapshots...")
+            # Single device->host transfer per step; divide once (Angstrom -> nm).
+            walkers_nm = np.asarray(walkers, dtype=np.float32) / 10.0
 
-            # _write_walker_to_pdb(
-            #     walkers[j],
-            #     os.path.join(output_directory, f"curr_walker_{j}.pdb"),
-            #     self.prealigned_structure.topology,
-            #     unit_cell_vectors,
-            # )
+            xtc_buffer[buffer_count] = walkers_nm
+            buffer_count += 1
+            if buffer_count == self.write_buffer_size:
+                logging.info("   Flushing buffered trajectory frames to XTC writers...")
+                _flush_xtc_buffer(writers, xtc_buffer, buffer_count)
+                buffer_count = 0
+
+            # Overwrite the per-walker snapshot PDBs, reusing one Trajectory object
+            # and the nm coordinates already computed for the XTC buffer.
+            for j in range(n_walkers):
+                _write_walker_to_pdb(
+                    pdb_snapshot_traj,
+                    walkers_nm[j],
+                    os.path.join(output_directory, f"curr_walker_{j}.pdb"),
+                )
 
         logging.info("Optimization complete.")
+
+        # Flush any frames still in the buffer before closing the writers.
+        if buffer_count > 0:
+            _flush_xtc_buffer(writers, xtc_buffer, buffer_count)
+            buffer_count = 0
 
         for writer in writers:
             writer.close()
 
         for i, walker in enumerate(walkers):
             _write_walker_to_pdb(
-                walker,
+                pdb_snapshot_traj,
+                np.asarray(walker, dtype=np.float32) / 10.0,
                 os.path.join(output_directory, f"final_walker_{i}.pdb"),
-                self.prealigned_structure.topology,
-                unit_cell_vectors,
             )
 
         if self.runs_postprocessing:
@@ -210,13 +244,26 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
         return walkers, weights
 
 
-def _write_walker_to_pdb(walker, filename, topology, unit_cell_vectors):
-    walker_as_traj = mdtraj.Trajectory(
-        xyz=walker / 10.0,
-        topology=topology,
-    )
-    walker_as_traj.unitcell_vectors = unit_cell_vectors[None, ...]
-    walker_as_traj.save_pdb(filename)
+def _flush_xtc_buffer(writers, buffer, count):
+    """Write the first ``count`` buffered frames to each per-walker XTC writer.
+
+    ``buffer`` has shape ``(buffer_size, n_walkers, n_atoms, 3)`` in nm; each writer
+    receives its ``count`` frames in a single batched ``write`` call.
+    """
+    for j, writer in enumerate(writers):
+        writer.write(buffer[:count, j])
+    return
+
+
+def _write_walker_to_pdb(snapshot_traj, positions_nm, filename):
+    """Overwrite ``filename`` with a single-frame PDB of ``positions_nm`` (in nm).
+
+    Reuses ``snapshot_traj``'s topology and unit cell by swapping only its
+    coordinates, instead of constructing a new ``mdtraj.Trajectory`` (which
+    re-attaches the topology) on every call.
+    """
+    snapshot_traj.xyz = positions_nm[None, ...]
+    snapshot_traj.save_pdb(filename)
     return
 
 

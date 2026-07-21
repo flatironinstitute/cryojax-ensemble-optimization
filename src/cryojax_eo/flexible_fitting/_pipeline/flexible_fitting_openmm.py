@@ -33,6 +33,7 @@ class FlexibleFittingPipeline(eqx.Module):
     model_to_volume_aligner: ModelToVolumeAligner | None
     atom_indices_for_opt: Int[Array, " n_atoms_for_opt"]
     early_stopping: EarlyStopping | None
+    write_buffer_size: int
 
     def __init__(
         self,
@@ -43,6 +44,8 @@ class FlexibleFittingPipeline(eqx.Module):
         atom_indices_for_opt: Int[Array, " n_atoms_for_opt"],
         model_to_volume_aligner: ModelToVolumeAligner | None = None,
         early_stopping: EarlyStopping | None = None,
+        *,
+        write_buffer_size: int = 10,
     ):
         assert n_steps > 0, "n_steps must be positive"
         assert atom_indices_for_opt.ndim == 1, "atom_indices_for_opt must be a 1D array."
@@ -57,6 +60,7 @@ class FlexibleFittingPipeline(eqx.Module):
         self.atom_indices_for_opt = atom_indices_for_opt
         self.model_to_volume_aligner = model_to_volume_aligner
         self.early_stopping = early_stopping
+        self.write_buffer_size = write_buffer_size
 
     def run(
         self,
@@ -99,6 +103,22 @@ class FlexibleFittingPipeline(eqx.Module):
             self.early_stopping.init() if self.early_stopping is not None else None
         )
 
+        # Buffer trajectory frames on the host and flush them to the XTC writer in
+        # batches, rather than writing (and forcing a device->host transfer) every
+        # step. Shape: (buffer_size, n_atoms, 3), stored in nm.
+        n_atoms = walker.shape[0]
+        xtc_buffer = np.empty((self.write_buffer_size, n_atoms, 3), dtype=np.float32)
+        buffer_count = 0
+
+        # Reusable single-frame Trajectory for the per-step PDB snapshots: set the
+        # topology and unit cell once, then only swap the coordinates each write
+        # (avoids rebuilding a Trajectory and re-attaching the topology every step).
+        pdb_snapshot_traj = mdtraj.Trajectory(
+            xyz=np.zeros((1, n_atoms, 3), dtype=np.float32),
+            topology=self.prealigned_structure.topology,
+        )
+        pdb_snapshot_traj.unitcell_vectors = unit_cell_vectors[None, ...]
+
         progress_bar = tqdm(range(self.n_steps), desc="Flexible Fitting", leave=True)
         for i in progress_bar:
             """
@@ -140,13 +160,22 @@ class FlexibleFittingPipeline(eqx.Module):
                 )
                 logging.info("   Walkers aligned to volume.")
 
-            logging.info("Write trajectory to files...")
-            writer.write(walker / 10.0)
+            logging.info("Buffering trajectory frame and writing snapshot...")
+            # Single device->host transfer per step; divide once (Angstrom -> nm).
+            walker_nm = np.asarray(walker, dtype=np.float32) / 10.0
+
+            xtc_buffer[buffer_count] = walker_nm
+            buffer_count += 1
+            if buffer_count == self.write_buffer_size:
+                writer.write(xtc_buffer[:buffer_count])
+                buffer_count = 0
+
+            # Overwrite the snapshot PDB, reusing one Trajectory object and the nm
+            # coordinates already computed for the XTC buffer.
             _write_walker_to_pdb(
-                walker,
+                pdb_snapshot_traj,
+                walker_nm,
                 os.path.join(output_directory, "curr_walker.pdb"),
-                self.prealigned_structure.topology,
-                unit_cell_vectors,
             )
 
             loss_str = (
@@ -167,24 +196,30 @@ class FlexibleFittingPipeline(eqx.Module):
                     logging.info("Early stopping triggered. Stopping optimization.")
                     break
 
+        # Flush any frames still in the buffer before closing the writer.
+        if buffer_count > 0:
+            writer.write(xtc_buffer[:buffer_count])
+            buffer_count = 0
         writer.close()
+
         _write_walker_to_pdb(
-            walker,
+            pdb_snapshot_traj,
+            np.asarray(walker, dtype=np.float32) / 10.0,
             os.path.join(output_directory, "final_walker.pdb"),
-            self.prealigned_structure.topology,
-            unit_cell_vectors,
         )
 
         return walker, md_state
 
 
-def _write_walker_to_pdb(walker, filename, topology, unit_cell_vectors):
-    walker_as_traj = mdtraj.Trajectory(
-        xyz=walker / 10.0,
-        topology=topology,
-    )
-    walker_as_traj.unitcell_vectors = unit_cell_vectors[None, ...]
-    walker_as_traj.save_pdb(filename)
+def _write_walker_to_pdb(snapshot_traj, positions_nm, filename):
+    """Overwrite ``filename`` with a single-frame PDB of ``positions_nm`` (in nm).
+
+    Reuses ``snapshot_traj``'s topology and unit cell by swapping only its
+    coordinates, instead of constructing a new ``mdtraj.Trajectory`` (which
+    re-attaches the topology) on every call.
+    """
+    snapshot_traj.xyz = positions_nm[None, ...]
+    snapshot_traj.save_pdb(filename)
     return
 
 
