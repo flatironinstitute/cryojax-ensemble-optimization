@@ -70,6 +70,7 @@ def _make_atom_list(atom_selection, topology) -> np.ndarray:
 
 def _make_volume_integrator(
     gmm_volume: cxs.GaussianMixtureVolume,
+    shape: tuple[int, int],
     pixel_size: NDArrayLike,
     ensemble_opt_config: EnsOptMDConfig,
 ) -> cxs.GaussianMixtureProjection:
@@ -80,13 +81,15 @@ def _make_volume_integrator(
         n_spread = cxs.suggest_n_spread(
             gmm_volume,
             pixel_size=pixel_size,
-            # cutoff_sigma=vol_int_options["spread_width_in_stds"],
+            cutoff_sigma=vol_int_options["spread_width_in_stds"],
         )
+        integrator_shape = tuple([s * 2 for s in shape])
     else:
+        integrator_shape = shape
         n_spread = None
 
     return cxs.GaussianMixtureProjection(
-        shape=None,
+        shape=integrator_shape,
         n_spread=n_spread,
         sampling_mode=vol_int_options["sampling_mode"],
         enable_pallas=vol_int_options["enable_pallas"],
@@ -198,20 +201,27 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
                 base_state_file_path=os.path.join(
                     ensemble_opt_config.path_to_output, f"states_proj_{i}/state_"
                 ),
+                # Offset per walker so walkers don't share an identical
+                # thermostat random stream. A seed of 0 keeps OpenMM's default
+                # behavior of drawing a fresh seed each run (non-reproducible).
+                # random_seed=(
+                #     ensemble_opt_config.rng_seed + i
+                # ),
             )
         )
     md_projector = EnsembleSteeredMDSimulator(projector_list)
 
     # Construct likelihood optimizer
-
+    tmp_image_config = relion_dataset.parameter_file[0]["image_config"]
     volume_integrator = _make_volume_integrator(
         cxs.GaussianMixtureVolume(
             positions=initial_walkers[0, atom_list],
             amplitudes=amplitudes,
             variances=variances,
         ),
-        pixel_size=relion_dataset.parameter_file[0]["image_config"].pixel_size,
+        pixel_size=tmp_image_config.pixel_size,
         ensemble_opt_config=ensemble_opt_config,
+        shape=tmp_image_config.shape,
     )
 
     img_to_walker_log_likelihood_fn = MargGaussianWhiteLogLikelihoodFn(
@@ -287,6 +297,10 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
         walkers=walkers,
         weights=weights,
     )
+    for i in range(walkers.shape[0]):
+        # only the filename, remove dir
+        pdb_filename = Path(ensemble_opt_config.path_to_atomic_models[i]).name
+        logging.info(f"{pdb_filename}: weight = {weights[i]:.4f}")
 
     return walkers, weights
 

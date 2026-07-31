@@ -226,6 +226,12 @@ class FlexibleFittingConfig(BaseModel, extra="forbid"):
     n_steps: PositiveInt = Field(
         description="Number of steps of cryoJAX ensemble refinement to run."
     )
+    rng_seed: int = Field(
+        default=0,
+        description="Random seed. Also fixes the OpenMM Langevin thermostat's "
+        "random stream for reproducibility. A value of 0 leaves OpenMM's default "
+        "behavior of drawing a fresh seed each run.",
+    )
 
     @field_validator("path_to_atomic_model")
     @classmethod

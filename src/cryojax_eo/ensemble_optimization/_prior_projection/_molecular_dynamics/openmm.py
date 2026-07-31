@@ -137,6 +137,7 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
         base_state_file_path: str,
         *,
         make_simulation_fn: Callable | None = None,
+        random_seed: int | None = None,
     ):
         if not _HAS_OPENMM:
             raise ModuleNotFoundError(
@@ -152,7 +153,9 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
         self.n_steps = n_steps
         if make_simulation_fn is None:
             parameters_for_md = _validate_and_set_params_for_md(parameters_for_md)
-            self.simulation = _default_make_sim_fn(parameters_for_md, pdb.topology)
+            self.simulation = _default_make_sim_fn(
+                parameters_for_md, pdb.topology, random_seed=random_seed
+            )
 
         else:
             self.simulation = make_simulation_fn(parameters_for_md, pdb.topology)
@@ -466,9 +469,11 @@ def _remove_last_force_from_simulation(
     return simulation
 
 
-def _default_make_sim_fn(parameters_for_md: dict, topology) -> openmm_app.Simulation:
+def _default_make_sim_fn(
+    parameters_for_md: dict, topology, *, random_seed: int | None = None
+) -> openmm_app.Simulation:
     forcefield = _create_forcefield(parameters_for_md)
-    integrator = _create_integrator(parameters_for_md)
+    integrator = _create_integrator(parameters_for_md, random_seed=random_seed)
     platform = _create_platform(parameters_for_md)
     system = _create_system(parameters_for_md, forcefield, topology)
 
@@ -489,12 +494,21 @@ def _create_forcefield(parameters_for_md: dict) -> openmm_app.ForceField:
     )
 
 
-def _create_integrator(parameters_for_md: dict) -> openmm.Integrator:
-    return openmm.LangevinIntegrator(
+def _create_integrator(
+    parameters_for_md: dict, *, random_seed: int | None = None
+) -> openmm.Integrator:
+    integrator = openmm.LangevinIntegrator(
         parameters_for_md["temperature"],
         parameters_for_md["friction"],
         parameters_for_md["timestep"],
     )
+    if random_seed is not None:
+        # Fix the Langevin thermostat's random stream for reproducibility.
+        # The seed must be set before the Context is created (i.e. here, before
+        # the Simulation is built) so it is baked in from the first step.
+        # A seed of 0 (OpenMM's default) means OpenMM picks a fresh seed per run.
+        integrator.setRandomNumberSeed(int(random_seed))
+    return integrator
 
 
 def _create_system(

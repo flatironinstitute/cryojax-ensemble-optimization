@@ -184,6 +184,9 @@ def run_flexible_fitting(flexible_fitting_config: FlexibleFittingConfig):
         restrain_atom_list=atom_list.tolist(),
         parameters_for_md=parameters_for_md,
         base_state_file_path=os.path.join(config["path_to_output"], "states_proj/state_"),
+        # A seed of 0 keeps OpenMM's default behavior of drawing a fresh seed
+        # each run (non-reproducible).
+        random_seed=config["rng_seed"] if config["rng_seed"] != 0 else None,
     )
 
     # Construct likelihood optimizer
