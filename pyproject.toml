@@ -37,7 +37,7 @@ dependencies = [
     "mdtraj",
     "tqdm",
     "cryojax==0.5.6",
-    "cryospax==0.2.0",
+    "cryospax==0.2.1",
     "openmm",
     "dm-pix",
     "optax",

@@ -7,6 +7,7 @@ def compute_correlation_at_optimal_offset(
     image_shifted: Float[Array, "H W"],
     image_ref: Float[Array, "H W"],
     coordinate_grid_in_angstroms: Float[Array, "H W 2"],
+    shift_search_area: Float[Array, "H W"] | None = None,
 ) -> tuple[Float[Array, ""], Float[Array, "2"]]:
     """
     Estimates the correlation between two images at the optimal shift
@@ -19,6 +20,11 @@ def compute_correlation_at_optimal_offset(
         Reference centered image.
     - `coordinate_grid_in_angstroms`:
         Coordinate grid that maps pixel indices to positions in angstroms.
+    - `shift_search_area`:
+        Optional mask, on the same grid as `coordinate_grid_in_angstroms`,
+        restricting the region of shifts that is searched. Shifts where the
+        mask is (numerically) zero are excluded. If `None`, all shifts are
+        searched.
     **Returns:**
     - `loss`:
         Negative correlation at the optimal shift.
@@ -32,6 +38,11 @@ def compute_correlation_at_optimal_offset(
             image_ref / jnp.linalg.norm(image_ref),
         )
     )
+    # This will matter in cryojax==0.6.0
+    # abs_cross_corr = jnp.fft.fftshift(abs_cross_corr)
+
+    if shift_search_area is not None:
+        abs_cross_corr = jnp.where(shift_search_area > 1e-3, abs_cross_corr, -jnp.inf)
 
     # Peak gives the shift. can fit for subpixel accuracy if needed
     max_idx = jnp.unravel_index(jnp.argmax(abs_cross_corr), abs_cross_corr.shape)
