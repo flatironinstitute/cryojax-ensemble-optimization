@@ -192,7 +192,9 @@ def compute_likelihoods_for_structural_file(
         batch_size=n_images_in_parallel,
         shuffle=False,
     )
-    pose_search = HierarchicalSO3GridSearch(base_grid_res=1, n_rounds=5, n_candidates=80)
+    pose_search = HierarchicalSO3GridSearch(
+        base_grid_res=1, n_rounds=5, n_candidates=40, n_angles_in_parallel=10
+    )
     image_config = relion_dataset.parameter_file[0]["image_config"]
     mask = cxim.CircularCosineMask(
         image_config.get_coordinate_grid(physical=False),
@@ -233,8 +235,8 @@ def compute_likelihoods_for_structural_file(
         likelihoods.append(batch_likelihoods)
 
     if estimates_poses:
-        new_parameter_file.starfile_data["particles"]["rlnImageName"] = (
-            relion_dataset.parameter_file.starfile_data["particles"]["rlnImageName"]
+        new_parameter_file.particle_data["rlnImageName"] = (
+            relion_dataset.parameter_file.particle_data["rlnImageName"]
         )
         new_parameter_file.save(overwrite=True)
 

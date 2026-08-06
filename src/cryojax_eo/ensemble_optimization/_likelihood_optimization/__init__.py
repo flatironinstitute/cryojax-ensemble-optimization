@@ -11,7 +11,7 @@ from ._walker_optimizers import (
     IterativeEnsembleLikelihoodOptimizer as IterativeEnsembleLikelihoodOptimizer,
 )
 from ._weights_optimizer import (
-    ProjGradDescWeightOptimizer as ProjGradDescWeightOptimizer,
+    MultGradWeightOptimizer as MultGradWeightOptimizer,
     optimize_weights as optimize_weights,
 )
 from .base_optimizer import (

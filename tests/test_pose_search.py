@@ -30,7 +30,7 @@ def test_global_SO3_hier_search(
 
     pose = pose_search(
         gmm_volume,
-        jnp.fft.rfftn(stack["images"]),
+        jnp.asarray(stack["images"]),
         stack["parameters"]["image_config"],
         stack["parameters"]["transfer_theory"],
     )

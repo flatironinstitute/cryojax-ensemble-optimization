@@ -122,11 +122,11 @@ class HierarchicalSO3GridSearch(eqx.Module):
 
     def __init__(
         self,
-        base_grid_res,
-        n_rounds,
-        n_candidates,
-        n_angles_in_parallel=10,
-        shift_search_range_in_angstroms=None,
+        base_grid_res: int,
+        n_rounds: int,
+        n_candidates: int,
+        n_angles_in_parallel: int = 10,
+        shift_search_range_in_angstroms: Float[Array, ""] | None = None,
     ):
         """
         Initialize the HierarchicalSO3GridSearch.

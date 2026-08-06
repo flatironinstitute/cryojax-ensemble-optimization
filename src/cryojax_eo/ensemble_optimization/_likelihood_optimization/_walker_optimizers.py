@@ -15,7 +15,7 @@ from jaxtyping import Array, Float
 from .._pose_search import HierarchicalSO3GridSearch
 from . import ImagesToEnsembleLikelihoodFn
 from ._utils import _estimate_poses
-from ._weights_optimizer import ProjGradDescWeightOptimizer
+from ._weights_optimizer import MultGradWeightOptimizer
 from .base_optimizer import AbstractEnsembleParameterOptimizer
 
 
@@ -25,7 +25,7 @@ class IterativeEnsembleLikelihoodOptimizer(AbstractEnsembleParameterOptimizer):
     n_batches_per_step: int
     ensemble_likelihood_fn: ImagesToEnsembleLikelihoodFn
     pose_search: HierarchicalSO3GridSearch | None
-    weight_optimizer: ProjGradDescWeightOptimizer
+    weight_optimizer: MultGradWeightOptimizer
 
     def __init__(
         self,
@@ -42,10 +42,9 @@ class IterativeEnsembleLikelihoodOptimizer(AbstractEnsembleParameterOptimizer):
         self.step_size = step_size
         self.n_steps = n_steps
         self.n_batches_per_step = n_batches_per_step
-        self.ensemble_likelihood_fn = ensemble_likelihood_fn
+        self.ensemble_likelihood_fn = ensemble_likelihood_fn  # type: ignore
         self.pose_search = pose_search
-        self.weight_optimizer = ProjGradDescWeightOptimizer(
-            n_steps=500,
+        self.weight_optimizer = MultGradWeightOptimizer(
             ensemble_likelihood_fn=ensemble_likelihood_fn,
             pose_search=pose_search,
         )
@@ -141,7 +140,7 @@ def _compute_ensemble_gradients(
     transfer_theories: cxs.ContrastTransferTheory,
     per_particle_args: Any,
     ensemble_likelihood_fn: ImagesToEnsembleLikelihoodFn,
-    weight_optimizer: ProjGradDescWeightOptimizer,
+    weight_optimizer: MultGradWeightOptimizer,
 ) -> tuple[
     float,
     Float[Array, "n_walkers n_atoms 3"],
@@ -175,11 +174,13 @@ def _compute_ensemble_gradients(
             transfer_theories,
             per_particle_args,
         )
-        weights = jax.nn.softmax(
+
+        weights = jax.lax.stop_gradient(
             weight_optimizer.optimize_with_precomputed_likelihood_matrix(
                 log_likelihood_matrix
             )
         )
+        weights = jax.nn.softmax(weights)
         return -ensemble_likelihood_fn.compute_from_log_likelihood_matrix(
             log_likelihood_matrix, weights
         ), weights
