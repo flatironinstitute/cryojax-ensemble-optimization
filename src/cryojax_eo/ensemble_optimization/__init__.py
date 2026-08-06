@@ -4,7 +4,7 @@ from ._likelihood_optimization import (
     ImagesToEnsembleLikelihoodFn as ImagesToEnsembleLikelihoodFn,
     IterativeEnsembleLikelihoodOptimizer as IterativeEnsembleLikelihoodOptimizer,
     MargGaussianWhiteLogLikelihoodFn as MargGaussianWhiteLogLikelihoodFn,
-    ProjGradDescWeightOptimizer as ProjGradDescWeightOptimizer,
+    MultGradWeightOptimizer as MultGradWeightOptimizer,
     compute_optimal_scale_and_offset as compute_optimal_scale_and_offset,
     likelihood_gaussian_white_noise as likelihood_gaussian_white_noise,
     likelihood_iso_gaussian_marg as likelihood_iso_gaussian_marg,

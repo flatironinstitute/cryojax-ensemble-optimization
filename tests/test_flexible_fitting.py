@@ -17,7 +17,7 @@ def test_run_flexible_fitting_from_config(
         "path_to_atomic_model": sample_path_groel_pdb,
         "path_to_prealigned_atomic_model": sample_path_groel_pdb,
         "path_to_output": output_directory,
-        "atom_selection": "not element H",
+        "atom_selection": "name CA",
         "n_steps": 2,
         "reference_volume_params": {
             "path_to_reference_volume": sample_path_mrc_file,
