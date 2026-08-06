@@ -37,18 +37,18 @@ def _loss_for_grid_search(
         wxyz=quat,
     )
 
-    computed_image_no_shif_fft = cxs.make_image_model(
+    computed_image_no_shif = cxs.make_image_model(
         volume,
         image_config,
         pose,
         transfer_theory,
-        normalizes_signal=True,
+        # normalizes_signal=True,
     ).simulate(outputs_real_space=True)
 
     # get the optimal shift, restricted to `shift_search_area`
     correlation, optimal_offset = compute_correlation_at_optimal_offset(
         target_image,
-        computed_image_no_shif_fft,
+        computed_image_no_shif,
         image_config.get_coordinate_grid(physical=True),
         shift_search_area,
     )
