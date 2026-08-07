@@ -1,9 +1,16 @@
 import argparse
 import os
 
+import pytest
 import yaml
 
 from cryojax_eo.commands._run_flexible_fitting import main as run_main
+
+
+pytest.importorskip(
+    "openmm",
+    reason="OpenMM is an optional dependency required for the flexible fitting pipeline",
+)
 
 
 def test_run_flexible_fitting_from_config(
