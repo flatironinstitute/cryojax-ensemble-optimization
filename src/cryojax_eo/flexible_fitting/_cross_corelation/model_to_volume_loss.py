@@ -1,4 +1,5 @@
 import abc
+from typing import cast
 
 import cryojax.ndimage as im
 import cryojax.simulator as cxs
@@ -8,10 +9,25 @@ from jaxtyping import Array, Float, Int
 
 
 class AbstractModelToVolumeLossFn(eqx.Module):
-    variances: Float[Array, "n_atoms n_gaussians_per_atom"]
+    variances: eqx.AbstractVar[Float[Array, "n_atoms n_gaussians_per_atom"]]
+    amplitudes: eqx.AbstractVar[Float[Array, "n_atoms n_gaussians_per_atom"]]
+    render_fn: eqx.AbstractVar[cxs.GaussianMixtureRenderFn]
+    vol_mask: eqx.AbstractVar[Float[Array, "dim_z dim_y dim_x"]]
+
+    @abc.abstractmethod
+    def __call__(
+        self,
+        walker: Float[Array, "n_atoms 3"],
+        reference_volume: Float[Array, "dim dim dim"],
+    ) -> Float[Array, ""]:
+        raise NotImplementedError
+
+
+class ModelToVolumeCorrelationLossFn(AbstractModelToVolumeLossFn):
     amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"]
+    variances: Float[Array, "n_atoms n_gaussians_per_atom"]
     render_fn: cxs.GaussianMixtureRenderFn
-    vol_mask: Float[Array, "dim_z dim_y dim_x"]
+    vol_mask: Float[Array, "dim dim dim"]
 
     def __init__(
         self,
@@ -43,21 +59,11 @@ class AbstractModelToVolumeLossFn(eqx.Module):
             ),
         )
 
-    @abc.abstractmethod
     def __call__(
         self,
         walker: Float[Array, "n_atoms 3"],
         reference_volume: Float[Array, "dim dim dim"],
-    ) -> float:
-        raise NotImplementedError
-
-
-class ModelToVolumeCorrelationLossFn(AbstractModelToVolumeLossFn):
-    def __call__(
-        self,
-        walker: Float[Array, "n_atoms 3"],
-        reference_volume: Float[Array, "dim dim dim"],
-    ) -> float:
+    ) -> Float[Array, ""]:
         # Compute the model-to-volume loss
         return 1 - _model_to_volume_crosscorrelation(
             walker,
@@ -70,6 +76,10 @@ class ModelToVolumeCorrelationLossFn(AbstractModelToVolumeLossFn):
 
 
 class ModelToVolumeWeightedMSELossFn(AbstractModelToVolumeLossFn):
+    amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"]
+    variances: Float[Array, "n_atoms n_gaussians_per_atom"]
+    render_fn: cxs.GaussianMixtureRenderFn
+    vol_mask: Float[Array, "dim dim dim"]
     mse_weights: Float[Array, "dim dim dim//2+1"]
 
     def __init__(
@@ -84,14 +94,24 @@ class ModelToVolumeWeightedMSELossFn(AbstractModelToVolumeLossFn):
         batch_size_for_z_planes: Int = 1,
         n_batches_of_atoms: Int = 1,
     ):
-        super().__init__(
-            amplitudes,
-            variances,
-            voxel_size,
-            volume_shape,
-            vol_mask=vol_mask,
-            batch_size_for_z_planes=batch_size_for_z_planes,
-            n_batches_of_atoms=n_batches_of_atoms,
+
+        assert (amplitudes > 0).all(), "Amplitudes must be positive."
+        assert (variances > 0).all(), "Variances must be positive."
+        assert voxel_size > 0, "Voxel size must be positive."
+        assert n_batches_of_atoms > 0, "n_batches_of_atoms must be positive."
+        assert batch_size_for_z_planes > 0, "batch_size_for_z_planes must be positive."
+
+        self.variances = variances
+        self.amplitudes = amplitudes
+
+        self.vol_mask = jnp.ones(volume_shape) if vol_mask is None else vol_mask
+
+        self.render_fn = cxs.GaussianMixtureRenderFn(
+            shape=volume_shape,
+            voxel_size=voxel_size,
+            batch_options=dict(
+                batch_size=batch_size_for_z_planes, n_batches=n_batches_of_atoms
+            ),
         )
 
         weights = weights
@@ -113,7 +133,7 @@ class ModelToVolumeWeightedMSELossFn(AbstractModelToVolumeLossFn):
         self,
         walker: Float[Array, "n_atoms 3"],
         reference_volume: Float[Array, "dim dim dim"],
-    ) -> float:
+    ) -> Float[Array, ""]:
         return _model_to_volume_weighted_mse(
             walker,
             self.amplitudes,
@@ -132,7 +152,7 @@ def _model_to_volume_crosscorrelation(
     reference_volume: Float[Array, "dim dim dim"],
     render_fn: cxs.GaussianMixtureRenderFn,
     vol_mask: Float[Array, "dim dim dim"],
-) -> float:
+) -> Float[Array, ""]:
     comp_volume = render_fn(
         volume_representation=cxs.GaussianMixtureVolume(
             walker,
@@ -161,7 +181,7 @@ def _model_to_volume_weighted_mse(
     render_fn: cxs.GaussianMixtureRenderFn,
     fourier_weights: Float[Array, "dim dim dim"],
     vol_mask: Float[Array, "dim dim dim"],
-) -> float:
+) -> Float[Array, ""]:
     comp_volume = render_fn(
         volume_representation=cxs.GaussianMixtureVolume(
             walker,
@@ -176,6 +196,7 @@ def _model_to_volume_weighted_mse(
     # fourier_weights are already in upsampled RFFT space
     # pad the volumes and compute the RFFT (of the same shape)
     pad_size = (fourier_weights.shape[0],) * 3
+    pad_size = cast(tuple[int, int, int], pad_size)
     comp_volume_fourier = (
         im.rfftn(im.pad_to_shape(comp_volume, pad_size)) * fourier_weights
     )

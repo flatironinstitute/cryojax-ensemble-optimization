@@ -10,11 +10,10 @@ run_md_openmm
 import os
 import pathlib
 import shutil
-import warnings
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from typing_extensions import override
 
 import jax
@@ -23,27 +22,41 @@ import mdtraj
 import numpy as np
 from jaxtyping import Array, Float, Int
 
+from ..base_prior_projector import AbstractEnsemblePriorProjector, AbstractPriorProjector
 
-try:
+
+if TYPE_CHECKING:
+    # Type checkers always resolve the real openmm modules, so annotations below keep
+    # full static typing. Every annotation referring to these names must be quoted so
+    # that it is never evaluated at runtime, where the names may be None.
     import openmm
     import openmm.app as openmm_app
     import openmm.unit as openmm_unit
 
     _HAS_OPENMM = True
+    _MakeSimulationFn = Callable[[dict, openmm_app.Topology], openmm_app.Simulation]
+else:
+    try:
+        import openmm
+        import openmm.app as openmm_app
+        import openmm.unit as openmm_unit
 
-except ImportError:
-    _HAS_OPENMM = False
-    openmm = None  # type: ignore[assignment]
-    openmm_app = None  # type: ignore[assignment]
-    openmm_unit = None  # type: ignore[assignment]
-    warnings.warn(
-        "OpenMM is not installed. Please install OpenMM if using any features "
-        + "that use molecular dynamics, e.g., ensemble optimization "
-        + "or flexible fitting."
-    )
+        _HAS_OPENMM = True
+
+    except ImportError:
+        _HAS_OPENMM = False
+        openmm = None
+        openmm_app = None
+        openmm_unit = None
 
 
-from ..base_prior_projector import AbstractEnsemblePriorProjector, AbstractPriorProjector
+def _assert_has_openmm() -> None:
+    if not _HAS_OPENMM:
+        raise ImportError(
+            "OpenMM is not installed. Please install OpenMM if using any features "
+            + "that use molecular dynamics, e.g., the ensemble optimization pipeline "
+            + "or flexible fitting."
+        )
 
 
 def md_params_config_to_openmm_overrides(md_params_config: dict) -> dict:
@@ -53,11 +66,7 @@ def md_params_config_to_openmm_overrides(md_params_config: dict) -> dict:
     Keys ``platform`` and ``properties`` are intentionally excluded here; wire them
     separately from ``EnsOptMDConfigProjector.platform`` and ``platform_properties``.
     """
-    if openmm_app is None or openmm_unit is None:
-        raise ImportError(
-            "OpenMM is not installed. Please install OpenMM if using any features "
-            "that use molecular dynamics."
-        )
+    _assert_has_openmm()
 
     _nonbonded_method_aliases = {
         "PME": openmm_app.PME,
@@ -85,22 +94,18 @@ def md_params_config_to_openmm_overrides(md_params_config: dict) -> dict:
         ]
     if "nonbonded_cutoff_nm" in md_params_config:
         overrides["nonbondedCutoff"] = (
-            md_params_config["nonbonded_cutoff_nm"] * openmm_unit.nanometer  # type: ignore[attr-defined]
+            md_params_config["nonbonded_cutoff_nm"] * openmm_unit.nanometer
         )
     if "constraints" in md_params_config:
         overrides["constraints"] = _constraints_aliases[md_params_config["constraints"]]
     if "temperature_K" in md_params_config:
-        overrides["temperature"] = (
-            md_params_config["temperature_K"] * openmm_unit.kelvin  # type: ignore[attr-defined]
-        )
+        overrides["temperature"] = md_params_config["temperature_K"] * openmm_unit.kelvin
     if "friction_per_ps" in md_params_config:
         overrides["friction"] = (
-            md_params_config["friction_per_ps"] / openmm_unit.picosecond  # type: ignore[attr-defined]
+            md_params_config["friction_per_ps"] / openmm_unit.picosecond
         )
     if "timestep_ps" in md_params_config:
-        overrides["timestep"] = (
-            md_params_config["timestep_ps"] * openmm_unit.picoseconds  # type: ignore[attr-defined]
-        )
+        overrides["timestep"] = md_params_config["timestep_ps"] * openmm_unit.picoseconds
     return overrides
 
 
@@ -122,7 +127,7 @@ def _get_default_md_params() -> dict:
 
 class SteeredMDSimulator(AbstractPriorProjector, strict=True):
     n_steps: Int
-    simulation: openmm_app.Simulation
+    simulation: "openmm_app.Simulation"
     restrain_atom_list: list[Int]
     base_state_file_path: str
 
@@ -136,12 +141,7 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
         *,
         make_simulation_fn: Callable | None = None,
     ):
-        if not _HAS_OPENMM:
-            raise ImportError(
-                "OpenMM is not installed. Please install OpenMM if using any features "
-                + "that use molecular dynamics, e.g., the ensemble optimization pipeline "
-                + "or flexible fitting."
-            )
+        _assert_has_openmm()
         pdb = openmm_app.PDBFile(str(path_to_initial_pdb))
         self.restrain_atom_list = restrain_atom_list
 
@@ -245,12 +245,7 @@ class EnsembleSteeredMDSimulator(AbstractEnsemblePriorProjector, strict=True):
     projectors: list[SteeredMDSimulator]
 
     def __init__(self, md_simulators: list[SteeredMDSimulator]):
-        if not _HAS_OPENMM:
-            raise ImportError(
-                "OpenMM is not installed. Please install OpenMM if using any features "
-                + "that use molecular dynamics, e.g., the ensemble optimization pipeline "
-                + "or flexible fitting."
-            )
+        _assert_has_openmm()
         self.projectors = md_simulators
 
     @override
@@ -280,16 +275,10 @@ def compute_biasing_constant(
     stride: Int = 1,
     atom_selection: str = "not element H",
     *,
-    make_simulation_fn: Callable[[dict, openmm_app.Topology], openmm_app.Simulation]
-    | None = None,
+    make_simulation_fn: "_MakeSimulationFn | None" = None,
     parameters_for_md: dict = {},
 ):
-    if not _HAS_OPENMM:
-        raise ImportError(
-            "OpenMM is not installed. Please install OpenMM if using any features "
-            + "that use molecular dynamics, e.g., the ensemble optimization pipeline "
-            + "or flexible fitting."
-        )
+    _assert_has_openmm()
     if make_simulation_fn is None:
         parameters_for_md = _validate_and_set_params_for_md(parameters_for_md)
         make_simulation_fn = _default_make_sim_fn
@@ -438,11 +427,11 @@ def _assert_is_valid_state_file(
 
 
 def _add_restraint_force_to_simulation(
-    simulation: openmm_app.Simulation,
-    positions: openmm_unit.Quantity,
+    simulation: "openmm_app.Simulation",
+    positions: "openmm_unit.Quantity",
     restrain_atom_list: list[int],
     bias_constant_in_kj_per_mol_angs: float,
-) -> openmm_app.Simulation:
+) -> "openmm_app.Simulation":
     RMSD_value = openmm.RMSDForce(
         positions,
         restrain_atom_list,
@@ -457,14 +446,14 @@ def _add_restraint_force_to_simulation(
 
 
 def _remove_last_force_from_simulation(
-    simulation: openmm_app.Simulation,
-) -> openmm_app.Simulation:
+    simulation: "openmm_app.Simulation",
+) -> "openmm_app.Simulation":
     n_forces = len(simulation.system.getForces())
     simulation.system.removeForce(n_forces - 1)
     return simulation
 
 
-def _default_make_sim_fn(parameters_for_md: dict, topology) -> openmm_app.Simulation:
+def _default_make_sim_fn(parameters_for_md: dict, topology) -> "openmm_app.Simulation":
     forcefield = _create_forcefield(parameters_for_md)
     integrator = _create_integrator(parameters_for_md)
     platform = _create_platform(parameters_for_md)
@@ -481,13 +470,13 @@ def _default_make_sim_fn(parameters_for_md: dict, topology) -> openmm_app.Simula
     return simulation
 
 
-def _create_forcefield(parameters_for_md: dict) -> openmm_app.ForceField:
+def _create_forcefield(parameters_for_md: dict) -> "openmm_app.ForceField":
     return openmm_app.ForceField(
         parameters_for_md["forcefield"], parameters_for_md["water_model"]
     )
 
 
-def _create_integrator(parameters_for_md: dict) -> openmm.Integrator:
+def _create_integrator(parameters_for_md: dict) -> "openmm.Integrator":
     return openmm.LangevinIntegrator(
         parameters_for_md["temperature"],
         parameters_for_md["friction"],
@@ -497,9 +486,9 @@ def _create_integrator(parameters_for_md: dict) -> openmm.Integrator:
 
 def _create_system(
     parameters_for_md: dict,
-    forcefield: openmm_app.ForceField,
-    topology: openmm_app.Topology,
-) -> openmm.System:
+    forcefield: "openmm_app.ForceField",
+    topology: "openmm_app.Topology",
+) -> "openmm.System":
     system = forcefield.createSystem(
         topology,
         nonbondedMethod=parameters_for_md["nonbondedMethod"],
@@ -510,7 +499,7 @@ def _create_system(
     return system
 
 
-def _create_platform(parameters_for_md: dict) -> openmm.Platform:
+def _create_platform(parameters_for_md: dict) -> "openmm.Platform":
     return openmm.Platform.getPlatformByName(parameters_for_md["platform"])
 
 

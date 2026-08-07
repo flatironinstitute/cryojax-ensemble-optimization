@@ -22,6 +22,13 @@ from cryojax_eo.io import read_walkers_from_pdbs
 from cryojax_eo.utils import ModelToVolumeAligner
 
 
+pytest.importorskip(
+    "openmm",
+    reason="OpenMM is an optional dependency required for the ensemble optimization "
+    "pipeline",
+)
+
+
 @pytest.fixture
 def sample_model_aligner(sample_path_to_pdb1):
     gmm_volume = cxs.load_tabulated_volume(
