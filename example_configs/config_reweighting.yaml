@@ -1,0 +1,44 @@
+data_params:
+  path_to_relion_project: /path/to/relion/project/
+  path_to_starfile: /path/to/starfile.star
+  loads_envelope: True # (*) Default: false, loads envelope function parameters
+  data_sign: "dark-on-light" # Relion convention, dark particles on a light background
+  path_to_volumetric_mask: /path/to/volumetric_mask.mrc # (*) e.g., the mask from a refinement procedure
+
+# How many images are used to compute likelihoods in parallel
+# This can usually be a large value since Fourier Slice Extraction is memory efficient
+n_images_in_parallel: 5000
+
+# Maximum number of iterations for
+# reweighting algorithm
+max_iter: 500
+
+# Tolerance for stopping criteria
+# of the multiplicative gradient
+# weight optimization method
+tol: 1e-4
+
+# ab initio version, ignores starfile poses
+# default is false
+estimates_poses: true
+
+# A collection of structural files
+# can be any combination of pdb, cif, mrc files
+path_to_structural_files:
+- path/to/structural_files/pdb_structural_file_0.pdb
+- path/to/structural_files/cif_structural_file_1.cif
+- path/to/structural_files/mrc_structural_file_2.mrc
+
+path_to_output_dir: ./reweighting_results/
+
+########### Atomic model exclusive parameters ###########
+# These will be ignored if no structural files have
+# pdb or cif format.
+
+# atom selection string in mdtraj convention
+# Examples: "all", "not element H", "name CA"
+atom_selection: "all"
+
+# Load Debye-Waller b-factors from provided PDBs
+loads_b_factors: true
+#########################################################

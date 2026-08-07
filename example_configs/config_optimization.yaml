@@ -1,0 +1,58 @@
+# Parameters marked with (*) are optional
+
+data_params:
+  path_to_relion_project: /path/to/relion/project/
+  path_to_starfile: /path/to/starfile.star
+  loads_envelope: True # (*) Default: false, loads envelope function parameters
+  data_sign: "dark-on-light" # Relion convention, dark particles on a light background
+  path_to_volumetric_mask: /path/to/volumetric_mask.mrc # (*) e.g., the mask from a refinement procedure
+
+alignment_params:
+  path_to_prealigned_atomic_model: /path/to/prealigned_atomic_model.pdb # an atomic model aligned to the consensus volume
+  path_to_reference_volume: path_to_reference_volume.mrc # (*) Reference volume (for local alignment)
+  downsample_box_size: 32 # (*) Downsample box size for reference volume
+
+projector_params:
+  bias_constant_in_kjpermol: 3.0e5 # Bias constant for the Steered MD projection (might require tuning)
+  n_steps: 1000
+  path_to_initial_states: # (*) Initial states for each replica, useful for continuing optimizations. Optional.
+    - ./initial_state_0.xml # MUST BE DIFFERENT FOR EACH REPLICA if provided
+    - ./initial_state_1.xml
+    - ./initial_state_2.xml
+  platform: CUDA
+  platform_properties:
+    DeviceIndex: '0'
+  # platform: CPU # CPU version for defining the platform
+  # platform_properties:
+  #   Threads: "32" # Can be unreliable, OpenMM does not always use all available threads
+  md_params: # (*) Override default OpenMM simulation parameters. All fields are optional.
+    forcefield: amber14-all.xml       # (*) Default: amber14-all.xml
+    water_model: amber14/tip3p.xml    # (*) Default: amber14/tip3p.xml
+    nonbonded_method: CutoffNonPeriodic # (*) Options: PME, CutoffNonPeriodic, NoCutoff, CutoffPeriodic, Ewald, LJPME
+    nonbonded_cutoff_nm: 1.0          # (*) Default: 1.0 nm
+    constraints: HBonds               # (*) Options: HBonds, AllBonds, HAngles, null (no constraints)
+    temperature_K: 300.0              # (*) Default: 300 K
+    friction_per_ps: 1.0              # (*) Default: 1.0 ps^-1
+    timestep_ps: 0.002                # (*) Default: 0.002 ps (2 fs)
+
+likelihood_optimizer_params:
+  batch_size: 50 # Batch size used for computing the log-likelihood in parallel
+  initial_weights: # (*) Initial weights, one for each replica. Default is 1/M, M = number of walkers
+  - 0.33
+  - 0.33
+  - 0.33
+  n_steps: 10
+  step_size: 2.0
+  n_batches_per_step: 5 # (*) Number of batches to use for each optimization step. Using more batches will provide a better estimate of the gradients, but will also increase the computational cost. Each batch has a size defined by batch_size. This allows to save memory and use small values of batch_size.
+
+atom_selection: ... # path to a txt/npy file, or a mdtraj-compatible selection string, e.g., "not element H"
+loads_b_factors: true # Load Debye-Waller b-factors from provided PDBs
+n_steps: 100 # Number of ensemble optimization steps
+
+path_to_atomic_models: # Can be the same for each replica
+- path/to/atomic_models/initial_model_0.pdb
+- path/to/atomic_models/initial_model_1.pdb
+- path/to/atomic_models/initial_model_2.pdb
+
+path_to_output: ./optimization_output/round3/
+rng_seed: 0 # seed for all RNG operations

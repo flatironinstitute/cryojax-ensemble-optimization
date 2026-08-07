@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+         <loc>https://flatironinstitute.github.io/cryojax-ensemble-optimization/</loc>
+         <lastmod>2026-08-07</lastmod>
+    </url>
+    <url>
+         <loc>https://flatironinstitute.github.io/cryojax-ensemble-optimization/dataset_simulation/</loc>
+         <lastmod>2026-08-07</lastmod>
+    </url>
+    <url>
+         <loc>https://flatironinstitute.github.io/cryojax-ensemble-optimization/ensemble_optimization/</loc>
+         <lastmod>2026-08-07</lastmod>
+    </url>
+    <url>
+         <loc>https://flatironinstitute.github.io/cryojax-ensemble-optimization/ensemble_reweighting/</loc>
+         <lastmod>2026-08-07</lastmod>
+    </url>
+    <url>
+         <loc>https://flatironinstitute.github.io/cryojax-ensemble-optimization/flexible_fitting/</loc>
+         <lastmod>2026-08-07</lastmod>
+    </url>
+    <url>
+         <loc>https://flatironinstitute.github.io/cryojax-ensemble-optimization/installation/</loc>
+         <lastmod>2026-08-07</lastmod>
+    </url>
+    <url>
+         <loc>https://flatironinstitute.github.io/cryojax-ensemble-optimization/tutorial/data_simulation/simulate_and_visualize_data/</loc>
+         <lastmod>2026-08-07</lastmod>
+    </url>
+    <url>
+         <loc>https://flatironinstitute.github.io/cryojax-ensemble-optimization/tutorial/ensemble_optimization/running_the_optimization/</loc>
+         <lastmod>2026-08-07</lastmod>
+    </url>
+</urlset>
