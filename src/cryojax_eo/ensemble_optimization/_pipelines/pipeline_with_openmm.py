@@ -9,6 +9,7 @@ import jax.numpy as jnp
 import mdtraj
 import numpy as np
 import optax
+from cryojax.jax_util import NDArrayLike
 from jax_dataloader import DataLoader
 from jaxtyping import Array, Float, Int, PRNGKeyArray
 from mdtraj.formats import XTCTrajectoryFile
@@ -267,7 +268,7 @@ def _write_walker_to_pdb(snapshot_traj, positions_nm, filename):
 
 def _align_walkers_to_reference(
     walkers: Float[Array, "n_walkers n_atoms 3"],
-    ref_positions: Float[Array, "n_atoms 3"],
+    ref_positions: Float[NDArrayLike, "n_atoms 3"],
     atom_indices: Int[Array, " n_atoms_for_opt"],
 ) -> Float[Array, "n_walkers n_atoms 3"]:
     """

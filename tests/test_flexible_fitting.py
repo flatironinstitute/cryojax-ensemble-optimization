@@ -14,17 +14,17 @@ pytest.importorskip(
 
 
 def test_run_flexible_fitting_from_config(
-    sample_path_groel_pdb,
+    sample_path_to_pdb1,
     sample_path_mrc_file,
     tmp_path,
 ):
     output_directory = str(tmp_path / "flexible_fitting_output")
 
     config = {
-        "path_to_atomic_model": sample_path_groel_pdb,
-        "path_to_prealigned_atomic_model": sample_path_groel_pdb,
+        "path_to_atomic_model": sample_path_to_pdb1,
+        "path_to_prealigned_atomic_model": sample_path_to_pdb1,
         "path_to_output": output_directory,
-        "atom_selection": "name CA",
+        "atom_selection": "not element H",
         "n_steps": 2,
         "reference_volume_params": {
             "path_to_reference_volume": sample_path_mrc_file,
