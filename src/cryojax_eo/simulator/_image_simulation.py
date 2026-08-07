@@ -1,6 +1,5 @@
 import cryojax.simulator as cxs
 import jax
-import jax.numpy as jnp
 from cryojax.ndimage import CircularCosineMask
 from jaxtyping import Array, Float, Int, PRNGKeyArray
 
@@ -55,7 +54,6 @@ def simulate_image_with_white_gaussian_noise(
 
     distribution = cxs.GaussianWhiteNoiseModel(
         image_model,
-        variance=1.0,
-        signal_scale_factor=jnp.sqrt(snr),
+        variance=1 / snr,
     )
     return data_sign * distribution.sample(key_noise)

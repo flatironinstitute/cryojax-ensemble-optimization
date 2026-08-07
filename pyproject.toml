@@ -37,8 +37,7 @@ dependencies = [
     "mdtraj",
     "tqdm",
     "cryojax==0.5.6",
-    "cryospax==0.2.0",
-    "openmm",
+    "cryospax==0.2.1",
     "dm-pix",
     "optax",
     "optimistix",
@@ -51,7 +50,8 @@ dev = [
   "ruff"
 ]
 tests = [
-  "pytest"
+  "pytest",
+  "openmm",
 ]
 docs = [
   "mkdocs",

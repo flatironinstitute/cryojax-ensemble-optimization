@@ -1,5 +1,6 @@
 import cryojax.simulator as cxs
 import equinox as eqx
+import jax.numpy as jnp
 from cryospax import RelionParticleDataset, RelionParticleParameterFile
 
 from cryojax_eo.ensemble_optimization import HierarchicalSO3GridSearch
@@ -25,9 +26,11 @@ def test_global_SO3_hier_search(
     )
     pose_search = HierarchicalSO3GridSearch(base_grid_res=1, n_rounds=5, n_candidates=40)
     stack = relion_dataset[0]
+    assert "parameters" in stack
+
     pose = pose_search(
         gmm_volume,
-        stack["images"],
+        jnp.asarray(stack["images"]),
         stack["parameters"]["image_config"],
         stack["parameters"]["transfer_theory"],
     )

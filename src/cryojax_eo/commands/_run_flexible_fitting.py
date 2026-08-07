@@ -4,6 +4,7 @@ import datetime
 import logging
 import os
 from pathlib import Path
+from typing import Any
 
 import jax.numpy as jnp
 import mdtraj
@@ -12,19 +13,23 @@ import optax
 import yaml
 from cryojax.io import read_array_from_mrc
 from cryojax.ndimage import fourier_crop_to_shape
+from jaxtyping import Array, Float, Int
 
 from cryojax_eo.ensemble_optimization import (
     SteeredMDSimulator,
     md_params_config_to_openmm_overrides,
 )
 from cryojax_eo.flexible_fitting import (
+    AbstractModelToVolumeLossFn,
+    AdamWalkerFlexibleFitting,
     FlexibleFittingPipeline,
     ModelToVolumeCorrelationLossFn,
+    ModelToVolumeWeightedMSELossFn,
     SteepestDescWalkerFlexibleFitting,
 )
 from cryojax_eo.internal import FlexibleFittingConfig
 from cryojax_eo.io import read_walkers_from_pdbs
-from cryojax_eo.utils import ModelToVolumeAligner
+from cryojax_eo.utils import EarlyStopping, ModelToVolumeAligner
 
 
 def add_args(parser):
@@ -56,6 +61,51 @@ def _make_atom_list(atom_selection, topology) -> np.ndarray:
     else:
         atom_list = topology.select(atom_selection)
     return np.array(atom_list)
+
+
+def _construct_model_to_volume_loss_fn(
+    amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
+    variances: Float[Array, "n_atoms n_gaussians_per_atom"],
+    voxel_size_ff: Float,
+    box_size_ff: Int,
+    vol_mask: Float[Array, "dim_z dim_y dim_x"] | None,
+    config: dict,
+):
+    loss_kwargs: dict[str, Any] = dict(
+        amplitudes=amplitudes,
+        variances=variances,
+        voxel_size=voxel_size_ff,
+        volume_shape=(box_size_ff, box_size_ff, box_size_ff),
+        vol_mask=vol_mask,
+        batch_size_for_z_planes=config["walker_optimizer_params"][
+            "batch_size_for_z_planes"
+        ],
+        n_batches_of_atoms=config["walker_optimizer_params"]["n_batches_of_atoms"],
+    )
+    if config["reference_volume_params"].get("path_to_weights") is not None:
+        path_to_weights = config["reference_volume_params"]["path_to_weights"]
+        loss_kwargs["weights"] = jnp.asarray(read_array_from_mrc(path_to_weights))
+        return ModelToVolumeWeightedMSELossFn(**loss_kwargs)
+    else:
+        return ModelToVolumeCorrelationLossFn(**loss_kwargs)
+
+
+def _construct_walker_optimizer(
+    config: dict, model_to_vol_loss_fn: AbstractModelToVolumeLossFn
+):
+    optimizer_kwargs = dict(
+        n_steps=config["walker_optimizer_params"]["n_steps"],
+        step_size=config["walker_optimizer_params"]["step_size"],
+        model_to_vol_loss_fn=model_to_vol_loss_fn,
+    )
+    if config["walker_optimizer_params"]["type"] == "steepest_desc":
+        return SteepestDescWalkerFlexibleFitting(**optimizer_kwargs)
+    elif config["walker_optimizer_params"]["type"] == "adam":
+        return AdamWalkerFlexibleFitting(**optimizer_kwargs)
+    else:
+        raise ValueError(
+            f"Invalid walker optimizer type: {config['walker_optimizer_params']['type']}"
+        )
 
 
 def run_flexible_fitting(flexible_fitting_config: FlexibleFittingConfig):
@@ -137,22 +187,28 @@ def run_flexible_fitting(flexible_fitting_config: FlexibleFittingConfig):
     )
 
     # Construct likelihood optimizer
-    model_to_vol_loss_fn = ModelToVolumeCorrelationLossFn(
-        amplitudes=amplitudes,
-        variances=variances,
-        voxel_size=voxel_size_ff,
-        volume_shape=(box_size_ff, box_size_ff, box_size_ff),
-        vol_mask=vol_mask,
-        batch_size_for_z_planes=config["walker_optimizer_params"][
-            "batch_size_for_z_planes"
-        ],
-        n_batches_of_atoms=config["walker_optimizer_params"]["n_batches_of_atoms"],
+    model_to_vol_loss_fn = _construct_model_to_volume_loss_fn(
+        amplitudes,
+        variances,
+        voxel_size_ff,
+        box_size_ff,
+        vol_mask,
+        config,
     )
 
-    walker_optimizer = SteepestDescWalkerFlexibleFitting(
-        n_steps=config["walker_optimizer_params"]["n_steps"],
-        step_size=config["walker_optimizer_params"]["step_size"],
+    walker_optimizer = _construct_walker_optimizer(
+        config=config,
         model_to_vol_loss_fn=model_to_vol_loss_fn,
+    )
+
+    early_stopping = (
+        EarlyStopping(
+            patience=config["early_stopping"]["patience"],
+            rtol=config["early_stopping"]["rtol"],
+            atol=config["early_stopping"]["atol"],
+        )
+        if config.get("early_stopping") is not None
+        else None
     )
 
     # Construct the ensemble optimization pipeline
@@ -163,6 +219,7 @@ def run_flexible_fitting(flexible_fitting_config: FlexibleFittingConfig):
         prealigned_structure=ref_structure,
         atom_indices_for_opt=atom_list,
         model_to_volume_aligner=model_aligner,
+        early_stopping=early_stopping,
     )
 
     # Running the optimization

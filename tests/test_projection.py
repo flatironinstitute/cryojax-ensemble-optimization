@@ -3,10 +3,16 @@ import shutil
 
 import mdtraj
 import numpy as np
+import pytest
 
 from cryojax_eo.ensemble_optimization import (
     EnsembleSteeredMDSimulator,
     SteeredMDSimulator,
+)
+
+
+pytest.importorskip(
+    "openmm", reason="OpenMM is an optional dependency required for MD projection"
 )
 
 

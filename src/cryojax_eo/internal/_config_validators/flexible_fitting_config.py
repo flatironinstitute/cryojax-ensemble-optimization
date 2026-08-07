@@ -17,6 +17,11 @@ from .utils import _validate_file_with_type, _validate_files_with_type
 
 
 class FFOptimizationConfig(BaseModel, extra="forbid"):
+    type: Literal["steepest_desc", "adam"] = Field(
+        default="steepest_desc",
+        description="Type of optimizer to use for the optimization process. "
+        + "Must be 'steepest_desc' or 'adam'.",
+    )
     n_steps: PositiveInt = Field(
         default=1, description="Number of steps for the optimization process."
     )
@@ -35,6 +40,23 @@ class FFOptimizationConfig(BaseModel, extra="forbid"):
         "where the iteration is taken over groups of atoms. "
         "This is useful if `batch_size = 1` and GPU memory is exhausted. "
         "By default, `1`.",
+    )
+
+
+class FFEarlyStoppingConfig(BaseModel, extra="forbid"):
+    patience: PositiveInt = Field(
+        description="Number of steps to wait before stopping the optimization. "
+        + "Must be a positive integer.",
+    )
+    rtol: PositiveFloat = Field(
+        default=1e-4,
+        description="Relative tolerance for the optimization. "
+        + "Must be a positive float.",
+    )
+    atol: PositiveFloat = Field(
+        default=1e-4,
+        description="Absolute tolerance for the optimization. "
+        + "Must be a positive float.",
     )
 
 
@@ -101,6 +123,13 @@ class RefVolFFConfig(BaseModel, extra="forbid"):
         description="Path to the consensus volume. "
         + "Used for rigid body alignment of walkers. "
         + "If None, no alignment will be performed.",
+    )
+
+    path_to_weights: FilePath | None = Field(
+        default=None,
+        description="Path to the weights for the weighted MSE loss. "
+        + "If None, the unweighted correlation loss will be used."
+        + "Can be obtained by running relion_reconstruct with --external_reconstruct",
     )
 
     flexible_fitting_box_size: PositiveInt = Field(
@@ -188,6 +217,11 @@ class FlexibleFittingConfig(BaseModel, extra="forbid"):
         + "This is a dictionary formatted by "
         + "the `FFOptimizationConfig` class."
     )
+    early_stopping: dict | None = Field(
+        default=None,
+        description="Parameters for the early stopping. "
+        + "This is a dictionary formatted by the `FFEarlyStoppingConfig` class.",
+    )
     # Optimization
     n_steps: PositiveInt = Field(
         description="Number of steps of cryoJAX ensemble refinement to run."
@@ -212,6 +246,15 @@ class FlexibleFittingConfig(BaseModel, extra="forbid"):
     @classmethod
     def validate_ref_vol_config(cls, values):
         return dict(RefVolFFConfig(**values).model_dump())
+
+    @field_validator("early_stopping")
+    @classmethod
+    def validate_early_stopping_config(cls, values):
+        return (
+            dict(FFEarlyStoppingConfig(**values).model_dump())
+            if values is not None
+            else {}
+        )
 
     @field_validator("atom_selection")
     @classmethod

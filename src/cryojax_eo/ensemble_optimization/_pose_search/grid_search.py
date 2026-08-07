@@ -1,5 +1,6 @@
 from typing import Any
 
+import cryojax.ndimage as cxim
 import cryojax.simulator as cxs
 import equinox as eqx
 import jax
@@ -15,13 +16,14 @@ from .geometry import (
 from .pose_offset import compute_correlation_at_optimal_offset
 
 
-@eqx.filter_vmap(in_axes=(0, None, None, None, None))
+@eqx.filter_vmap(in_axes=(0, None, None, None, None, None))
 def _loss_for_grid_search(
     quat: Float[Array, "4"],
     volume: cxs.AbstractVolumeRepresentation,
     target_image: Float[Array, "H W"],
     image_config: cxs.BasicImageConfig,
     transfer_theory: cxs.ContrastTransferTheory,
+    shift_search_area: Float[Array, "H W"] | None,
 ) -> tuple[Float[Array, ""], Float[Array, " 2"]]:
     """
     Computes the correlation at the optimal shift using Plancherel's theorem and
@@ -35,21 +37,49 @@ def _loss_for_grid_search(
         wxyz=quat,
     )
 
-    computed_image_no_shift = cxs.make_image_model(
+    computed_image_no_shif = cxs.make_image_model(
         volume,
         image_config,
         pose,
         transfer_theory,
-        normalizes_signal=True,
-    ).simulate()
+        # normalizes_signal=True,
+    ).simulate(outputs_real_space=True)
 
-    # get the optimal shift
+    # get the optimal shift, restricted to `shift_search_area`
     correlation, optimal_offset = compute_correlation_at_optimal_offset(
         target_image,
-        computed_image_no_shift,
+        computed_image_no_shif,
         image_config.get_coordinate_grid(physical=True),
+        shift_search_area,
     )
     return -correlation, optimal_offset
+
+
+def _batched_loss_for_grid_search(
+    quats: Float[Array, "N 4"],
+    volume: cxs.AbstractVolumeRepresentation,
+    target_image: Float[Array, "H W"],
+    image_config: cxs.BasicImageConfig,
+    transfer_theory: cxs.ContrastTransferTheory,
+    shift_search_area: Float[Array, "H W"] | None,
+    n_angles_in_parallel: int,
+) -> tuple[Float[Array, " N"], Float[Array, "N 2"]]:
+    """
+    Evaluate `_loss_for_grid_search` over a set of quaternions, computing
+    `n_angles_in_parallel` of them at a time (vmapped) in a loop over batches.
+    """
+    return filter_bmap(
+        lambda x: _loss_for_grid_search(
+            x,
+            volume,
+            target_image,
+            image_config,
+            transfer_theory,
+            shift_search_area,
+        ),
+        xs=quats,
+        batch_size=n_angles_in_parallel,
+    )
 
 
 class _HierSO3GriSearchCarry(eqx.Module):
@@ -75,14 +105,29 @@ class HierarchicalSO3GridSearch(eqx.Module):
         Number of candidate quaternions to consider in each round.
     - `base_grid_res`:
         Base grid resolution for the SO3 grid.
+    - `n_angles_in_parallel`:
+        Number of orientations whose losses are evaluated in parallel
+        (i.e. vmapped) within each batch of the search.
+    - `shift_search_range_in_angstroms`:
+        Half-width of the square region of shifts that is searched, in
+        angstroms. If `None`, all shifts are searched.
     """
 
     base_quats: Float[Array, "N 4"]
     n_rounds: int
     n_candidates: int
     base_grid_res: int
+    n_angles_in_parallel: int
+    shift_search_range_in_angstroms: Float[Array, ""] | None
 
-    def __init__(self, base_grid_res, n_rounds, n_candidates):
+    def __init__(
+        self,
+        base_grid_res: int,
+        n_rounds: int,
+        n_candidates: int,
+        n_angles_in_parallel: int = 10,
+        shift_search_range_in_angstroms: Float[Array, ""] | None = None,
+    ):
         """
         Initialize the HierarchicalSO3GridSearch.
 
@@ -93,20 +138,42 @@ class HierarchicalSO3GridSearch(eqx.Module):
             Number of rounds to perform the hierarchical search.
         - `n_candidates`:
             Number of candidate quaternions to consider in each round.
+        - `n_angles_in_parallel`:
+            Number of orientations whose losses are evaluated in parallel
+            (i.e. vmapped) within each batch of the search. Larger values
+            are faster but use more memory.
+        - `shift_search_range_in_angstroms`:
+            Half-width of the square region of shifts that is searched, in
+            angstroms. Only shifts with `|x| <= shift_search_range_in_angstroms`
+            and `|y| <= shift_search_range_in_angstroms` are considered. If
+            `None`, all shifts are searched.
         """
         assert base_grid_res >= 1, "Base grid must be at least 1."
         assert n_rounds >= 0, "Number of rounds must be non-negative."
         assert n_candidates >= 1, "Number of candidates must be at least 1."
+        assert n_angles_in_parallel >= 1, (
+            "Number of angles in parallel must be at least 1."
+        )
+        assert (
+            shift_search_range_in_angstroms is None
+            or shift_search_range_in_angstroms > 0.0
+        ), "Shift search range must be positive."
 
         self.base_grid_res = base_grid_res
         self.base_quats = grid_SO3(base_grid_res)
         self.n_rounds = n_rounds
         self.n_candidates = n_candidates
+        self.n_angles_in_parallel = n_angles_in_parallel
+        self.shift_search_range_in_angstroms = (
+            None
+            if shift_search_range_in_angstroms is None
+            else jnp.asarray(shift_search_range_in_angstroms)
+        )
 
     def __call__(
         self,
         volume: cxs.AbstractVolumeRepresentation,
-        image: Float[Array, "H W"],
+        target_image: Float[Array, "H W"],
         image_config: cxs.BasicImageConfig,
         transfer_theory: cxs.ContrastTransferTheory,
     ) -> cxs.QuaternionPose:
@@ -115,29 +182,30 @@ class HierarchicalSO3GridSearch(eqx.Module):
         **Arguments:**
         - `volume`:
             `cryojax` `AbstractVolumeRepresentation` representing a volumetric density.
-        - `image`:
-            Target image to compare against through the search.
+        - `target_image`:
+            The target image in Real space to compare against through the search.
         - `image_config`:
-            Configuration for image simulation.
+            Configuration for target_image simulation.
         - `transfer_theory`:
-            Contrast transfer theory to use for image simulation.
+            Contrast transfer theory to use for target_image simulation.
 
         **Returns:**
         - `optimal_pose`:
             The optimal pose found through the hierarchical SO3 grid search.
         """
 
-        image = jnp.asarray(image)
-        losses, offsets = filter_bmap(
-            lambda x: _loss_for_grid_search(
-                x,
-                volume,
-                image,
-                image_config,
-                transfer_theory,
-            ),
-            xs=self.base_quats,
-            batch_size=10,
+        # target_image = jnp.asarray(target_image)
+        shift_search_area = _make_shift_search_area(
+            self.shift_search_range_in_angstroms, image_config
+        )
+        losses, offsets = _batched_loss_for_grid_search(
+            self.base_quats,
+            volume,
+            target_image,
+            image_config,
+            transfer_theory,
+            shift_search_area,
+            self.n_angles_in_parallel,
         )
         # jax.debug.print("Iter: 1. Best loss: {loss}", loss=losses.min())
 
@@ -157,8 +225,14 @@ class HierarchicalSO3GridSearch(eqx.Module):
                 N=self.n_candidates,
                 base_resol=self.base_grid_res,
             )
-            losses, offsets = _loss_for_grid_search(
-                quats, volume, image, image_config, transfer_theory
+            losses, offsets = _batched_loss_for_grid_search(
+                quats,
+                volume,
+                target_image,
+                image_config,
+                transfer_theory,
+                shift_search_area,
+                self.n_angles_in_parallel,
             )
             carry = _HierSO3GriSearchCarry(
                 losses=losses,
@@ -175,9 +249,11 @@ class HierarchicalSO3GridSearch(eqx.Module):
                     x,
                     self.n_candidates,
                     volume,
-                    image,
+                    target_image,
                     image_config,
                     transfer_theory,
+                    shift_search_area,
+                    self.n_angles_in_parallel,
                 ),
                 init_val=carry,
             )
@@ -195,9 +271,11 @@ def _run_global_SO3_step(
     hier_grid_search_carry: _HierSO3GriSearchCarry,
     n_candidates: int,
     volume: cxs.AbstractVolumeRepresentation,
-    image: Float[Array, "H W"],
+    target_image: Float[Array, "H W"],
     image_config: cxs.BasicImageConfig,
     transfer_theory: cxs.ContrastTransferTheory,
+    shift_search_area: Float[Array, "H W"] | None,
+    n_angles_in_parallel: int,
 ):
     quats, grid_indices = getbestneighbors_next_SO3(
         hier_grid_search_carry.losses,
@@ -206,8 +284,14 @@ def _run_global_SO3_step(
         N=n_candidates,
         curr_res=hier_grid_search_carry.curr_resolution,
     )
-    losses, offsets = _loss_for_grid_search(
-        quats, volume, image, image_config, transfer_theory
+    losses, offsets = _batched_loss_for_grid_search(
+        quats,
+        volume,
+        target_image,
+        image_config,
+        transfer_theory,
+        shift_search_area,
+        n_angles_in_parallel,
     )
     # jax.debug.print(
     #     "Iter: {iter}. Best loss: {loss}",
@@ -228,3 +312,18 @@ def local_SO3_hier_search(lossfn, base_grid_res=1, n_rounds=5, n_candidates=40):
         "Local SO3 hierarchical search is not implemented yet. "
         "Please use global SO3 hierarchical search instead."
     )
+
+
+def _make_shift_search_area(
+    shift_search_range_in_angstroms: Float[Array, ""] | None,
+    image_config: cxs.BasicImageConfig,
+) -> Float[Array, "H W"] | None:
+    """Build the mask restricting which shifts the search considers."""
+    if shift_search_range_in_angstroms is None:
+        return None
+    return cxim.Rectangular2DCosineMask(
+        image_config.get_coordinate_grid(physical=True),
+        x_width=shift_search_range_in_angstroms * 2,
+        y_width=shift_search_range_in_angstroms * 2,
+        rolloff_width=0.1,
+    ).get()

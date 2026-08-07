@@ -1,3 +1,4 @@
+from ._early_stopping import EarlyStopping as EarlyStopping
 from ._gmm_fitting import (
     Gaussian3D as Gaussian3D,
     fit_gmm_model_to_voxel_grid as fit_gmm_model_to_voxel_grid,
