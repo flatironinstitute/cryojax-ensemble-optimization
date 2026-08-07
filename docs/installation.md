@@ -31,7 +31,7 @@ To find your CUDA version, run `nvidia-smi` — the version appears in the top-r
 
 ## Apptainer/Singularity Installation (HPC clusters)
 
-For HPC environments where conda is unavailable or installation is restricted, we provide an [Apptainer](https://apptainer.org/) definition file at `container/cryojax_eo.def`. Pre-built images are hosted on [Sylabs Cloud](https://cloud.sylabs.io/library/davidsilva27/default/cryojax_eo).
+For HPC environments where conda is unavailable or installation is restricted, we provide an [Apptainer](https://apptainer.org/) definition file at `container/cryojax_eo.def`. We do not distribute pre-built images — build your own from the definition file, which also lets you match the CUDA version to your cluster's driver.
 
 !!! note "Loading Apptainer/Singularity on HPC clusters"
     On most HPC clusters, Apptainer or Singularity is available as an environment module and must be loaded before use:
@@ -40,16 +40,15 @@ For HPC environments where conda is unavailable or installation is restricted, w
     ```
     If neither works, check what is available with `module spider apptainer` or `module spider singularity`, or contact your system administrator.
 
-**Option 1 — Pull a pre-built image:**
+**Step 1 — Check your CUDA version.**
 
-```bash
-apptainer pull --library https://library.sylabs.io library://davidsilva27/default/cryojax_eo:latest
+Run `nvidia-smi` — the driver's CUDA version appears in the top-right corner of the output. The definition file pins `cuda-version==12.6`. If your driver is older, edit this line in `container/cryojax_eo.def` before building:
+
+```
+$MAMBA install -n cryojax_eo -c conda-forge openmm "cuda-version==12.6" -y
 ```
 
-!!! note
-    The `--library` flag is required because newer versions of Apptainer/Singularity no longer include Sylabs Cloud as the default endpoint. If you are using Singularity instead of Apptainer, replace `apptainer` with `singularity` in all commands.
-
-**Option 2 — Build from the definition file:**
+**Step 2 — Build the image.**
 
 ```bash
 # Use sudo if available
@@ -59,15 +58,18 @@ sudo apptainer build container/cryojax_eo.sif container/cryojax_eo.def
 apptainer build --fakeroot container/cryojax_eo.sif container/cryojax_eo.def
 ```
 
-!!! warning "CUDA version requirement"
-    The pre-built image requires a CUDA driver version ≥ 12.6. To check your version, run `nvidia-smi` — the version appears in the top-right corner of the output.
+The build pulls `cryojax_eo` from the `main` branch on GitHub. To pin a specific release, change the `pip install` line in the definition file to reference a tag, for example:
 
-    If your cluster has an older driver, build from the definition file and replace `cuda-version==12.6` with your installed version:
-    ```bash
-    mamba install -n cryojax_eo -c conda-forge openmm cuda-version==<your-version>
-    ```
+```
+"cryojax_eo @ git+https://github.com/flatironinstitute/cryojax-ensemble-optimization.git@v0.1.0"
+```
 
-**Running commands with the container:**
+!!! note
+    If your cluster provides Singularity rather than Apptainer, replace `apptainer` with `singularity` in all commands.
+
+    Building requires network access and a few GB of scratch space. If your compute nodes are offline, build on a login node or set `APPTAINER_TMPDIR` to a filesystem with enough room.
+
+**Step 3 — Run commands with the container:**
 
 ```bash
 apptainer exec --nv --bind /path/to/data:/path/to/data container/cryojax_eo.sif \

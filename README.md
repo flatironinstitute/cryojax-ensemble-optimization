@@ -38,18 +38,13 @@ Note: OpenMM is not required for all our utilities. Data simulation and Ensemble
 
 ### Apptainer/Singularity Installation (HPC clusters)
 
-For HPC environments where conda is unavailable or installation is restricted, we provide an [Apptainer](https://apptainer.org/) definition file at `container/cryojax_eo.def`. Pre-built images are hosted on [Sylabs Cloud](https://cloud.sylabs.io/library/davidsilva27/default/cryojax_eo).
+For HPC environments where conda is unavailable or installation is restricted, we provide an [Apptainer](https://apptainer.org/) definition file at `container/cryojax_eo.def`. We do not distribute pre-built images — build your own from the definition file, which also lets you match the CUDA version to your cluster's driver.
 
-> **Note:** On most HPC clusters, Apptainer or Singularity must be loaded as an environment module before use: `module load apptainer` (or `module load singularity`). If neither works, check availability with `module spider apptainer` or contact your system administrator.
+> **Note:** On most HPC clusters, Apptainer or Singularity must be loaded as an environment module before use: `module load apptainer` (or `module load singularity`). If neither works, check availability with `module spider apptainer` or contact your system administrator. Replace `apptainer` with `singularity` below if that is what your cluster provides.
 
-**Option 1 — Pull a pre-built image:**
-```bash
-apptainer pull --library https://library.sylabs.io library://davidsilva27/default/cryojax_eo:latest
-```
+**Step 1 — Check your CUDA version.** Run `nvidia-smi`; the driver's CUDA version appears in the top-right corner. The definition file pins `cuda-version==12.6` — if your driver is older, edit that line in `container/cryojax_eo.def` before building.
 
-> **Note:** The `--library` flag is required because newer versions of Apptainer/Singularity no longer include Sylabs Cloud as the default endpoint. Replace `apptainer` with `singularity` if that is what your cluster provides.
-
-**Option 2 — Build from the definition file:**
+**Step 2 — Build the image:**
 ```bash
 # Use sudo if available
 sudo apptainer build container/cryojax_eo.sif container/cryojax_eo.def
@@ -58,7 +53,9 @@ sudo apptainer build container/cryojax_eo.sif container/cryojax_eo.def
 apptainer build --fakeroot container/cryojax_eo.sif container/cryojax_eo.def
 ```
 
-**Running commands with the container:**
+The build installs `cryojax_eo` from the `main` branch. To pin a release, append `@v0.1.0` (or your tag of choice) to the git URL in the definition file's `pip install` line.
+
+**Step 3 — Run commands with the container:**
 ```bash
 apptainer exec --nv --bind /path/to/data:/path/to/data path/to/container/cryojax_eo.sif \
     run_ensemble_optimization --config config.yaml
