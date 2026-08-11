@@ -24,7 +24,7 @@ import mdtraj
 import numpy as np
 from jaxtyping import Array, Float, Int
 
-from ..base_prior_projector import AbstractEnsemblePriorProjector, AbstractPriorProjector
+from .base_prior_projector import AbstractEnsemblePriorProjector, AbstractPriorProjector
 
 
 if TYPE_CHECKING:
