@@ -34,6 +34,7 @@ class FlexibleFittingPipeline(eqx.Module):
     atom_indices_for_opt: Int[Array, " n_atoms_for_opt"]
     early_stopping: EarlyStopping | None
     write_buffer_size: int
+    write_buffer_size: int
 
     def __init__(
         self,
@@ -52,6 +53,7 @@ class FlexibleFittingPipeline(eqx.Module):
         assert len(atom_indices_for_opt) > 0, (
             "atom_indices_for_opt must contain at least one index."
         )
+        assert write_buffer_size > 0, "write_buffer_size must be positive"
 
         self.prior_projector = prior_projector
         self.walker_optimizer = walker_optimizer
@@ -60,6 +62,7 @@ class FlexibleFittingPipeline(eqx.Module):
         self.atom_indices_for_opt = atom_indices_for_opt
         self.model_to_volume_aligner = model_to_volume_aligner
         self.early_stopping = early_stopping
+        self.write_buffer_size = write_buffer_size
         self.write_buffer_size = write_buffer_size
 
     def run(
@@ -102,6 +105,22 @@ class FlexibleFittingPipeline(eqx.Module):
         early_stopping_state = (
             self.early_stopping.init() if self.early_stopping is not None else None
         )
+
+        # Buffer trajectory frames on the host and flush them to the XTC writer in
+        # batches, rather than writing (and forcing a device->host transfer) every
+        # step. Shape: (buffer_size, n_atoms, 3), stored in nm.
+        n_atoms = walker.shape[0]
+        xtc_buffer = np.empty((self.write_buffer_size, n_atoms, 3), dtype=np.float32)
+        buffer_count = 0
+
+        # Reusable single-frame Trajectory for the per-step PDB snapshots: set the
+        # topology and unit cell once, then only swap the coordinates each write
+        # (avoids rebuilding a Trajectory and re-attaching the topology every step).
+        pdb_snapshot_traj = mdtraj.Trajectory(
+            xyz=np.zeros((1, n_atoms, 3), dtype=np.float32),
+            topology=self.prealigned_structure.topology,
+        )
+        pdb_snapshot_traj.unitcell_vectors = unit_cell_vectors[None, ...]
 
         # Buffer trajectory frames on the host and flush them to the XTC writer in
         # batches, rather than writing (and forcing a device->host transfer) every
@@ -167,6 +186,7 @@ class FlexibleFittingPipeline(eqx.Module):
             xtc_buffer[buffer_count] = walker_nm
             buffer_count += 1
             if buffer_count == self.write_buffer_size:
+                logging.info("Flushing buffered trajectory frames to XTC writer...")
                 writer.write(xtc_buffer[:buffer_count])
                 buffer_count = 0
 
@@ -200,6 +220,7 @@ class FlexibleFittingPipeline(eqx.Module):
         if buffer_count > 0:
             writer.write(xtc_buffer[:buffer_count])
             buffer_count = 0
+
         writer.close()
 
         _write_walker_to_pdb(

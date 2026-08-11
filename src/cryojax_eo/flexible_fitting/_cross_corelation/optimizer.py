@@ -18,19 +18,6 @@ class AbstractWalkerOptimizer(eqx.Module):
     n_steps: Int = eqx.field(static=True)
     model_to_vol_loss_fn: AbstractModelToVolumeLossFn
 
-    def __init__(
-        self,
-        n_steps: Int,
-        step_size: Float,
-        model_to_vol_loss_fn: AbstractModelToVolumeLossFn,
-    ):
-        assert n_steps > 0, "n_steps must be positive"
-        assert step_size >= 0, "step_size must be non-negative."
-
-        self.n_steps = n_steps
-        self.model_to_vol_loss_fn = model_to_vol_loss_fn
-        self.step_size = step_size
-
     @eqx.filter_jit
     def __call__(
         self,
@@ -66,6 +53,19 @@ class AbstractWalkerOptimizer(eqx.Module):
 
 
 class SteepestDescWalkerFlexibleFitting(AbstractWalkerOptimizer):
+    def __init__(
+        self,
+        n_steps: Int,
+        step_size: Float,
+        model_to_vol_loss_fn: AbstractModelToVolumeLossFn,
+    ):
+        assert n_steps > 0, "n_steps must be positive"
+        assert step_size >= 0, "step_size must be non-negative."
+
+        self.n_steps = n_steps
+        self.model_to_vol_loss_fn = model_to_vol_loss_fn
+        self.step_size = step_size
+
     def _optimizer_step(
         self,
         walkers: Float[Array, "n_atoms 3"],
@@ -93,7 +93,12 @@ class AdamWalkerFlexibleFitting(AbstractWalkerOptimizer):
         step_size: Float,
         model_to_vol_loss_fn: AbstractModelToVolumeLossFn,
     ):
-        super().__init__(n_steps, step_size, model_to_vol_loss_fn)
+        assert n_steps > 0, "n_steps must be positive"
+        assert step_size >= 0, "step_size must be non-negative."
+
+        self.n_steps = n_steps
+        self.model_to_vol_loss_fn = model_to_vol_loss_fn
+        self.step_size = step_size
         self.optimizer = optax.adam(learning_rate=self.step_size)
 
     def _optimizer_step(

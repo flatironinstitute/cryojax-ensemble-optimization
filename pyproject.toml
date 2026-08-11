@@ -36,7 +36,7 @@ dependencies = [
     "pydantic",
     "mdtraj",
     "tqdm",
-    "cryojax==0.6.0",
+    "cryojax@git+https://github.com/michael-0brien/cryojax.git@dev",
     "cryospax==0.2.0",
     "openmm",
     "dm-pix",
@@ -45,13 +45,19 @@ dependencies = [
     "PyYAML"
 ]
 
+[tool.hatch.metadata]
+# Required for the direct git-URL dependency on the cryojax `dev` branch above.
+# Repin to a released cryojax (>=0.6.0) + cryospax once they are on PyPI.
+allow-direct-references = true
+
 [project.optional-dependencies]
 dev = [
   "pre-commit",
   "ruff"
 ]
 tests = [
-  "pytest"
+  "pytest",
+  "openmm",
 ]
 docs = [
   "mkdocs",

@@ -131,6 +131,13 @@ def estimate_poses(
     )
 
 
+@eqx.filter_vmap
+def _convert_quat_to_euler(quat_pose: cxs.QuaternionPose) -> cxs.EulerAnglePose:
+    return cxs.EulerAnglePose.from_rotation_and_translation(
+        quat_pose.rotation, quat_pose.offset_in_angstroms
+    )
+
+
 def compute_likelihoods_for_structural_file(
     path_to_structure: str | Path,
     relion_dataset: RelionParticleDataset,
@@ -186,7 +193,9 @@ def compute_likelihoods_for_structural_file(
         batch_size=n_images_in_parallel,
         shuffle=False,
     )
-    pose_search = HierarchicalSO3GridSearch(base_grid_res=1, n_rounds=5, n_candidates=80)
+    pose_search = HierarchicalSO3GridSearch(
+        base_grid_res=1, n_rounds=5, n_candidates=40, n_angles_in_parallel=10
+    )
     image_config = relion_dataset.parameter_file[0]["image_config"]
     mask = cxim.CircularCosineMask(
         image_config.get_coordinate_grid(physical=False),
@@ -195,11 +204,15 @@ def compute_likelihoods_for_structural_file(
     )
 
     if estimates_poses:
+        max_n_batches = np.ceil(len(relion_dataset) / n_images_in_parallel).astype(int)
         path_to_starfile = os.path.join(
             path_to_outputdir, Path(path_to_structure).stem + "_starfile.star"
         )
         new_parameter_file = RelionParticleParameterFile(
-            path_to_starfile=path_to_starfile, mode="w", exist_ok=True
+            path_to_starfile=path_to_starfile,
+            mode="w",
+            exist_ok=True,
+            max_optics_groups=max_n_batches + 10,
         )
     for batch in tqdm(dataloader, desc="batches", leave=False):
         if estimates_poses:
@@ -211,7 +224,7 @@ def compute_likelihoods_for_structural_file(
                 pose_search=pose_search,
                 n_images_in_parallel=10,
             )
-            batch["particle_stack"]["parameters"]["pose"] = poses
+            batch["particle_stack"]["parameters"]["pose"] = _convert_quat_to_euler(poses)
             new_parameter_file.append(batch["particle_stack"]["parameters"])
 
         batch_likelihoods = _compute_likelihoods_fn(
@@ -223,8 +236,8 @@ def compute_likelihoods_for_structural_file(
         likelihoods.append(batch_likelihoods)
 
     if estimates_poses:
-        new_parameter_file.starfile_data["particles"]["rlnImageName"] = (
-            relion_dataset.parameter_file.starfile_data["particles"]["rlnImageName"]
+        new_parameter_file.particle_data["rlnImageName"] = (
+            relion_dataset.parameter_file.particle_data["rlnImageName"]
         )
         new_parameter_file.save(overwrite=True)
 

@@ -9,6 +9,7 @@ import jax.numpy as jnp
 import mdtraj
 import numpy as np
 import optax
+from cryojax.jax_util import NDArrayLike
 from jax_dataloader import DataLoader
 from jaxtyping import Array, Float, Int, PRNGKeyArray
 from mdtraj.formats import XTCTrajectoryFile
@@ -18,7 +19,7 @@ from cryojax_eo.utils import ModelToVolumeAligner, rigid_align_positions
 
 from .._likelihood_optimization import (
     IterativeEnsembleLikelihoodOptimizer,
-    ProjGradDescWeightOptimizer,
+    MultGradWeightOptimizer,
 )
 from .._prior_projection.base_prior_projector import AbstractEnsemblePriorProjector
 from .base_pipeline import AbstractEnsembleOptimizationPipeline
@@ -213,8 +214,7 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
 
         if self.runs_postprocessing:
             logging.info("Running postprocessing...")
-            weight_optimizer = ProjGradDescWeightOptimizer(
-                n_steps=500,
+            weight_optimizer = MultGradWeightOptimizer(
                 ensemble_likelihood_fn=self.likelihood_optimizer.ensemble_likelihood_fn,
                 pose_search=self.likelihood_optimizer.pose_search,
             )
@@ -229,7 +229,7 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
         walkers: Float[Array, "n_walkers n_atoms 3"],
         weights: Float[Array, " n_walkers"],
         dataloader: DataLoader,
-        weight_optimizer: ProjGradDescWeightOptimizer,
+        weight_optimizer: MultGradWeightOptimizer,
     ):
         """
         Postprocess the walkers and weights.
@@ -237,7 +237,6 @@ class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=
         # Project the weights
         weights = weight_optimizer(
             walkers[:, self.atom_indices_for_opt],
-            weights,
             dataloader,
         )
 
@@ -269,7 +268,7 @@ def _write_walker_to_pdb(snapshot_traj, positions_nm, filename):
 
 def _align_walkers_to_reference(
     walkers: Float[Array, "n_walkers n_atoms 3"],
-    ref_positions: Float[Array, "n_atoms 3"],
+    ref_positions: Float[NDArrayLike, "n_atoms 3"],
     atom_indices: Int[Array, " n_atoms_for_opt"],
 ) -> Float[Array, "n_walkers n_atoms 3"]:
     """

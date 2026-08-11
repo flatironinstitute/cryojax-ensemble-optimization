@@ -37,18 +37,18 @@ def _loss_for_grid_search(
         wxyz=quat,
     )
 
-    computed_image_no_shift = cxs.make_image_model(
+    computed_image_no_shif = cxs.make_image_model(
         volume,
         image_config,
         pose,
         transfer_theory,
-        normalizes_signal=True,
-    ).simulate()
+        # normalizes_signal=True,
+    ).simulate(outputs_real_space=True)
 
     # get the optimal shift, restricted to `shift_search_area`
     correlation, optimal_offset = compute_correlation_at_optimal_offset(
         target_image,
-        computed_image_no_shift,
+        computed_image_no_shif,
         image_config.get_coordinate_grid(physical=True),
         shift_search_area,
     )
@@ -122,11 +122,11 @@ class HierarchicalSO3GridSearch(eqx.Module):
 
     def __init__(
         self,
-        base_grid_res,
-        n_rounds,
-        n_candidates,
-        n_angles_in_parallel=10,
-        shift_search_range_in_angstroms=None,
+        base_grid_res: int,
+        n_rounds: int,
+        n_candidates: int,
+        n_angles_in_parallel: int = 10,
+        shift_search_range_in_angstroms: Float[Array, ""] | None = None,
     ):
         """
         Initialize the HierarchicalSO3GridSearch.
@@ -173,7 +173,7 @@ class HierarchicalSO3GridSearch(eqx.Module):
     def __call__(
         self,
         volume: cxs.AbstractVolumeRepresentation,
-        image: Float[Array, "H W"],
+        target_image: Float[Array, "H W"],
         image_config: cxs.BasicImageConfig,
         transfer_theory: cxs.ContrastTransferTheory,
     ) -> cxs.QuaternionPose:
@@ -182,26 +182,26 @@ class HierarchicalSO3GridSearch(eqx.Module):
         **Arguments:**
         - `volume`:
             `cryojax` `AbstractVolumeRepresentation` representing a volumetric density.
-        - `image`:
-            Target image to compare against through the search.
+        - `target_image`:
+            The target image in Real space to compare against through the search.
         - `image_config`:
-            Configuration for image simulation.
+            Configuration for target_image simulation.
         - `transfer_theory`:
-            Contrast transfer theory to use for image simulation.
+            Contrast transfer theory to use for target_image simulation.
 
         **Returns:**
         - `optimal_pose`:
             The optimal pose found through the hierarchical SO3 grid search.
         """
 
-        image = jnp.asarray(image)
+        # target_image = jnp.asarray(target_image)
         shift_search_area = _make_shift_search_area(
             self.shift_search_range_in_angstroms, image_config
         )
         losses, offsets = _batched_loss_for_grid_search(
             self.base_quats,
             volume,
-            image,
+            target_image,
             image_config,
             transfer_theory,
             shift_search_area,
@@ -228,7 +228,7 @@ class HierarchicalSO3GridSearch(eqx.Module):
             losses, offsets = _batched_loss_for_grid_search(
                 quats,
                 volume,
-                image,
+                target_image,
                 image_config,
                 transfer_theory,
                 shift_search_area,
@@ -249,7 +249,7 @@ class HierarchicalSO3GridSearch(eqx.Module):
                     x,
                     self.n_candidates,
                     volume,
-                    image,
+                    target_image,
                     image_config,
                     transfer_theory,
                     shift_search_area,
@@ -271,7 +271,7 @@ def _run_global_SO3_step(
     hier_grid_search_carry: _HierSO3GriSearchCarry,
     n_candidates: int,
     volume: cxs.AbstractVolumeRepresentation,
-    image: Float[Array, "H W"],
+    target_image: Float[Array, "H W"],
     image_config: cxs.BasicImageConfig,
     transfer_theory: cxs.ContrastTransferTheory,
     shift_search_area: Float[Array, "H W"] | None,
@@ -287,7 +287,7 @@ def _run_global_SO3_step(
     losses, offsets = _batched_loss_for_grid_search(
         quats,
         volume,
-        image,
+        target_image,
         image_config,
         transfer_theory,
         shift_search_area,
@@ -315,7 +315,8 @@ def local_SO3_hier_search(lossfn, base_grid_res=1, n_rounds=5, n_candidates=40):
 
 
 def _make_shift_search_area(
-    shift_search_range_in_angstroms: float | None, image_config: cxs.BasicImageConfig
+    shift_search_range_in_angstroms: Float[Array, ""] | None,
+    image_config: cxs.BasicImageConfig,
 ) -> Float[Array, "H W"] | None:
     """Build the mask restricting which shifts the search considers."""
     if shift_search_range_in_angstroms is None:

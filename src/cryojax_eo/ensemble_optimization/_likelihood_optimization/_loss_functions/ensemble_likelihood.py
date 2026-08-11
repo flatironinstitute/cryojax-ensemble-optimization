@@ -71,7 +71,7 @@ class ImagesToEnsembleLikelihoodFn(AbstractImagesToEnsembleLikelihoodFn):
         self,
         log_likelihood_matrix: Float[Array, "n_images n_walkers"],
         weights: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
-    ):
+    ) -> Float[Array, ""]:
         return jnp.mean(
             jax.scipy.special.logsumexp(
                 a=log_likelihood_matrix, b=weights[None, :], axis=1
@@ -129,7 +129,7 @@ class ImagesToEnsembleLikelihoodFn(AbstractImagesToEnsembleLikelihoodFn):
         poses_per_walker: cxs.AbstractPose,
         transfer_theories: cxs.ContrastTransferTheory,
         per_particle_args: Any,
-    ):
+    ) -> Float[Array, ""]:
         likelihood_matrix = self.compute_log_likelihood_matrix(
             walkers,
             images,
@@ -150,7 +150,7 @@ def _compute_likelihoods_single_walker_bmap(
     transfer_theories: cxs.ContrastTransferTheory,
     per_particle_args: Any,
     n_images_in_parallel: int,
-):
+) -> Float[Array, " n_images"]:
     @eqx.filter_vmap(in_axes=(0, None, 0, 0, 0))
     def _body_fn(img, ic, p, tf, ppa):
         return likelihood_fn(
@@ -179,7 +179,7 @@ def _compute_likelihoods_over_walkers(
     per_particle_args: Any,
     n_walkers_in_parallel: int,
     n_images_in_parallel: int,
-):
+) -> Float[Array, "n_walkers n_images"]:
     @eqx.filter_vmap(in_axes=(0, None, None, 0, None, None))
     def _body_fn(w, im, ic, p, tf, ppa):
         return _compute_likelihoods_single_walker_bmap(

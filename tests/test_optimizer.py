@@ -8,7 +8,7 @@ from cryojax_eo.ensemble_optimization import (
     ImagesToEnsembleLikelihoodFn,
     IterativeEnsembleLikelihoodOptimizer,
     MargGaussianWhiteLogLikelihoodFn,
-    ProjGradDescWeightOptimizer,
+    MultGradWeightOptimizer,
 )
 from cryojax_eo.io import read_walkers_from_pdbs
 
@@ -106,13 +106,12 @@ def test_weight_optimizer(
 
     ensemble_likelihood_fn = ImagesToEnsembleLikelihoodFn(img_to_walker_likelihood_fn)
 
-    optimizer = ProjGradDescWeightOptimizer(
-        n_steps=2,
+    optimizer = MultGradWeightOptimizer(
         ensemble_likelihood_fn=ensemble_likelihood_fn,
     )
 
     weights = jnp.array([0.5, 0.5])
-    new_weights = optimizer(walkers, weights, dataloader)
+    new_weights = optimizer(walkers, dataloader)
 
     assert new_weights.shape == weights.shape, "Optimized weights have incorrect shape"
 
