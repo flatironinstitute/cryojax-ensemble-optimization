@@ -5,7 +5,8 @@ import equinox as eqx
 import jax.numpy as jnp
 from jaxtyping import Array, Float
 
-from ....simulator._dilated_mask import DilatedMask
+from cryojax_eo.simulator import DilatedMask
+
 from .common_functions import compute_optimal_scale_and_offset
 
 

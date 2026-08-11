@@ -3,7 +3,7 @@ import equinox as eqx
 import jax.numpy as jnp
 from cryospax import RelionParticleDataset, RelionParticleParameterFile
 
-from cryojax_eo.ensemble_optimization import HierarchicalSO3GridSearch
+from cryojax_eo import HierarchicalSO3GridSearch
 
 
 def test_global_SO3_hier_search(

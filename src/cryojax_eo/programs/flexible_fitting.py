@@ -12,13 +12,13 @@ from jaxtyping import Array, Float, Int
 from mdtraj.formats import XTCTrajectoryFile
 from tqdm import tqdm
 
-from cryojax_eo.ensemble_optimization import (
-    SteeredMDSimulator,
-)
 from cryojax_eo.utils import EarlyStopping, ModelToVolumeAligner, rigid_align_positions
 
-from .._cross_corelation.model_to_volume_loss import ModelToVolumeCorrelationLossFn
-from .._cross_corelation.optimizer import AbstractWalkerOptimizer
+from .._prior_projection import (
+    SteeredMDSimulator,
+)
+from .._volume_to_model_utils.model_to_volume_loss import ModelToVolumeCorrelationLossFn
+from .._volume_to_model_utils.optimizer import AbstractWalkerOptimizer
 
 
 class FlexibleFittingPipeline(eqx.Module):
