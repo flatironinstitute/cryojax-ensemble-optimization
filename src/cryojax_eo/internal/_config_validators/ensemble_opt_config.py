@@ -8,6 +8,7 @@ from pydantic import (
     DirectoryPath,
     Field,
     FilePath,
+    NonNegativeInt,
     PositiveFloat,
     PositiveInt,
     field_validator,
@@ -54,6 +55,39 @@ class VolumeIntegratorBackendConfig(BaseModel, extra="forbid"):
         return self
 
 
+class PoseSearchConfig(BaseModel, extra="forbid"):
+    """Parameters for the hierarchical SO(3) grid search used to estimate poses."""
+
+    n_rounds: NonNegativeInt = Field(
+        default=5,
+        description="Number of rounds of the hierarchical search. Each round "
+        + "refines the grid around the best candidates of the previous one. "
+        + "If 0, only the base grid is searched.",
+    )
+    initial_resolution: PositiveInt = Field(
+        default=1,
+        description="Resolution of the base (coarsest) SO(3) grid. Higher values "
+        + "start the search from a finer grid, at a higher computational cost.",
+    )
+    n_candidates: PositiveInt = Field(
+        default=40,
+        description="Number of candidate orientations kept at the end of each "
+        + "round, whose neighbors are searched in the next round.",
+    )
+    n_angles_in_parallel: PositiveInt = Field(
+        default=10,
+        description="Number of orientations whose losses are evaluated in "
+        + "parallel (i.e. vmapped) within each batch of the search. Larger "
+        + "values are faster but use more memory.",
+    )
+    shift_search_range_in_angstroms: PositiveFloat | None = Field(
+        default=None,
+        description="Half-width of the square region of shifts that is searched, "
+        + "in angstroms. Only shifts with |x| and |y| below this value are "
+        + "considered. If None, all shifts are searched.",
+    )
+
+
 class EnsOptMDConfigOptimizationConfig(BaseModel, extra="forbid"):
     n_steps: PositiveInt = Field(
         default=1, description="Number of steps for the optimization process."
@@ -76,11 +110,13 @@ class EnsOptMDConfigOptimizationConfig(BaseModel, extra="forbid"):
         description="Initial weights for the models. "
         "If None, will be set to uniform distribution.",
     )
-    estimates_pose: bool = Field(
-        default=False,
-        description="Whether to estimate the pose of the particles during optimization. "
-        + "If True, the pose will be estimated using the current weights of the ensemble."
-        + " If False, the pose will be estimated using uniform weights.",
+    pose_search_params: PoseSearchConfig | None = Field(
+        default=None,
+        description="Parameters for the pose search performed during optimization. "
+        + "If None, the poses stored in the starfile are used as-is. Otherwise, "
+        + "the pose of each particle is estimated for every walker at each step "
+        + "with a hierarchical SO(3) grid search. "
+        + "This is a dictionary formatted by the `PoseSearchConfig` class.",
     )
     volume_integrator_backend: VolumeIntegratorBackendConfig = Field(
         default_factory=VolumeIntegratorBackendConfig,
@@ -96,12 +132,13 @@ class EnsOptMDConfigOptimizationConfig(BaseModel, extra="forbid"):
             v = [w / total for w in v]
         return v
 
-    @field_validator("estimates_pose")
+    @field_validator("pose_search_params")
     @classmethod
-    def validate_estimates_pose(cls, v):
-        if v:
+    def validate_pose_search_params(cls, v):
+        if v is not None:
             warnings.warn(
-                "estimates_pose is set to True. This feature is still experimental, "
+                "pose_search_params was provided, so poses will be estimated during "
+                + "optimization. This feature is still experimental, "
                 + "and may slow down the optimization process.",
                 stacklevel=2,
             )

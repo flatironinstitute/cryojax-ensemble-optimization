@@ -27,6 +27,8 @@ from cryojax_eo.io import read_walkers_from_pdbs
 from cryojax_eo.simulator import DilatedMask
 from cryojax_eo.utils import ModelToVolumeAligner
 
+from ._utils import make_pose_search
+
 
 def add_args(parser):
     parser.add_argument(
@@ -225,18 +227,14 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
     ensemble_likelihood_fn = cxeo.ImagesToEnsembleLikelihoodFn(
         img_to_walker_log_likelihood_fn, n_walkers_in_parallel=1, n_images_in_parallel=50
     )
-    if likelihood_optimizer_params["estimates_pose"]:
-        raise NotImplementedError(
-            "Pose estimation inside the MD ensemble"
-            " optimization pipeline is not yet implemented."
-        )
+    pose_search = make_pose_search(likelihood_optimizer_params["pose_search_params"])
 
     likelihood_optimizer = cxeo.IterativeEnsembleLikelihoodOptimizer(
         step_size=likelihood_optimizer_params["step_size"],
         n_steps=likelihood_optimizer_params["n_steps"],
         n_batches_per_step=likelihood_optimizer_params["n_batches_per_step"],
         ensemble_likelihood_fn=ensemble_likelihood_fn,
-        pose_search=None,
+        pose_search=pose_search,
     )
 
     runs_postprocessing = True if initial_walkers.shape[0] > 1 else False

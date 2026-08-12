@@ -12,6 +12,7 @@ from pydantic import (
     field_validator,
 )
 
+from .ensemble_opt_config import PoseSearchConfig as PoseSearchConfig
 from .utils import _validate_file_with_type, _validate_files_with_type
 
 
@@ -111,14 +112,17 @@ class ReweightingConfig(BaseModel, extra="forbid"):
         description="Maximum resolution to use for the volume representation. "
         "If None, no filtering will be applied.",
     )
-    estimates_poses: bool = Field(
-        default=False,
-        description="Whether to estimate the poses of the particles for each model. "
-        "If True, the estimated poses will be saved in a new starfile"
-        "in the output directory. "
+    pose_search_params: PoseSearchConfig | None = Field(
+        default=None,
+        description="Parameters for the pose search. "
+        "If None, the poses stored in the starfile are used as-is. Otherwise, "
+        "the poses of the particles are estimated for each model with a "
+        "hierarchical SO(3) grid search, and saved in a new starfile in the "
+        "output directory. "
         "This will significantly increase the computational cost of the optimization, "
         "but it can also improve the performance of the optimization, "
-        " especially for low-resolution data.",
+        " especially for low-resolution data. "
+        "This is a dictionary formatted by the `PoseSearchConfig` class.",
     )
 
     # @model_validator(mode="after")

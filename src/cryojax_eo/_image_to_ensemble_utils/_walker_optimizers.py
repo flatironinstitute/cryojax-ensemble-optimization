@@ -14,7 +14,7 @@ from jaxtyping import Array, Float
 
 from .._pose_search import HierarchicalSO3GridSearch
 from . import ImagesToEnsembleLikelihoodFn
-from ._utils import _estimate_poses
+from ._utils import estimate_poses
 from ._weights_optimizer import MultGradWeightOptimizer
 from .base_optimizer import AbstractEnsembleParameterOptimizer
 
@@ -116,8 +116,13 @@ def _estimate_poses_per_walker(
     batch: Any,
     ensemble_likelihood_fn: ImagesToEnsembleLikelihoodFn,
     pose_search: HierarchicalSO3GridSearch,
-):
-    return _estimate_poses(
+) -> cxs.QuaternionPose:
+
+    integrator = ensemble_likelihood_fn.image_to_walker_likelihood_fn.integrator
+    if integrator is None:
+        integrator = cxs.AutoVolumeProjection()
+
+    return estimate_poses(
         walkers,
         ensemble_likelihood_fn.image_to_walker_likelihood_fn.amplitudes,
         ensemble_likelihood_fn.image_to_walker_likelihood_fn.variances,
@@ -125,6 +130,7 @@ def _estimate_poses_per_walker(
         batch["particle_stack"]["parameters"]["image_config"],
         batch["particle_stack"]["parameters"]["transfer_theory"],
         pose_search,
+        integrator=integrator,
         n_walkers_in_parallel=ensemble_likelihood_fn.n_walkers_in_parallel,
         n_images_in_parallel=ensemble_likelihood_fn.n_images_in_parallel,
     )

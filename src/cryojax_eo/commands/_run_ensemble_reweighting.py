@@ -26,6 +26,8 @@ import cryojax_eo as cxeo
 from cryojax_eo.internal import ReweightingConfig
 from cryojax_eo.simulator import DilatedMask
 
+from ._utils import make_pose_search
+
 
 RELION_DATASET_IN_AXES = dict(
     images=eqx.if_array(0),
@@ -141,7 +143,7 @@ def compute_likelihoods_for_structural_file(
     data_sign: Literal["dark-on-light", "light-on-dark"],
     n_images_in_parallel: int,
     max_volume_repr_resolution: float | None,
-    estimates_poses: bool,
+    pose_search: cxeo.HierarchicalSO3GridSearch | None,
     path_to_outputdir: str,
 ) -> Float[Array, " n_images"]:
     image_sign = -1.0 if data_sign == "dark-on-light" else 1.0
@@ -187,9 +189,6 @@ def compute_likelihoods_for_structural_file(
         batch_size=n_images_in_parallel,
         shuffle=False,
     )
-    pose_search = cxeo.HierarchicalSO3GridSearch(
-        base_grid_res=1, n_rounds=5, n_candidates=40, n_angles_in_parallel=10
-    )
     image_config = relion_dataset.parameter_file[0]["image_config"]
     mask = cxim.CircularCosineMask(
         image_config.get_coordinate_grid(physical=False),
@@ -197,7 +196,7 @@ def compute_likelihoods_for_structural_file(
         rolloff_width=1.0,
     )
 
-    if estimates_poses:
+    if pose_search is not None:
         max_n_batches = np.ceil(len(relion_dataset) / n_images_in_parallel).astype(int)
         path_to_starfile = os.path.join(
             path_to_outputdir, Path(path_to_structure).stem + "_starfile.star"
@@ -209,7 +208,7 @@ def compute_likelihoods_for_structural_file(
             max_optics_groups=max_n_batches + 10,
         )
     for batch in tqdm(dataloader, desc="batches", leave=False):
-        if estimates_poses:
+        if pose_search is not None:
             poses = estimate_poses(
                 volume=voxel_volume,
                 images=batch["particle_stack"]["images"] * mask.get()[None, ...],
@@ -229,7 +228,7 @@ def compute_likelihoods_for_structural_file(
         )
         likelihoods.append(batch_likelihoods)
 
-    if estimates_poses:
+    if pose_search is not None:
         new_parameter_file.particle_data["rlnImageName"] = (
             relion_dataset.parameter_file.particle_data["rlnImageName"]
         )
@@ -279,11 +278,7 @@ def run_ensemble_reweighting_from_scratch(
     else:
         dilated_mask = None
 
-    # if config["likelihood_optimizer_params"]["estimates_pose"]:
-    #     raise NotImplementedError(
-    #         "Pose estimation inside the MD ensemble"
-    #         " optimization pipeline is not yet implemented."
-    #     )
+    pose_search = make_pose_search(config["pose_search_params"])
 
     # Running the optimization
 
@@ -305,7 +300,7 @@ def run_ensemble_reweighting_from_scratch(
             n_images_in_parallel=config["n_images_in_parallel"],
             data_sign=config["data_params"]["data_sign"],
             max_volume_repr_resolution=config["max_volume_repr_resolution"],
-            estimates_poses=config["estimates_poses"],
+            pose_search=pose_search,
             path_to_outputdir=config["path_to_output_dir"],
         )
         # make the key in the dictionary the filename without the path and extension
