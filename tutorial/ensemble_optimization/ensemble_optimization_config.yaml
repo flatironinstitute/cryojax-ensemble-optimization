@@ -31,8 +31,8 @@ likelihood_optimizer_params:
   - 0.5
   n_steps: 10
   step_size: 0.25
-  estimates_pose: false # poses are taken from the starfile
-  # pose_search_params: ... # only used when estimates_pose is true
+  estimates_poses: false # poses are taken from the starfile
+  # pose_search_params: ... # only used when estimates_poses is true
 
 atom_selection: not element H
 loads_b_factors: true

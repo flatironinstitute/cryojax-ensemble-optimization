@@ -110,7 +110,7 @@ class EnsOptMDConfigOptimizationConfig(BaseModel, extra="forbid"):
         description="Initial weights for the models. "
         "If None, will be set to uniform distribution.",
     )
-    estimates_pose: bool = Field(
+    estimates_poses: bool = Field(
         default=False,
         description="Whether to estimate the pose of the particles during optimization. "
         + "If True, the pose of each particle is estimated for every walker at each "
@@ -121,7 +121,7 @@ class EnsOptMDConfigOptimizationConfig(BaseModel, extra="forbid"):
     pose_search_params: PoseSearchConfig = Field(
         default_factory=PoseSearchConfig,
         description="Parameters for the pose search performed during optimization. "
-        + "Only used when `estimates_pose` is True. Any omitted field falls back "
+        + "Only used when `estimates_poses` is True. Any omitted field falls back "
         + "to the built-in default. "
         + "This is a dictionary formatted by the `PoseSearchConfig` class.",
     )
@@ -141,15 +141,15 @@ class EnsOptMDConfigOptimizationConfig(BaseModel, extra="forbid"):
 
     @model_validator(mode="after")
     def validate_pose_estimation(self):
-        if self.estimates_pose:
+        if self.estimates_poses:
             warnings.warn(
-                "estimates_pose is set to True. This feature is still experimental, "
+                "estimates_poses is set to True. This feature is still experimental, "
                 + "and may slow down the optimization process.",
                 stacklevel=2,
             )
         elif "pose_search_params" in self.model_fields_set:
             warnings.warn(
-                "pose_search_params is ignored when estimates_pose is False.",
+                "pose_search_params is ignored when estimates_poses is False.",
                 stacklevel=2,
             )
         return self

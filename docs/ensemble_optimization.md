@@ -57,8 +57,8 @@ likelihood_optimizer_params:
   n_steps: 10
   step_size: 2.0
   n_batches_per_step: 5 # allows for memory-friendly computation of gradients
-  estimates_pose: true # (*) Default: false. Estimate poses during the optimization instead of using the ones in the starfile
-  pose_search_params: # (*) Settings for that search. Ignored when estimates_pose is false. Every field is optional
+  estimates_poses: true # (*) Default: false. Estimate poses during the optimization instead of using the ones in the starfile
+  pose_search_params: # (*) Settings for that search. Ignored when estimates_poses is false. Every field is optional
     n_rounds: 5 # (*) Number of refinement rounds. 0 searches the base grid only
     initial_resolution: 1 # (*) Resolution of the base (coarsest) SO(3) grid
     n_candidates: 40 # (*) Number of orientations kept at the end of each round
@@ -86,7 +86,7 @@ The `path_to_initial_states` argument is useful for restarting simulations or wa
 
 The optional `md_params` block inside `projector_params` lets you override any of the underlying OpenMM simulation parameters without modifying the code. All fields are optional and fall back to built-in defaults when omitted. The `nonbonded_method` field accepts string aliases: `CutoffNonPeriodic` (default, for implicit/vacuum simulations), `PME` or `Ewald` (for explicit solvent with a periodic box), `CutoffPeriodic` (periodic box with a simple cutoff), `LJPME` (PME for both electrostatics and Lennard-Jones), and `NoCutoff` (no cutoff; very small systems only). Note that periodic methods require a simulation box defined in the PDB. The `constraints` field accepts `HBonds` (default, constrains bonds to hydrogen — compatible with a 2 fs timestep), `AllBonds`, `HAngles` (allows ~4 fs timesteps), or `null` to disable constraints entirely. Numeric fields use explicit unit suffixes: `_nm` for nanometers, `_K` for Kelvin, `_per_ps` for ps⁻¹, and `_ps` for picoseconds. The `platform` and `platform_properties` fields are set separately at the top level of `projector_params`.
 
-Setting `estimates_pose: true` inside `likelihood_optimizer_params` turns on pose estimation during the optimization. When it is `false` (the default), the poses stored in the starfile are used as they are. When it is `true`, the pose of each particle is re-estimated for every walker at each step with a hierarchical SO(3) grid search, which is considerably more expensive. The search itself is configured by the optional `pose_search_params` block, whose fields all have defaults: the cost grows with `n_rounds` and `n_candidates`, while `n_angles_in_parallel` trades memory for speed. Restricting the translational search with `shift_search_range_in_angstroms` is recommended when the particles are already roughly centered. This feature is still experimental.
+Setting `estimates_poses: true` inside `likelihood_optimizer_params` turns on pose estimation during the optimization. When it is `false` (the default), the poses stored in the starfile are used as they are. When it is `true`, the pose of each particle is re-estimated for every walker at each step with a hierarchical SO(3) grid search, which is considerably more expensive. The search itself is configured by the optional `pose_search_params` block, whose fields all have defaults: the cost grows with `n_rounds` and `n_candidates`, while `n_angles_in_parallel` trades memory for speed. Restricting the translational search with `shift_search_range_in_angstroms` is recommended when the particles are already roughly centered. This feature is still experimental.
 
 ## Outputs
 

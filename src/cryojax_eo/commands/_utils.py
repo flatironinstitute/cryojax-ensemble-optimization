@@ -4,13 +4,13 @@ import cryojax_eo as cxeo
 
 
 def make_pose_search(
-    estimates_pose: bool,
+    estimates_poses: bool,
     pose_search_params: dict,
 ) -> cxeo.HierarchicalSO3GridSearch | None:
     """Build the pose search from its config, or `None` if it was not requested.
 
     **Arguments:**
-    - `estimates_pose`:
+    - `estimates_poses`:
         Whether poses should be estimated at all. If False, `pose_search_params`
         is ignored.
     - `pose_search_params`:
@@ -18,9 +18,9 @@ def make_pose_search(
 
     **Returns:**
         The `HierarchicalSO3GridSearch` described by the config, or `None` if
-        `estimates_pose` is False.
+        `estimates_poses` is False.
     """
-    if not estimates_pose:
+    if not estimates_poses:
         return None
 
     return cxeo.HierarchicalSO3GridSearch(
