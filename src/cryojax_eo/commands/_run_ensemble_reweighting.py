@@ -278,7 +278,9 @@ def run_ensemble_reweighting_from_scratch(
     else:
         dilated_mask = None
 
-    pose_search = make_pose_search(config["pose_search_params"])
+    pose_search = make_pose_search(
+        config["estimates_poses"], config["pose_search_params"]
+    )
 
     # Running the optimization
 

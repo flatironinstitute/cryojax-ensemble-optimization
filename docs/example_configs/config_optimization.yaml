@@ -44,7 +44,8 @@ likelihood_optimizer_params:
   n_steps: 10
   step_size: 2.0
   n_batches_per_step: 5 # (*) Number of batches to use for each optimization step. Using more batches will provide a better estimate of the gradients, but will also increase the computational cost. Each batch has a size defined by batch_size. This allows to save memory and use small values of batch_size.
-  pose_search_params: # (*) Estimate the pose of each particle for every walker with a hierarchical SO(3) grid search. Omit it (or set it to null) to use the poses stored in the starfile. Experimental, and significantly more expensive.
+  estimates_pose: true # (*) Default: false. Estimate the pose of each particle for every walker with a hierarchical SO(3) grid search, instead of using the poses stored in the starfile. Experimental, and significantly more expensive.
+  pose_search_params: # (*) Settings for that search. Ignored when estimates_pose is false. Every field is optional
     n_rounds: 5 # (*) Number of refinement rounds. 0 searches the base grid only
     initial_resolution: 1 # (*) Resolution of the base (coarsest) SO(3) grid
     n_candidates: 40 # (*) Number of orientations kept at the end of each round

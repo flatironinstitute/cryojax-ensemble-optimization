@@ -110,12 +110,19 @@ class EnsOptMDConfigOptimizationConfig(BaseModel, extra="forbid"):
         description="Initial weights for the models. "
         "If None, will be set to uniform distribution.",
     )
-    pose_search_params: PoseSearchConfig | None = Field(
-        default=None,
+    estimates_pose: bool = Field(
+        default=False,
+        description="Whether to estimate the pose of the particles during optimization. "
+        + "If True, the pose of each particle is estimated for every walker at each "
+        + "step with a hierarchical SO(3) grid search, configured by "
+        + "`pose_search_params`. If False, the poses stored in the starfile are "
+        + "used as-is and `pose_search_params` is ignored.",
+    )
+    pose_search_params: PoseSearchConfig = Field(
+        default_factory=PoseSearchConfig,
         description="Parameters for the pose search performed during optimization. "
-        + "If None, the poses stored in the starfile are used as-is. Otherwise, "
-        + "the pose of each particle is estimated for every walker at each step "
-        + "with a hierarchical SO(3) grid search. "
+        + "Only used when `estimates_pose` is True. Any omitted field falls back "
+        + "to the built-in default. "
         + "This is a dictionary formatted by the `PoseSearchConfig` class.",
     )
     volume_integrator_backend: VolumeIntegratorBackendConfig = Field(
@@ -132,17 +139,20 @@ class EnsOptMDConfigOptimizationConfig(BaseModel, extra="forbid"):
             v = [w / total for w in v]
         return v
 
-    @field_validator("pose_search_params")
-    @classmethod
-    def validate_pose_search_params(cls, v):
-        if v is not None:
+    @model_validator(mode="after")
+    def validate_pose_estimation(self):
+        if self.estimates_pose:
             warnings.warn(
-                "pose_search_params was provided, so poses will be estimated during "
-                + "optimization. This feature is still experimental, "
+                "estimates_pose is set to True. This feature is still experimental, "
                 + "and may slow down the optimization process.",
                 stacklevel=2,
             )
-        return v
+        elif "pose_search_params" in self.model_fields_set:
+            warnings.warn(
+                "pose_search_params is ignored when estimates_pose is False.",
+                stacklevel=2,
+            )
+        return self
 
 
 class MDParamsConfig(BaseModel, extra="forbid"):

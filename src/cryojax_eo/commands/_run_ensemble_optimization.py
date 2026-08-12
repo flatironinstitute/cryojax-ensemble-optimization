@@ -227,7 +227,10 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
     ensemble_likelihood_fn = cxeo.ImagesToEnsembleLikelihoodFn(
         img_to_walker_log_likelihood_fn, n_walkers_in_parallel=1, n_images_in_parallel=50
     )
-    pose_search = make_pose_search(likelihood_optimizer_params["pose_search_params"])
+    pose_search = make_pose_search(
+        likelihood_optimizer_params["estimates_pose"],
+        likelihood_optimizer_params["pose_search_params"],
+    )
 
     likelihood_optimizer = cxeo.IterativeEnsembleLikelihoodOptimizer(
         step_size=likelihood_optimizer_params["step_size"],
