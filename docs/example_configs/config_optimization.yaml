@@ -51,6 +51,11 @@ likelihood_optimizer_params:
     n_candidates: 40 # (*) Number of orientations kept at the end of each round
     n_angles_in_parallel: 10 # (*) Orientations evaluated in parallel (vmapped). Larger is faster but uses more memory
     shift_search_range_in_angstroms: 20.0 # (*) Half-width of the searched shift range, in angstroms. Omit to search all shifts
+  volume_integrator_backend: # (*) How walker volumes are projected into images when computing likelihoods and gradients. Every field is optional
+    spread_mode: local # (*) Default: local. 'local' spreads each gaussian onto its nearby grid points only; 'exact' evaluates dense gaussian integrals over the whole grid
+    spread_width_in_stds: 6.0 # (*) Default: 6.0. Truncation width of the spreading, in standard deviations of the gaussian. Ignored when spread_mode is 'exact'
+    sampling_mode: average # (*) Default: average. 'average' integrates the gaussian over each pixel (error functions); 'point' evaluates it at the pixel center
+    enable_pallas: false # (*) Default: false. Use the Pallas/Triton GPU kernels instead of pure JAX. Requires a CUDA GPU, and only applies when spread_mode is 'local'
 
 atom_selection: ... # path to a txt/npy file, or a mdtraj-compatible selection string, e.g., "not element H"
 loads_b_factors: true # Load Debye-Waller b-factors from provided PDBs
