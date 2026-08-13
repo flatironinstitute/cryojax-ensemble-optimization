@@ -6,14 +6,16 @@ from jaxtyping import Array, Float
 from .._pose_search import HierarchicalSO3GridSearch
 
 
-def _estimate_poses(
+@eqx.filter_jit
+def estimate_poses(
     walkers: Float[Array, "n_walkers n_atoms 3"],
-    variances: Float[Array, "n_atoms n_gaussians"],
     amplitudes: Float[Array, "n_atoms n_gaussians"],
+    variances: Float[Array, "n_atoms n_gaussians"],
     images: Float[Array, "n_images y x"],
     image_config: cxs.BasicImageConfig,
     transfer_theories: cxs.ContrastTransferTheory,
     pose_search: HierarchicalSO3GridSearch,
+    integrator: cxs.AbstractVolumeIntegrator,
     n_walkers_in_parallel: int,
     n_images_in_parallel: int,
 ) -> cxs.QuaternionPose:
@@ -23,10 +25,10 @@ def _estimate_poses(
     **Arguments:**
     - walkers:
         The current positions of the walkers as Gaussian mixture volumes.
-    - variances:
-        The variances of the Gaussian mixtures.
     - amplitudes:
         The amplitudes of the Gaussian mixtures.
+    - variances:
+        The variances of the Gaussian mixtures.
     - images:
         The images to estimate the poses for.
     - image_config:
@@ -48,6 +50,7 @@ def _estimate_poses(
             image_config,
             transfer_theories,
             pose_search,
+            integrator,
             n_images_in_parallel,
         ),
         xs=walkers,
@@ -55,7 +58,7 @@ def _estimate_poses(
     )
 
 
-@eqx.filter_vmap(in_axes=(0, None, None, None, None, None, None, None))
+@eqx.filter_vmap(in_axes=(0, None, None, None, None, None, None, None, None))
 def _estimate_poses_for_walker(
     walker: Float[Array, "n_atoms 3"],
     amplitudes: Float[Array, "n_atoms n_gaussians"],
@@ -64,16 +67,32 @@ def _estimate_poses_for_walker(
     image_config: cxs.BasicImageConfig,
     transfer_theories: cxs.ContrastTransferTheory,
     pose_search: HierarchicalSO3GridSearch,
+    integrator: cxs.AbstractVolumeIntegrator,
     n_images_in_parallel: int,
 ) -> cxs.QuaternionPose:
     volume = cxs.GaussianMixtureVolume(walker, amplitudes, variances)
-    pose_search_vmap = eqx.filter_vmap(
-        lambda img, ic, tf: pose_search(volume, img, ic, tf),
-        in_axes=(0, eqx.if_array(0), 0),
-    )
 
     return filter_bmap(
-        pose_search_vmap,
-        xs=(images, image_config, transfer_theories),
+        lambda x: _estimate_poses_for_single_image(
+            volume,
+            x[0],
+            image_config,
+            x[1],
+            pose_search,
+            integrator,
+        ),
+        xs=(images, transfer_theories),
         batch_size=n_images_in_parallel,
     )
+
+
+@eqx.filter_vmap(in_axes=(None, 0, None, 0, None, None))
+def _estimate_poses_for_single_image(
+    volume: cxs.GaussianMixtureVolume,
+    image: Float[Array, "y x"],
+    image_config: cxs.BasicImageConfig,
+    transfer_theory: cxs.ContrastTransferTheory,
+    pose_search: HierarchicalSO3GridSearch,
+    integrator: cxs.AbstractVolumeIntegrator,
+) -> cxs.QuaternionPose:
+    return pose_search(volume, image, image_config, transfer_theory, integrator)

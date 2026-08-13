@@ -9,6 +9,8 @@ from jax_dataloader import DataLoader
 from jaxtyping import Array, Float
 from tqdm import tqdm
 
+from ..._pose_search import HierarchicalSO3GridSearch
+from .._utils import estimate_poses
 from .single_likelihood import AbstractImageToWalkerLogLikelihoodFn
 
 
@@ -83,8 +85,15 @@ class ImagesToEnsembleLikelihoodFn(AbstractImagesToEnsembleLikelihoodFn):
         walkers: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
         dataloader: DataLoader,
         *,
+        pose_search: HierarchicalSO3GridSearch | None = None,
         prints_progress=False,
     ) -> Float[Array, "n_images n_walkers"]:
+        """Compute the log-likelihood of every image under every walker.
+
+        If `pose_search` is `None`, the poses in the dataloader are used for
+        every walker. Otherwise, the pose of each image is re-estimated for
+        each walker with the given search.
+        """
         compute_likelihood_matrix_fn = eqx.filter_jit(self.compute_log_likelihood_matrix)
 
         shuffle = dataloader.dataloader.shuffle  # save the original shuffle state
@@ -98,11 +107,25 @@ class ImagesToEnsembleLikelihoodFn(AbstractImagesToEnsembleLikelihoodFn):
             else tqdm(dataloader, desc="Computing full likelihood matrix", unit=" batch")
         )
         for batch in iterable:
-            poses_per_walker = jax.tree.map(
-                lambda x: jnp.repeat(x[None, :], repeats=walkers.shape[0], axis=0),
-                batch["particle_stack"]["parameters"]["pose"],
-            )
-            poses_per_walker = cast(cxs.EulerAnglePose, poses_per_walker)
+            if pose_search is None:
+                poses_per_walker = jax.tree.map(
+                    lambda x: jnp.repeat(x[None, :], repeats=walkers.shape[0], axis=0),
+                    batch["particle_stack"]["parameters"]["pose"],
+                )
+                poses_per_walker = cast(cxs.EulerAnglePose, poses_per_walker)
+            else:
+                poses_per_walker = estimate_poses(
+                    walkers,
+                    self.image_to_walker_likelihood_fn.amplitudes,
+                    self.image_to_walker_likelihood_fn.variances,
+                    batch["particle_stack"]["images"],
+                    batch["particle_stack"]["parameters"]["image_config"],
+                    batch["particle_stack"]["parameters"]["transfer_theory"],
+                    pose_search,
+                    self.image_to_walker_likelihood_fn.integrator,
+                    n_walkers_in_parallel=self.n_walkers_in_parallel,
+                    n_images_in_parallel=self.n_images_in_parallel,
+                )
 
             lklhood_matrix = compute_likelihood_matrix_fn(
                 walkers,

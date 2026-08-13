@@ -54,9 +54,7 @@ class ModelToVolumeCorrelationLossFn(AbstractModelToVolumeLossFn):
         self.render_fn = cxs.GaussianMixtureRenderFn(
             shape=volume_shape,
             voxel_size=voxel_size,
-            batch_options=dict(
-                batch_size=batch_size_for_z_planes, n_batches=n_batches_of_atoms
-            ),
+            n_batches=n_batches_of_atoms,
         )
 
     def __call__(

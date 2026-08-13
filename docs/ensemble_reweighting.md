@@ -47,9 +47,19 @@ max_iter: 500
 # Convergence tolerance for the multiplicative gradient weight optimization
 tol: 1e-4
 
-# ab initio version, ignores starfile poses
+# ab initio version, ignores starfile poses and estimates them
+# with a hierarchical SO(3) grid search
 # default is false
 estimates_poses: true
+
+# (*) Settings for that search. Ignored when estimates_poses is false.
+# Every field is optional
+pose_search_params:
+  n_rounds: 5 # (*) Number of refinement rounds. 0 searches the base grid only
+  initial_resolution: 1 # (*) Resolution of the base (coarsest) SO(3) grid
+  n_candidates: 40 # (*) Number of orientations kept at the end of each round
+  n_angles_in_parallel: 10 # (*) Orientations evaluated in parallel (vmapped)
+  shift_search_range_in_angstroms: 40.0 # (*) Half-width of the searched shift range. Omit to search all shifts
 
 # A collection of structural files
 # can be any combination of pdb, cif, mrc files

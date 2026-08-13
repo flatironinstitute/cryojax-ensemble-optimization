@@ -15,18 +15,7 @@ from cryojax.io import read_array_from_mrc
 from cryojax.ndimage import fourier_crop_to_shape
 from jaxtyping import Array, Float, Int
 
-from cryojax_eo.ensemble_optimization import (
-    SteeredMDSimulator,
-    md_params_config_to_openmm_overrides,
-)
-from cryojax_eo.flexible_fitting import (
-    AbstractModelToVolumeLossFn,
-    AdamWalkerFlexibleFitting,
-    FlexibleFittingPipeline,
-    ModelToVolumeCorrelationLossFn,
-    ModelToVolumeWeightedMSELossFn,
-    SteepestDescWalkerFlexibleFitting,
-)
+import cryojax_eo as cxeo
 from cryojax_eo.internal import FlexibleFittingConfig
 from cryojax_eo.io import read_walkers_from_pdbs
 from cryojax_eo.utils import EarlyStopping, ModelToVolumeAligner
@@ -85,13 +74,13 @@ def _construct_model_to_volume_loss_fn(
     if config["reference_volume_params"].get("path_to_weights") is not None:
         path_to_weights = config["reference_volume_params"]["path_to_weights"]
         loss_kwargs["weights"] = jnp.asarray(read_array_from_mrc(path_to_weights))
-        return ModelToVolumeWeightedMSELossFn(**loss_kwargs)
+        return cxeo.ModelToVolumeWeightedMSELossFn(**loss_kwargs)
     else:
-        return ModelToVolumeCorrelationLossFn(**loss_kwargs)
+        return cxeo.ModelToVolumeCorrelationLossFn(**loss_kwargs)
 
 
 def _construct_walker_optimizer(
-    config: dict, model_to_vol_loss_fn: AbstractModelToVolumeLossFn
+    config: dict, model_to_vol_loss_fn: cxeo.AbstractModelToVolumeLossFn
 ):
     optimizer_kwargs = dict(
         n_steps=config["walker_optimizer_params"]["n_steps"],
@@ -99,9 +88,9 @@ def _construct_walker_optimizer(
         model_to_vol_loss_fn=model_to_vol_loss_fn,
     )
     if config["walker_optimizer_params"]["type"] == "steepest_desc":
-        return SteepestDescWalkerFlexibleFitting(**optimizer_kwargs)
+        return cxeo.SteepestDescWalkerFlexibleFitting(**optimizer_kwargs)
     elif config["walker_optimizer_params"]["type"] == "adam":
-        return AdamWalkerFlexibleFitting(**optimizer_kwargs)
+        return cxeo.AdamWalkerFlexibleFitting(**optimizer_kwargs)
     else:
         raise ValueError(
             f"Invalid walker optimizer type: {config['walker_optimizer_params']['type']}"
@@ -172,18 +161,21 @@ def run_flexible_fitting(flexible_fitting_config: FlexibleFittingConfig):
     logging.debug("Reference volume loaded.")
 
     # Construct prior projector
-    parameters_for_md = md_params_config_to_openmm_overrides(
+    parameters_for_md = cxeo.md_params_config_to_openmm_overrides(
         config["projector_params"]["md_params"]
     )
     parameters_for_md["platform"] = config["projector_params"]["platform"]
     parameters_for_md["properties"] = config["projector_params"]["platform_properties"]
 
-    prior_projector = SteeredMDSimulator(
+    prior_projector = cxeo.SteeredMDSimulator(
         path_to_initial_pdb=config["path_to_atomic_model"],
         n_steps=config["projector_params"]["n_steps"],
         restrain_atom_list=atom_list.tolist(),
         parameters_for_md=parameters_for_md,
         base_state_file_path=os.path.join(config["path_to_output"], "states_proj/state_"),
+        # A seed of 0 keeps OpenMM's default behavior of drawing a fresh seed
+        # each run (non-reproducible).
+        random_seed=config["rng_seed"] if config["rng_seed"] != 0 else None,
     )
 
     # Construct likelihood optimizer
@@ -212,7 +204,7 @@ def run_flexible_fitting(flexible_fitting_config: FlexibleFittingConfig):
     )
 
     # Construct the ensemble optimization pipeline
-    flexible_fitting_pipeline = FlexibleFittingPipeline(
+    flexible_fitting_pipeline = cxeo.FlexibleFittingPipeline(
         prior_projector=prior_projector,
         walker_optimizer=walker_optimizer,
         n_steps=config["n_steps"],

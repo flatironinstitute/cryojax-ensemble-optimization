@@ -7,6 +7,8 @@ run_md_openmm
     Run MD simulations using OpenMM
 """
 
+from __future__ import annotations
+
 import os
 import pathlib
 import shutil
@@ -22,7 +24,7 @@ import mdtraj
 import numpy as np
 from jaxtyping import Array, Float, Int
 
-from ..base_prior_projector import AbstractEnsemblePriorProjector, AbstractPriorProjector
+from .base_prior_projector import AbstractEnsemblePriorProjector, AbstractPriorProjector
 
 
 if TYPE_CHECKING:
@@ -127,7 +129,7 @@ def _get_default_md_params() -> dict:
 
 class SteeredMDSimulator(AbstractPriorProjector, strict=True):
     n_steps: Int
-    simulation: "openmm_app.Simulation"
+    simulation: openmm_app.Simulation
     restrain_atom_list: list[Int]
     base_state_file_path: str
 
@@ -140,6 +142,7 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
         base_state_file_path: str,
         *,
         make_simulation_fn: Callable | None = None,
+        random_seed: int | None = None,
     ):
         _assert_has_openmm()
         pdb = openmm_app.PDBFile(str(path_to_initial_pdb))
@@ -150,7 +153,9 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
         self.n_steps = n_steps
         if make_simulation_fn is None:
             parameters_for_md = _validate_and_set_params_for_md(parameters_for_md)
-            self.simulation = _default_make_sim_fn(parameters_for_md, pdb.topology)
+            self.simulation = _default_make_sim_fn(
+                parameters_for_md, pdb.topology, random_seed=random_seed
+            )
 
         else:
             self.simulation = make_simulation_fn(parameters_for_md, pdb.topology)
@@ -275,7 +280,7 @@ def compute_biasing_constant(
     stride: Int = 1,
     atom_selection: str = "not element H",
     *,
-    make_simulation_fn: "_MakeSimulationFn | None" = None,
+    make_simulation_fn: _MakeSimulationFn | None = None,
     parameters_for_md: dict = {},
 ):
     _assert_has_openmm()
@@ -427,11 +432,11 @@ def _assert_is_valid_state_file(
 
 
 def _add_restraint_force_to_simulation(
-    simulation: "openmm_app.Simulation",
-    positions: "openmm_unit.Quantity",
+    simulation: openmm_app.Simulation,
+    positions: openmm_unit.Quantity,
     restrain_atom_list: list[int],
     bias_constant_in_kj_per_mol_angs: float,
-) -> "openmm_app.Simulation":
+) -> openmm_app.Simulation:
     RMSD_value = openmm.RMSDForce(
         positions,
         restrain_atom_list,
@@ -446,16 +451,18 @@ def _add_restraint_force_to_simulation(
 
 
 def _remove_last_force_from_simulation(
-    simulation: "openmm_app.Simulation",
-) -> "openmm_app.Simulation":
+    simulation: openmm_app.Simulation,
+) -> openmm_app.Simulation:
     n_forces = len(simulation.system.getForces())
     simulation.system.removeForce(n_forces - 1)
     return simulation
 
 
-def _default_make_sim_fn(parameters_for_md: dict, topology) -> "openmm_app.Simulation":
+def _default_make_sim_fn(
+    parameters_for_md: dict, topology, *, random_seed: int | None = None
+) -> openmm_app.Simulation:
     forcefield = _create_forcefield(parameters_for_md)
-    integrator = _create_integrator(parameters_for_md)
+    integrator = _create_integrator(parameters_for_md, random_seed=random_seed)
     platform = _create_platform(parameters_for_md)
     system = _create_system(parameters_for_md, forcefield, topology)
 
@@ -470,25 +477,34 @@ def _default_make_sim_fn(parameters_for_md: dict, topology) -> "openmm_app.Simul
     return simulation
 
 
-def _create_forcefield(parameters_for_md: dict) -> "openmm_app.ForceField":
+def _create_forcefield(parameters_for_md: dict) -> openmm_app.ForceField:
     return openmm_app.ForceField(
         parameters_for_md["forcefield"], parameters_for_md["water_model"]
     )
 
 
-def _create_integrator(parameters_for_md: dict) -> "openmm.Integrator":
-    return openmm.LangevinIntegrator(
+def _create_integrator(
+    parameters_for_md: dict, *, random_seed: int | None = None
+) -> openmm.Integrator:
+    integrator = openmm.LangevinIntegrator(
         parameters_for_md["temperature"],
         parameters_for_md["friction"],
         parameters_for_md["timestep"],
     )
+    if random_seed is not None:
+        # Fix the Langevin thermostat's random stream for reproducibility.
+        # The seed must be set before the Context is created (i.e. here, before
+        # the Simulation is built) so it is baked in from the first step.
+        # A seed of 0 (OpenMM's default) means OpenMM picks a fresh seed per run.
+        integrator.setRandomNumberSeed(int(random_seed))
+    return integrator
 
 
 def _create_system(
     parameters_for_md: dict,
-    forcefield: "openmm_app.ForceField",
-    topology: "openmm_app.Topology",
-) -> "openmm.System":
+    forcefield: openmm_app.ForceField,
+    topology: openmm_app.Topology,
+) -> openmm.System:
     system = forcefield.createSystem(
         topology,
         nonbondedMethod=parameters_for_md["nonbondedMethod"],
@@ -499,7 +515,7 @@ def _create_system(
     return system
 
 
-def _create_platform(parameters_for_md: dict) -> "openmm.Platform":
+def _create_platform(parameters_for_md: dict) -> openmm.Platform:
     return openmm.Platform.getPlatformByName(parameters_for_md["platform"])
 
 

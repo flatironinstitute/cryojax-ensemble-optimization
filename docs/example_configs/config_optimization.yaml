@@ -44,6 +44,18 @@ likelihood_optimizer_params:
   n_steps: 10
   step_size: 2.0
   n_batches_per_step: 5 # (*) Number of batches to use for each optimization step. Using more batches will provide a better estimate of the gradients, but will also increase the computational cost. Each batch has a size defined by batch_size. This allows to save memory and use small values of batch_size.
+  estimates_poses: true # (*) Default: false. Estimate the pose of each particle for every walker with a hierarchical SO(3) grid search, instead of using the poses stored in the starfile. Experimental, and significantly more expensive.
+  pose_search_params: # (*) Settings for that search. Ignored when estimates_poses is false. Every field is optional
+    n_rounds: 5 # (*) Number of refinement rounds. 0 searches the base grid only
+    initial_resolution: 1 # (*) Resolution of the base (coarsest) SO(3) grid
+    n_candidates: 40 # (*) Number of orientations kept at the end of each round
+    n_angles_in_parallel: 10 # (*) Orientations evaluated in parallel (vmapped). Larger is faster but uses more memory
+    shift_search_range_in_angstroms: 20.0 # (*) Half-width of the searched shift range, in angstroms. Omit to search all shifts
+  volume_integrator_backend: # (*) How walker volumes are projected into images when computing likelihoods and gradients. Every field is optional
+    spread_mode: local # (*) Default: local. 'local' spreads each gaussian onto its nearby grid points only; 'exact' evaluates dense gaussian integrals over the whole grid
+    spread_width_in_stds: 6.0 # (*) Default: 6.0. Truncation width of the spreading, in standard deviations of the gaussian. Ignored when spread_mode is 'exact'
+    sampling_mode: average # (*) Default: average. 'average' integrates the gaussian over each pixel (error functions); 'point' evaluates it at the pixel center
+    enable_pallas: false # (*) Default: false. Use the Pallas/Triton GPU kernels instead of pure JAX. Requires a CUDA GPU, and only applies when spread_mode is 'local'
 
 atom_selection: ... # path to a txt/npy file, or a mdtraj-compatible selection string, e.g., "not element H"
 loads_b_factors: true # Load Debye-Waller b-factors from provided PDBs

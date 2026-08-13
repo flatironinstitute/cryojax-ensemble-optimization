@@ -5,7 +5,7 @@ import mdtraj
 import numpy as np
 import pytest
 
-from cryojax_eo.ensemble_optimization import (
+from cryojax_eo import (
     EnsembleSteeredMDSimulator,
     SteeredMDSimulator,
 )
