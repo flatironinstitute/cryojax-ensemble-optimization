@@ -61,6 +61,34 @@ def _make_atom_list(atom_selection, topology) -> np.ndarray:
     return np.array(atom_list)
 
 
+def _shift_structure_to_box_frame(
+    structure: mdtraj.Trajectory, image_config: cxs.BasicImageConfig
+) -> mdtraj.Trajectory:
+    """Move a structure from map coordinates into cryojax's box-centered frame.
+
+    A structure aligned to a map in ChimeraX carries that map's coordinates, which
+    place the box corner at the origin, so the coordinates come out large and
+    positive. cryojax instead centers the box on the origin, spanning `[-L/2, L/2)`
+    where `L = box_size * pixel_size`. Subtracting the center of the box, `L / 2`,
+    moves the structure into that frame while preserving its displacement from the
+    box center: it stays off-center by exactly as much as it was in the map.
+    Centering on the center of mass would instead discard that offset.
+
+    This assumes the map the structure was aligned to places its first voxel at the
+    coordinate origin (`origin` and `n*start` both zero in the MRC header, as
+    written by cryoSPARC and RELION) and shares the box geometry of `image_config`.
+    For a map with a non-zero origin, the shift is instead
+    `origin + (n*start + shape / 2) * voxel_size`, read from its header.
+
+    `mdtraj` stores coordinates in nanometers while cryojax works in angstroms,
+    hence the conversion.
+    """
+    box_length_in_angstroms = image_config.shape[0] * image_config.pixel_size
+    shift_in_nanometers = (box_length_in_angstroms / 2) / 10.0
+    structure.xyz = structure.xyz - shift_in_nanometers
+    return structure
+
+
 def _make_volume_integrator(
     gmm_volume: cxs.GaussianMixtureVolume,
     shape: tuple[int, int],
@@ -104,7 +132,9 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
     )
 
     ref_structure = mdtraj.load(str(alignment_params["path_to_prealigned_atomic_model"]))
-    ref_structure = ref_structure.center_coordinates(mass_weighted=True)
+    # NOTE: the reference structure is deliberately not centered on its center of
+    # mass. It is shifted into the box-centered frame below, once the image config
+    # is available, so that its offset from the center of the box is preserved.
 
     atom_list = _make_atom_list(
         ensemble_opt_config.atom_selection, ref_structure.topology
@@ -124,6 +154,10 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
             ),
         ),
         path_to_relion_project=data_params["path_to_relion_project"],
+    )
+
+    ref_structure = _shift_structure_to_box_frame(
+        ref_structure, relion_dataset.parameter_file[0]["image_config"]
     )
 
     key = jax.random.PRNGKey(ensemble_opt_config.rng_seed)

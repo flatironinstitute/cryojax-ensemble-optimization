@@ -72,6 +72,29 @@ def warnexists(out):
     return
 
 
+def _shift_positions_to_box_frame(
+    gmm_volume: cxs.GaussianMixtureVolume, image_config: cxs.BasicImageConfig
+) -> cxs.GaussianMixtureVolume:
+    """Move a structure from map coordinates into cryojax's box-centered frame.
+
+    A structure aligned to a map in ChimeraX carries that map's coordinates, which
+    place the box corner at the origin, so the coordinates come out large and
+    positive. cryojax instead centers the box on the origin, spanning `[-L/2, L/2)`
+    where `L = box_size * pixel_size`. Subtracting the center of the box, `L / 2`,
+    moves the structure into that frame while preserving its displacement from the
+    box center: it stays off-center by exactly as much as it was in the map.
+
+    This assumes the map the structure was aligned to places its first voxel at the
+    coordinate origin (`origin` and `n*start` both zero in the MRC header, as
+    written by cryoSPARC and RELION) and shares the box geometry of `image_config`.
+    For a map with a non-zero origin, the shift is instead
+    `origin + (n*start + shape / 2) * voxel_size`, read from its header.
+    """
+    box_length = image_config.shape[0] * image_config.pixel_size
+    positions = gmm_volume.positions - box_length / 2
+    return eqx.tree_at(lambda v: v.positions, gmm_volume, positions)
+
+
 @eqx.filter_jit
 def _gmm_volume_to_voxel_grid(
     gmm_volume: cxs.GaussianMixtureVolume, image_config: cxs.BasicImageConfig
@@ -108,7 +131,13 @@ def _estimate_pose(
     transfer_theory: cxs.ContrastTransferTheory,
     pose_search: cxeo.HierarchicalSO3GridSearch,
 ) -> cxs.QuaternionPose:
-    return pose_search(volume, image, image_config, transfer_theory)
+    return pose_search(
+        volume,
+        image,
+        image_config,
+        transfer_theory,
+        integrator=cxs.AutoVolumeProjection(),
+    )
 
 
 @eqx.filter_jit
@@ -155,9 +184,21 @@ def compute_likelihoods_for_structural_file(
             tabulation="peng",
             include_b_factors=True,
             selection_string=selection_string,
-            # pdb_options=dict(center=False),
+            pdb_options=dict(center=False),
         )
+        gmm_volume = _shift_positions_to_box_frame(gmm_volume, image_config)
         voxel_grid = _gmm_volume_to_voxel_grid(gmm_volume, image_config)
+
+        from cryojax.io import write_volume_to_mrc
+
+        write_volume_to_mrc(
+            voxel_grid,
+            image_config.pixel_size,
+            os.path.join(
+                path_to_outputdir, Path(path_to_structure).stem + "_voxel_grid.mrc"
+            ),
+            overwrite=True,
+        )
 
     elif Path(path_to_structure).suffix in [".mrc"]:
         voxel_grid = read_array_from_mrc(path_to_structure, loads_grid_spacing=False)

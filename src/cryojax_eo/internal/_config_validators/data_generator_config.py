@@ -24,7 +24,9 @@ class DatasetSimulatorConfigAtomicModels(BaseModel, extra="forbid"):
 
     path_to_atomic_models: str | list[FilePath] = Field(
         description="Path to the atomic models directory. "
-        + "If a pattern is provided, all files matching the pattern will be used."
+        + "If a pattern is provided, all files matching the pattern will be used. "
+        + "Files may be atomic models (`.pdb`, `.npz`) or real-space voxel grids "
+        + "(`.mrc`)."
     )
 
     atomic_models_probabilities: PositiveFloat | list[PositiveFloat] = Field(
@@ -54,7 +56,7 @@ class DatasetSimulatorConfigAtomicModels(BaseModel, extra="forbid"):
 
     @field_serializer("path_to_atomic_models")
     def serialize_path_to_atomic_models(self, v):
-        return _validate_files_with_type(v, file_types=[".pdb", ".npz"])
+        return _validate_files_with_type(v, file_types=[".pdb", ".npz", ".mrc"])
 
 
 class DatasetSimulatorConfigRotations(BaseModel, extra="forbid"):
