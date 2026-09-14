@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from cryospax import RelionParticleDataset, RelionParticleParameterFile
 
-from cryojax_eo.ensemble_optimization import (
+from cryojax_eo import (
     GaussianWhiteLogLikelihoodFn,
     MargGaussianWhiteLogLikelihoodFn,  # done
     compute_optimal_scale_and_offset,  # done

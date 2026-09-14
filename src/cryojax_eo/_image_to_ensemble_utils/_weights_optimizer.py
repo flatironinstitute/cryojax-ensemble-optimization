@@ -3,7 +3,6 @@ Weight and position optimizers for ensemble refinement.
 """
 
 import logging
-from typing_extensions import override
 
 import equinox as eqx
 import jax.numpy as jnp
@@ -33,7 +32,6 @@ class MultGradWeightOptimizer(eqx.Module):
         self.ensemble_likelihood_fn = ensemble_likelihood_fn  # type: ignore
         self.pose_search = pose_search
 
-    @override
     def __call__(
         self,
         walkers: Float[Array, "n_walkers n_atoms 3"],
@@ -42,6 +40,10 @@ class MultGradWeightOptimizer(eqx.Module):
         """
         Optimize the weights of the walkers using projected gradient descent
         using all images.
+
+        If `pose_search` is not `None`, the pose of each image is re-estimated
+        for each walker before computing the likelihoods, instead of using the
+        poses stored in the dataloader.
 
         **Arguments:**
             walkers: The current positions of the walkers.
@@ -59,7 +61,10 @@ class MultGradWeightOptimizer(eqx.Module):
         """
         likelihood_matrix = (
             self.ensemble_likelihood_fn.compute_full_log_likelihood_matrix(
-                walkers, dataloader, prints_progress=True
+                walkers,
+                dataloader,
+                pose_search=self.pose_search,
+                prints_progress=True,
             )
         )
         return self.optimize_with_precomputed_likelihood_matrix(

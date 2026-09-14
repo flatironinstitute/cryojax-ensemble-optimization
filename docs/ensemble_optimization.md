@@ -57,6 +57,18 @@ likelihood_optimizer_params:
   n_steps: 10
   step_size: 2.0
   n_batches_per_step: 5 # allows for memory-friendly computation of gradients
+  estimates_poses: true # (*) Default: false. Estimate poses during the optimization instead of using the ones in the starfile
+  pose_search_params: # (*) Settings for that search. Ignored when estimates_poses is false. Every field is optional
+    n_rounds: 5 # (*) Number of refinement rounds. 0 searches the base grid only
+    initial_resolution: 1 # (*) Resolution of the base (coarsest) SO(3) grid
+    n_candidates: 40 # (*) Number of orientations kept at the end of each round
+    n_angles_in_parallel: 10 # (*) Orientations evaluated in parallel (vmapped)
+    shift_search_range_in_angstroms: 20.0 # (*) Half-width of the searched shift range. Omit to search all shifts
+  volume_integrator_backend: # (*) How walker volumes are projected into images. Every field is optional
+    spread_mode: local # (*) Default: local. Options: local, exact
+    spread_width_in_stds: 6.0 # (*) Default: 6.0. Ignored when spread_mode is 'exact'
+    sampling_mode: average # (*) Default: average. Options: average, point
+    enable_pallas: false # (*) Default: false. Pallas/Triton GPU kernels. Requires a CUDA GPU and spread_mode: local
 
 atom_selection: ... # path to a txt/npy file, or a mdtraj-compatible selection string, e.g., "not element H"
 loads_b_factors: true # Load Debye-Waller b-factors from provided PDBs
@@ -78,6 +90,19 @@ Alignment is crucial. If the structure is not aligned to the frame of reference 
 The `path_to_initial_states` argument is useful for restarting simulations or warm-starting from a previously equilibrated MD state. We recommend providing a unique state file for each walker to avoid numerical issues that arise when walkers are indistinguishable.
 
 The optional `md_params` block inside `projector_params` lets you override any of the underlying OpenMM simulation parameters without modifying the code. All fields are optional and fall back to built-in defaults when omitted. The `nonbonded_method` field accepts string aliases: `CutoffNonPeriodic` (default, for implicit/vacuum simulations), `PME` or `Ewald` (for explicit solvent with a periodic box), `CutoffPeriodic` (periodic box with a simple cutoff), `LJPME` (PME for both electrostatics and Lennard-Jones), and `NoCutoff` (no cutoff; very small systems only). Note that periodic methods require a simulation box defined in the PDB. The `constraints` field accepts `HBonds` (default, constrains bonds to hydrogen — compatible with a 2 fs timestep), `AllBonds`, `HAngles` (allows ~4 fs timesteps), or `null` to disable constraints entirely. Numeric fields use explicit unit suffixes: `_nm` for nanometers, `_K` for Kelvin, `_per_ps` for ps⁻¹, and `_ps` for picoseconds. The `platform` and `platform_properties` fields are set separately at the top level of `projector_params`.
+
+Setting `estimates_poses: true` inside `likelihood_optimizer_params` turns on pose estimation during the optimization. When it is `false` (the default), the poses stored in the starfile are used as they are. When it is `true`, the pose of each particle is re-estimated for every walker at each step with a hierarchical SO(3) grid search, which is considerably more expensive. The search itself is configured by the optional `pose_search_params` block, whose fields all have defaults: the cost grows with `n_rounds` and `n_candidates`, while `n_angles_in_parallel` trades memory for speed. Restricting the translational search with `shift_search_range_in_angstroms` is recommended when the particles are already roughly centered. This feature is still experimental.
+
+### Volume integrator backend
+
+Every likelihood evaluation projects each walker — a mixture of gaussians, one per atom — onto the image plane. The optional `volume_integrator_backend` block inside `likelihood_optimizer_params` controls how that projection is computed. It affects only speed, memory, and numerical accuracy, not the model being optimized, and all of its fields fall back to built-in defaults when omitted. It does not affect the alignment step or the MD projector.
+
+- `spread_mode` (default `local`): `local` spreads each gaussian onto only the grid points near its center, with the truncation width set by `spread_width_in_stds`. `exact` instead evaluates dense gaussian integrals over the whole grid. Since gaussians are short-ranged compared to typical box sizes, `local` is much faster for the same result, and is the recommended choice; use `exact` when you want a reference calculation with no truncation. In `local` mode the number of grid points per gaussian is derived automatically from the atom variances and the pixel size, and the projection is computed on a plane twice the box size in each dimension before being cropped back.
+- `spread_width_in_stds` (default `6.0`): how far each gaussian is spread, in standard deviations, when `spread_mode: local`. Lowering it makes the projection cheaper in both time and memory, at the cost of truncating the tails more aggressively. It is ignored — with a warning — when `spread_mode: exact`.
+- `sampling_mode` (default `average`): `average` uses error functions to compute the *average* of the gaussian over each pixel, which is the more accurate choice, especially for coarse pixel sizes. `point` simply evaluates the gaussian at the pixel center, which is cheaper but noisier.
+- `enable_pallas` (default `false`): whether to use [Pallas](https://docs.jax.dev/en/latest/pallas/index.html)/Triton GPU kernels instead of the pure-JAX implementation. This requires a CUDA GPU — it raises an error if requested without one — and only applies when `spread_mode: local`; it is ignored for `exact`.
+
+The main reason to set `enable_pallas: true` is memory rather than speed. The pure-JAX forward pass is usually the faster of the two, but its memory grows with the number of particles projected at once, whereas the Pallas backward pass is a pure gather with a flat memory profile. That makes it worth enabling when a large `batch_size` exhausts GPU memory, at the cost of giving up some forward-pass speed. If you are not memory-limited, leave it `false`. Note that this field is always passed through explicitly, so it takes precedence over the `CRYOJAX_ENABLE_PALLAS` environment variable.
 
 ## Outputs
 

@@ -16,13 +16,14 @@ from .geometry import (
 from .pose_offset import compute_correlation_at_optimal_offset
 
 
-@eqx.filter_vmap(in_axes=(0, None, None, None, None, None))
+@eqx.filter_vmap(in_axes=(0, None, None, None, None, None, None))
 def _loss_for_grid_search(
     quat: Float[Array, "4"],
     volume: cxs.AbstractVolumeRepresentation,
     target_image: Float[Array, "H W"],
     image_config: cxs.BasicImageConfig,
     transfer_theory: cxs.ContrastTransferTheory,
+    integrator: cxs.AbstractVolumeIntegrator,
     shift_search_area: Float[Array, "H W"] | None,
 ) -> tuple[Float[Array, ""], Float[Array, " 2"]]:
     """
@@ -42,6 +43,7 @@ def _loss_for_grid_search(
         image_config,
         pose,
         transfer_theory,
+        volume_integrator=integrator,
         # normalizes_signal=True,
     ).simulate(outputs_real_space=True)
 
@@ -61,6 +63,7 @@ def _batched_loss_for_grid_search(
     target_image: Float[Array, "H W"],
     image_config: cxs.BasicImageConfig,
     transfer_theory: cxs.ContrastTransferTheory,
+    integrator: cxs.AbstractVolumeIntegrator,
     shift_search_area: Float[Array, "H W"] | None,
     n_angles_in_parallel: int,
 ) -> tuple[Float[Array, " N"], Float[Array, "N 2"]]:
@@ -75,6 +78,7 @@ def _batched_loss_for_grid_search(
             target_image,
             image_config,
             transfer_theory,
+            integrator,
             shift_search_area,
         ),
         xs=quats,
@@ -176,6 +180,7 @@ class HierarchicalSO3GridSearch(eqx.Module):
         target_image: Float[Array, "H W"],
         image_config: cxs.BasicImageConfig,
         transfer_theory: cxs.ContrastTransferTheory,
+        integrator: cxs.AbstractVolumeIntegrator,
     ) -> cxs.QuaternionPose:
         """Perform the hierarchical SO3 grid search to find the optimal pose.
 
@@ -204,6 +209,7 @@ class HierarchicalSO3GridSearch(eqx.Module):
             target_image,
             image_config,
             transfer_theory,
+            integrator,
             shift_search_area,
             self.n_angles_in_parallel,
         )
@@ -231,6 +237,7 @@ class HierarchicalSO3GridSearch(eqx.Module):
                 target_image,
                 image_config,
                 transfer_theory,
+                integrator,
                 shift_search_area,
                 self.n_angles_in_parallel,
             )
@@ -252,6 +259,7 @@ class HierarchicalSO3GridSearch(eqx.Module):
                     target_image,
                     image_config,
                     transfer_theory,
+                    integrator,
                     shift_search_area,
                     self.n_angles_in_parallel,
                 ),
@@ -274,6 +282,7 @@ def _run_global_SO3_step(
     target_image: Float[Array, "H W"],
     image_config: cxs.BasicImageConfig,
     transfer_theory: cxs.ContrastTransferTheory,
+    integrator: cxs.AbstractVolumeIntegrator,
     shift_search_area: Float[Array, "H W"] | None,
     n_angles_in_parallel: int,
 ):
@@ -290,6 +299,7 @@ def _run_global_SO3_step(
         target_image,
         image_config,
         transfer_theory,
+        integrator,
         shift_search_area,
         n_angles_in_parallel,
     )

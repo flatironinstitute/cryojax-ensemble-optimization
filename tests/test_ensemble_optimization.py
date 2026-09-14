@@ -9,8 +9,7 @@ import pytest
 from cryospax import RelionParticleDataset, RelionParticleParameterFile
 from optax import constant_schedule
 
-from cryojax_eo.dataset import create_dataloader
-from cryojax_eo.ensemble_optimization import (
+from cryojax_eo import (
     EnsembleOptimizationPipeline,
     EnsembleSteeredMDSimulator,
     ImagesToEnsembleLikelihoodFn,
@@ -18,6 +17,7 @@ from cryojax_eo.ensemble_optimization import (
     MargGaussianWhiteLogLikelihoodFn,
     SteeredMDSimulator,
 )
+from cryojax_eo.dataset import create_dataloader
 from cryojax_eo.io import read_walkers_from_pdbs
 from cryojax_eo.utils import ModelToVolumeAligner
 
@@ -180,6 +180,11 @@ def test_run_ensemble_optimization_from_config(
             "step_size": 1.0,
             "n_batches_per_step": 2,
             "batch_size": 2,
+            "volume_integrator_backend": {
+                "enable_pallas": False,
+                "spread_mode": "exact",
+                "sampling_mode": "average",
+            },
         },
         "alignment_params": {
             "path_to_prealigned_atomic_model": sample_path_to_pdb1,
