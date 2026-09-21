@@ -1,23 +1,91 @@
-from functools import partial
+import warnings
 from pathlib import Path
 from typing import Annotated, Literal
 
-import jax.numpy as jnp
 import mdtraj
 from pydantic import (
-    AfterValidator,
     BaseModel,
     DirectoryPath,
     Field,
     FilePath,
+    NonNegativeInt,
     PositiveFloat,
     PositiveInt,
-    field_serializer,
     field_validator,
     model_validator,
 )
 
 from .utils import _validate_file_with_type, _validate_files_with_type
+
+
+class VolumeIntegratorBackendConfig(BaseModel, extra="forbid"):
+    enable_pallas: bool = Field(
+        default=False,
+        description="Whether to use the Pallas/Triton GPU kernel, instead of pure "
+        + "JAX, when spread_mode='local'. Ignored when spread_mode='exact'. Most "
+        + "advantageous for the backward pass.",
+    )
+    spread_mode: Literal["exact", "local"] = Field(
+        default="local",
+        description="How each gaussian is projected onto the grid. 'exact' "
+        + "evaluates dense gaussian integrals over the whole grid. 'local' instead "
+        + "spreads each gaussian onto only its nearby grid points, with the "
+        + "truncation width set by `spread_width_in_stds`, trading accuracy for "
+        + "speed since gaussians are short-ranged relative to typical grid sizes.",
+    )
+    spread_width_in_stds: PositiveFloat = Field(
+        default=6.0,
+        description="Truncation width for 'local' spread mode, in standard "
+        + "deviations of the gaussian. Ignored when spread_mode='exact'.",
+    )
+    sampling_mode: Literal["average", "point"] = Field(
+        default="average",
+        description="How the projected volume is sampled at each pixel. 'average' "
+        + "uses gaussian integrals (error functions) to compute the average value "
+        + "over the pixel. 'point' evaluates the gaussian at the pixel center.",
+    )
+
+    @model_validator(mode="after")
+    def validate_config(self):
+        if self.spread_mode == "exact" and self.spread_width_in_stds is not None:
+            warnings.warn(
+                "spread_width_in_stds is ignored when spread_mode='exact'.",
+                stacklevel=2,
+            )
+        return self
+
+
+class PoseSearchConfig(BaseModel, extra="forbid"):
+    """Parameters for the hierarchical SO(3) grid search used to estimate poses."""
+
+    n_rounds: NonNegativeInt = Field(
+        default=5,
+        description="Number of rounds of the hierarchical search. Each round "
+        + "refines the grid around the best candidates of the previous one. "
+        + "If 0, only the base grid is searched.",
+    )
+    initial_resolution: PositiveInt = Field(
+        default=1,
+        description="Resolution of the base (coarsest) SO(3) grid. Higher values "
+        + "start the search from a finer grid, at a higher computational cost.",
+    )
+    n_candidates: PositiveInt = Field(
+        default=40,
+        description="Number of candidate orientations kept at the end of each "
+        + "round, whose neighbors are searched in the next round.",
+    )
+    n_angles_in_parallel: PositiveInt = Field(
+        default=10,
+        description="Number of orientations whose losses are evaluated in "
+        + "parallel (i.e. vmapped) within each batch of the search. Larger "
+        + "values are faster but use more memory.",
+    )
+    shift_search_range_in_angstroms: PositiveFloat | None = Field(
+        default=None,
+        description="Half-width of the square region of shifts that is searched, "
+        + "in angstroms. Only shifts with |x| and |y| below this value are "
+        + "considered. If None, all shifts are searched.",
+    )
 
 
 class EnsOptMDConfigOptimizationConfig(BaseModel, extra="forbid"):
@@ -42,30 +110,49 @@ class EnsOptMDConfigOptimizationConfig(BaseModel, extra="forbid"):
         description="Initial weights for the models. "
         "If None, will be set to uniform distribution.",
     )
-    estimates_pose: bool = Field(
+    estimates_poses: bool = Field(
         default=False,
         description="Whether to estimate the pose of the particles during optimization. "
-        + "If True, the pose will be estimated using the current weights of the ensemble."
-        + " If False, the pose will be estimated using uniform weights.",
+        + "If True, the pose of each particle is estimated for every walker at each "
+        + "step with a hierarchical SO(3) grid search, configured by "
+        + "`pose_search_params`. If False, the poses stored in the starfile are "
+        + "used as-is and `pose_search_params` is ignored.",
+    )
+    pose_search_params: PoseSearchConfig = Field(
+        default_factory=PoseSearchConfig,
+        description="Parameters for the pose search performed during optimization. "
+        + "Only used when `estimates_poses` is True. Any omitted field falls back "
+        + "to the built-in default. "
+        + "This is a dictionary formatted by the `PoseSearchConfig` class.",
+    )
+    volume_integrator_backend: VolumeIntegratorBackendConfig = Field(
+        default_factory=VolumeIntegratorBackendConfig,
+        description="Backend options for the volume integrator used during "
+        + "optimization.",
     )
 
-    @field_serializer("initial_weights")
-    def serialize_initial_weights(self, v):
-        if v is not None:
-            v = jnp.array(v)
-            v = v / jnp.sum(v)
-
-        return v
-
-    @field_validator("estimates_pose")
+    @field_validator("initial_weights")
     @classmethod
-    def validate_estimates_pose(cls, v):
-        if v:
-            raise Warning(
-                "estimates_pose is set to True. This feature is still experimental, "
-                + "and may slow down the optimization process."
-            )
+    def validate_initial_weights(cls, v):
+        if v is not None:
+            total = sum(v)
+            v = [w / total for w in v]
         return v
+
+    @model_validator(mode="after")
+    def validate_pose_estimation(self):
+        if self.estimates_poses:
+            warnings.warn(
+                "estimates_poses is set to True. This feature is still experimental, "
+                + "and may slow down the optimization process.",
+                stacklevel=2,
+            )
+        elif "pose_search_params" in self.model_fields_set:
+            warnings.warn(
+                "pose_search_params is ignored when estimates_poses is False.",
+                stacklevel=2,
+            )
+        return self
 
 
 class MDParamsConfig(BaseModel, extra="forbid"):
@@ -130,9 +217,12 @@ class EnsOptMDConfigProjector(BaseModel, extra="forbid"):
     n_steps: PositiveInt = Field(
         description="Number of steps for the MD sampler. Must be greater than 0."
     )
-    bias_constant_in_kjpermol: PositiveFloat | list[PositiveFloat] = Field(
+    bias_constant_in_kjpermol: (
+        PositiveFloat | Annotated[list[PositiveFloat], Field(min_length=2, max_length=2)]
+    ) = Field(
         description="Biasing constant for the projection step. "
-        + "Can be a single value or a list of two values for linear scheduling."
+        + "Can be a single value, or a list of exactly two values [start, end] "
+        + "for linear scheduling."
     )
     platform: Literal["CPU", "CUDA", "OpenCL"] = Field(
         default="CPU",
@@ -184,9 +274,7 @@ class EnsOptMDConfigProjector(BaseModel, extra="forbid"):
 
 
 class EnsOptAlignConfig(BaseModel, extra="forbid"):
-    path_to_prealigned_atomic_model: Annotated[
-        str, AfterValidator(partial(_validate_file_with_type, file_type=".pdb"))
-    ] = Field(
+    path_to_prealigned_atomic_model: str = Field(
         description="Path to the reference model. "
         + "This model should be aligned to the cryo-EM particles, "
         + " and will be used for alignment of the walkers during optimization."
@@ -264,7 +352,7 @@ class EnsOptDataConfig(BaseModel, extra="forbid"):
 
 class EnsOptMDConfig(BaseModel, extra="forbid"):
     # I/O
-    path_to_atomic_models: str | list[FilePath] = Field(
+    path_to_atomic_models: list[str] = Field(
         description="Path to the atomic models directory. "
         + "If a pattern is provided, all files matching the pattern will be used."
     )
@@ -318,72 +406,70 @@ class EnsOptMDConfig(BaseModel, extra="forbid"):
     @model_validator(mode="after")
     def validate_config(self):
         n_atomic_models = len(self.path_to_atomic_models)
-        if self.projector_params["path_to_initial_states"] is not None:
-            n_initial_states = len(self.projector_params["path_to_initial_states"])
-            assert n_atomic_models == n_initial_states, (
-                f"Number of initial states {n_initial_states} "
-                + f"does not match number of atomic models {n_atomic_models}."
+
+        initial_states = self.projector_params["path_to_initial_states"]
+        if initial_states is not None and len(initial_states) != n_atomic_models:
+            raise ValueError(
+                f"Number of initial states {len(initial_states)} "
+                f"does not match number of atomic models {n_atomic_models}."
             )
 
-        if self.likelihood_optimizer_params["initial_weights"] is not None:
-            n_initial_weights = len(self.likelihood_optimizer_params["initial_weights"])
-            if n_atomic_models != n_initial_weights:
-                raise Warning(
-                    f"Number of initial weights {n_initial_weights} "
-                    + f"does not match number of atomic models {n_atomic_models}."
-                    + " Setting initial weights to uniform distribution."
-                )
-            self.likelihood_optimizer_params["initial_weights"] = jnp.asarray(
-                [1.0 / n_atomic_models for _ in range(n_atomic_models)]
+        initial_weights = self.likelihood_optimizer_params["initial_weights"]
+        if initial_weights is not None and len(initial_weights) != n_atomic_models:
+            warnings.warn(
+                f"Number of initial weights {len(initial_weights)} "
+                f"does not match number of atomic models {n_atomic_models}. "
+                "Falling back to a uniform distribution.",
+                stacklevel=2,
             )
+            initial_weights = None
 
-        else:
-            self.likelihood_optimizer_params["initial_weights"] = jnp.asarray(
-                [1.0 / n_atomic_models for _ in range(n_atomic_models)]
-            )
+        if initial_weights is None:
+            initial_weights = [1.0 / n_atomic_models] * n_atomic_models
+
+        self.likelihood_optimizer_params["initial_weights"] = initial_weights
         return self
 
-    @field_validator("path_to_atomic_models")
+    @field_validator("path_to_atomic_models", mode="before")
     @classmethod
     def validate_path_to_atomic_models(cls, v):
         return _validate_files_with_type(v, file_types=[".pdb"])
 
     @field_validator("likelihood_optimizer_params")
     @classmethod
-    def validate_ensemble_opt_config(cls, values):
-        return dict(EnsOptMDConfigOptimizationConfig(**values).model_dump())
+    def validate_likelihood_optimizer_params(cls, values):
+        return EnsOptMDConfigOptimizationConfig(**values).model_dump()
 
     @field_validator("projector_params")
     @classmethod
-    def validate_md_sampler_config(cls, values):
-        return dict(EnsOptMDConfigProjector(**values).model_dump())
+    def validate_projector_params(cls, values):
+        return EnsOptMDConfigProjector(**values).model_dump()
 
     @field_validator("alignment_params")
     @classmethod
-    def validate_aligner_config(cls, values):
-        return dict(EnsOptAlignConfig(**values).model_dump())
+    def validate_alignment_params(cls, values):
+        return EnsOptAlignConfig(**values).model_dump()
 
     @field_validator("data_params")
     @classmethod
-    def validate_data_config(cls, values):
-        return dict(EnsOptDataConfig(**values).model_dump())
+    def validate_data_params(cls, values):
+        return EnsOptDataConfig(**values).model_dump()
 
     @field_validator("atom_selection")
     @classmethod
-    def validate_atom_selection(cls, values):
-        suffix = Path(values).suffix
+    def validate_atom_selection(cls, v):
+        suffix = Path(v).suffix
         if suffix in [".txt", ".npy"]:
-            assert Path(values).exists(), f"Indices File: {values} does not exist."
-
-        elif suffix not in [".txt", ".npy", ""]:
+            if not Path(v).exists():
+                raise ValueError(f"Indices file {v} does not exist.")
+        elif suffix != "":
             raise ValueError("Invalid file type for atom selection.")
-
         else:
             try:
-                mdtraj.Topology().select(values)
+                mdtraj.Topology().select(v)
             except Exception as e:
-                raise ValueError(f"Invalid atom selection string: {values}. Error: {e}")
-        return values
+                raise ValueError(f"Invalid atom selection string: {v}. Error: {e}")
+        return v
 
 
 ### Keeping just in case we want to re-enable auto-incrementing output paths ###

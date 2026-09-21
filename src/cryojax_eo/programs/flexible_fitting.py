@@ -12,13 +12,13 @@ from jaxtyping import Array, Float, Int
 from mdtraj.formats import XTCTrajectoryFile
 from tqdm import tqdm
 
-from cryojax_eo.ensemble_optimization import (
-    SteeredMDSimulator,
-)
 from cryojax_eo.utils import EarlyStopping, ModelToVolumeAligner, rigid_align_positions
 
-from .._cross_corelation.model_to_volume_loss import ModelToVolumeCorrelationLossFn
-from .._cross_corelation.optimizer import AbstractWalkerOptimizer
+from .._prior_projection import (
+    SteeredMDSimulator,
+)
+from .._volume_to_model_utils.model_to_volume_loss import ModelToVolumeCorrelationLossFn
+from .._volume_to_model_utils.optimizer import AbstractWalkerOptimizer
 
 
 class FlexibleFittingPipeline(eqx.Module):
@@ -33,6 +33,7 @@ class FlexibleFittingPipeline(eqx.Module):
     model_to_volume_aligner: ModelToVolumeAligner | None
     atom_indices_for_opt: Int[Array, " n_atoms_for_opt"]
     early_stopping: EarlyStopping | None
+    write_buffer_size: int
     write_buffer_size: int
 
     def __init__(
@@ -61,6 +62,7 @@ class FlexibleFittingPipeline(eqx.Module):
         self.atom_indices_for_opt = atom_indices_for_opt
         self.model_to_volume_aligner = model_to_volume_aligner
         self.early_stopping = early_stopping
+        self.write_buffer_size = write_buffer_size
         self.write_buffer_size = write_buffer_size
 
     def run(
@@ -103,6 +105,22 @@ class FlexibleFittingPipeline(eqx.Module):
         early_stopping_state = (
             self.early_stopping.init() if self.early_stopping is not None else None
         )
+
+        # Buffer trajectory frames on the host and flush them to the XTC writer in
+        # batches, rather than writing (and forcing a device->host transfer) every
+        # step. Shape: (buffer_size, n_atoms, 3), stored in nm.
+        n_atoms = walker.shape[0]
+        xtc_buffer = np.empty((self.write_buffer_size, n_atoms, 3), dtype=np.float32)
+        buffer_count = 0
+
+        # Reusable single-frame Trajectory for the per-step PDB snapshots: set the
+        # topology and unit cell once, then only swap the coordinates each write
+        # (avoids rebuilding a Trajectory and re-attaching the topology every step).
+        pdb_snapshot_traj = mdtraj.Trajectory(
+            xyz=np.zeros((1, n_atoms, 3), dtype=np.float32),
+            topology=self.prealigned_structure.topology,
+        )
+        pdb_snapshot_traj.unitcell_vectors = unit_cell_vectors[None, ...]
 
         # Buffer trajectory frames on the host and flush them to the XTC writer in
         # batches, rather than writing (and forcing a device->host transfer) every
@@ -204,6 +222,7 @@ class FlexibleFittingPipeline(eqx.Module):
             buffer_count = 0
 
         writer.close()
+
         _write_walker_to_pdb(
             pdb_snapshot_traj,
             np.asarray(walker, dtype=np.float32) / 10.0,

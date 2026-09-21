@@ -4,6 +4,7 @@ import pathlib
 from typing import Any
 from typing_extensions import override
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import mdtraj
@@ -17,15 +18,14 @@ from tqdm import tqdm
 
 from cryojax_eo.utils import ModelToVolumeAligner, rigid_align_positions
 
-from .._likelihood_optimization import (
+from .._image_to_ensemble_utils import (
     IterativeEnsembleLikelihoodOptimizer,
     MultGradWeightOptimizer,
 )
 from .._prior_projection.base_prior_projector import AbstractEnsemblePriorProjector
-from .base_pipeline import AbstractEnsembleOptimizationPipeline
 
 
-class EnsembleOptimizationPipeline(AbstractEnsembleOptimizationPipeline, strict=True):
+class EnsembleOptimizationPipeline(eqx.Module):
     """
     Ensemble refinement pipeline using OpenMM for molecular dynamics simulation.
     """

@@ -23,13 +23,10 @@ from jaxtyping import Array, Float
 from tqdm import tqdm
 
 import cryojax_eo as cxeo
-from cryojax_eo.ensemble_optimization import (
-    HierarchicalSO3GridSearch,
-    likelihood_iso_gaussian_marg,
-    optimize_weights,
-)
 from cryojax_eo.internal import ReweightingConfig
 from cryojax_eo.simulator import DilatedMask
+
+from ._utils import make_pose_search
 
 
 RELION_DATASET_IN_AXES = dict(
@@ -89,13 +86,14 @@ def _gmm_volume_to_voxel_grid(
 @eqx.filter_jit
 @eqx.filter_vmap(in_axes=(None, RELION_DATASET_IN_AXES, None, None))
 def _compute_likelihoods_fn(volume, relion_stack, dilated_mask, image_sign):
-    # return likelihood_iso_gaussian_marg(
-    return likelihood_iso_gaussian_marg(
+    # return cxeo.likelihood_iso_gaussian_marg(
+    return cxeo.likelihood_iso_gaussian_marg(
         volume=volume,
         image=relion_stack["images"],
         image_config=relion_stack["parameters"]["image_config"],
         pose=relion_stack["parameters"]["pose"],
         transfer_theory=relion_stack["parameters"]["transfer_theory"],
+        integrator=cxs.AutoVolumeProjection(),
         dilated_mask=dilated_mask,
         image_sign=image_sign,
         per_particle_args=None,
@@ -108,7 +106,7 @@ def _estimate_pose(
     image: Float[Array, "y_dim x_dim"],
     image_config: cxs.BasicImageConfig,
     transfer_theory: cxs.ContrastTransferTheory,
-    pose_search: HierarchicalSO3GridSearch,
+    pose_search: cxeo.HierarchicalSO3GridSearch,
 ) -> cxs.QuaternionPose:
     return pose_search(volume, image, image_config, transfer_theory)
 
@@ -119,7 +117,7 @@ def estimate_poses(
     images: Float[Array, "y_dim x_dim"],
     image_config: cxs.BasicImageConfig,
     transfer_theory: cxs.ContrastTransferTheory,
-    pose_search: HierarchicalSO3GridSearch,
+    pose_search: cxeo.HierarchicalSO3GridSearch,
     *,
     n_images_in_parallel: int,
 ) -> cxs.QuaternionPose:
@@ -145,7 +143,7 @@ def compute_likelihoods_for_structural_file(
     data_sign: Literal["dark-on-light", "light-on-dark"],
     n_images_in_parallel: int,
     max_volume_repr_resolution: float | None,
-    estimates_poses: bool,
+    pose_search: cxeo.HierarchicalSO3GridSearch | None,
     path_to_outputdir: str,
 ) -> Float[Array, " n_images"]:
     image_sign = -1.0 if data_sign == "dark-on-light" else 1.0
@@ -176,10 +174,9 @@ def compute_likelihoods_for_structural_file(
         frequency_cutoff_fraction = cutoff_freq / nyquist_freq
 
         lowpass_filter = cxim.LowpassFilter(
-            frequency_grid_in_angstroms_or_pixels=cxim.make_frequency_grid(
-                (box_size, box_size, box_size), image_config.pixel_size
+            frequency_grid=cxim.make_frequency_grid(
+                (box_size, box_size, box_size),
             ),
-            grid_spacing=image_config.pixel_size,
             frequency_cutoff_fraction=frequency_cutoff_fraction,
         )
         voxel_grid = cxim.irfftn(lowpass_filter(cxim.rfftn(voxel_grid)))
@@ -192,9 +189,6 @@ def compute_likelihoods_for_structural_file(
         batch_size=n_images_in_parallel,
         shuffle=False,
     )
-    pose_search = HierarchicalSO3GridSearch(
-        base_grid_res=1, n_rounds=5, n_candidates=40, n_angles_in_parallel=10
-    )
     image_config = relion_dataset.parameter_file[0]["image_config"]
     mask = cxim.CircularCosineMask(
         image_config.get_coordinate_grid(physical=False),
@@ -202,7 +196,7 @@ def compute_likelihoods_for_structural_file(
         rolloff_width=1.0,
     )
 
-    if estimates_poses:
+    if pose_search is not None:
         max_n_batches = np.ceil(len(relion_dataset) / n_images_in_parallel).astype(int)
         path_to_starfile = os.path.join(
             path_to_outputdir, Path(path_to_structure).stem + "_starfile.star"
@@ -214,7 +208,7 @@ def compute_likelihoods_for_structural_file(
             max_optics_groups=max_n_batches + 10,
         )
     for batch in tqdm(dataloader, desc="batches", leave=False):
-        if estimates_poses:
+        if pose_search is not None:
             poses = estimate_poses(
                 volume=voxel_volume,
                 images=batch["particle_stack"]["images"] * mask.get()[None, ...],
@@ -234,7 +228,7 @@ def compute_likelihoods_for_structural_file(
         )
         likelihoods.append(batch_likelihoods)
 
-    if estimates_poses:
+    if pose_search is not None:
         new_parameter_file.particle_data["rlnImageName"] = (
             relion_dataset.parameter_file.particle_data["rlnImageName"]
         )
@@ -284,11 +278,9 @@ def run_ensemble_reweighting_from_scratch(
     else:
         dilated_mask = None
 
-    # if config["likelihood_optimizer_params"]["estimates_pose"]:
-    #     raise NotImplementedError(
-    #         "Pose estimation inside the MD ensemble"
-    #         " optimization pipeline is not yet implemented."
-    #     )
+    pose_search = make_pose_search(
+        config["estimates_poses"], config["pose_search_params"]
+    )
 
     # Running the optimization
 
@@ -310,7 +302,7 @@ def run_ensemble_reweighting_from_scratch(
             n_images_in_parallel=config["n_images_in_parallel"],
             data_sign=config["data_params"]["data_sign"],
             max_volume_repr_resolution=config["max_volume_repr_resolution"],
-            estimates_poses=config["estimates_poses"],
+            pose_search=pose_search,
             path_to_outputdir=config["path_to_output_dir"],
         )
         # make the key in the dictionary the filename without the path and extension
@@ -318,7 +310,7 @@ def run_ensemble_reweighting_from_scratch(
         likelihoods_dict[dict_key] = likelihoods
         likelihood_matrix[:, i] = np.asarray(likelihoods)
 
-    weights = optimize_weights(
+    weights = cxeo.optimize_weights(
         log_likelihood_matrix=jnp.array(likelihood_matrix),
         max_iter=config["max_iter"],
         tol=config["tol"],
@@ -373,7 +365,7 @@ def run_ensemble_reweighting_from_likelihoods(
             "Ensure path_to_structural_files matches the original run."
         ) from e
 
-    weights = optimize_weights(
+    weights = cxeo.optimize_weights(
         log_likelihood_matrix=jnp.array(likelihood_matrix),
         max_iter=config["max_iter"],
         tol=config["tol"],

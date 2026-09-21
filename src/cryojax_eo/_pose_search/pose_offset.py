@@ -1,4 +1,3 @@
-import cryojax.ndimage as cxim
 import jax.numpy as jnp
 from jaxtyping import Array, Float
 
@@ -38,8 +37,9 @@ def compute_correlation_at_optimal_offset(
             image_ref / jnp.linalg.norm(image_ref),
         )
     )
-    # This will matter in cryojax==0.6.0
-    # abs_cross_corr = jnp.fft.fftshift(abs_cross_corr)
+    # The zero-lag component comes out of the FFT in the corner, so center it
+    # to match the (fftshifted) coordinate grid and the shift search area
+    abs_cross_corr = jnp.fft.fftshift(abs_cross_corr)
 
     if shift_search_area is not None:
         abs_cross_corr = jnp.where(shift_search_area > 1e-3, abs_cross_corr, -jnp.inf)
@@ -58,7 +58,9 @@ def _compute_cross_correlation_image(image_shifted, image_ref):
     """Compute cross-correlation image between two input images.
     Using Fourier's convolution theorem.
     """
-    image_shifted_fft = cxim.rfftn(image_shifted)
-    image_ref_fft = cxim.rfftn(image_ref)
+    # image_shifted_fft = cxim.rfftn(image_shifted)
+    # image_ref_fft = cxim.rfftn(image_ref)
+    image_shifted_fft = jnp.fft.rfftn(image_shifted)
+    image_ref_fft = jnp.fft.rfftn(image_ref)
     cross_corr_fft = image_shifted_fft * image_ref_fft.conj()
-    return cxim.irfftn(cross_corr_fft)
+    return jnp.fft.irfftn(cross_corr_fft)

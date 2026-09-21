@@ -5,7 +5,8 @@ import equinox as eqx
 import jax.numpy as jnp
 from jaxtyping import Array, Float
 
-from ....simulator._dilated_mask import DilatedMask
+from cryojax_eo.simulator import DilatedMask
+
 from .common_functions import compute_optimal_scale_and_offset
 
 
@@ -14,6 +15,7 @@ class AbstractImageToWalkerLogLikelihoodFn(eqx.Module, strict=True):
     variances: eqx.AbstractVar[Float[Array, "n_atoms n_gaussians_per_atom"]]
     image_sign: eqx.AbstractVar[Float[Array, ""]]
     dilated_mask: eqx.AbstractVar[DilatedMask | None]
+    integrator: eqx.AbstractVar[cxs.GaussianMixtureProjection | cxs.AutoVolumeProjection]
 
     def __call__(
         self,
@@ -49,6 +51,7 @@ class MargGaussianWhiteLogLikelihoodFn(AbstractImageToWalkerLogLikelihoodFn, str
     variances: Float[Array, "n_atoms n_gaussians_per_atom"]
     image_sign: Float[Array, ""]
     dilated_mask: DilatedMask | None
+    integrator: cxs.GaussianMixtureProjection | cxs.AutoVolumeProjection
 
     def __init__(
         self,
@@ -56,6 +59,7 @@ class MargGaussianWhiteLogLikelihoodFn(AbstractImageToWalkerLogLikelihoodFn, str
         variances: Float[Array, "n_atoms n_gaussians_per_atom"],
         data_sign: Literal["dark-on-light", "light-on-dark"],
         dilated_mask: DilatedMask | None = None,
+        integrator: cxs.GaussianMixtureProjection | None = None,
     ):
         """Init the MargGaussianWhiteLogLikelihoodFn.
 
@@ -84,6 +88,10 @@ class MargGaussianWhiteLogLikelihoodFn(AbstractImageToWalkerLogLikelihoodFn, str
         self.amplitudes = amplitudes
         self.image_sign = jnp.asarray(image_sign)
         self.dilated_mask = dilated_mask
+        if integrator is not None:
+            self.integrator = integrator
+        else:
+            self.integrator = cxs.AutoVolumeProjection()
 
     def __call__(
         self,
@@ -107,6 +115,7 @@ class MargGaussianWhiteLogLikelihoodFn(AbstractImageToWalkerLogLikelihoodFn, str
             transfer_theory=transfer_theory,
             dilated_mask=self.dilated_mask,
             image_sign=self.image_sign,
+            integrator=self.integrator,
         )
 
 
@@ -115,6 +124,7 @@ class GaussianWhiteLogLikelihoodFn(AbstractImageToWalkerLogLikelihoodFn, strict=
     variances: Float[Array, "n_atoms n_gaussians_per_atom"]
     image_sign: Float[Array, ""]
     dilated_mask: DilatedMask | None
+    integrator: cxs.GaussianMixtureProjection | cxs.AutoVolumeProjection
 
     def __init__(
         self,
@@ -122,6 +132,7 @@ class GaussianWhiteLogLikelihoodFn(AbstractImageToWalkerLogLikelihoodFn, strict=
         variances: Float[Array, "n_atoms n_gaussians_per_atom"],
         data_sign: Literal["dark-on-light", "light-on-dark"],
         dilated_mask: DilatedMask | None = None,
+        integrator: cxs.GaussianMixtureProjection | None = None,
     ):
         """Init the GaussianWhiteLogLikelihoodFn.
 
@@ -150,6 +161,10 @@ class GaussianWhiteLogLikelihoodFn(AbstractImageToWalkerLogLikelihoodFn, strict=
         self.amplitudes = amplitudes
         self.image_sign = jnp.asarray(image_sign)
         self.dilated_mask = dilated_mask
+        if integrator is not None:
+            self.integrator = integrator
+        else:
+            self.integrator = cxs.AutoVolumeProjection()
 
     def __call__(
         self,
@@ -172,6 +187,7 @@ class GaussianWhiteLogLikelihoodFn(AbstractImageToWalkerLogLikelihoodFn, strict=
             pose=pose,
             transfer_theory=transfer_theory,
             dilated_mask=self.dilated_mask,
+            integrator=self.integrator,
             image_sign=self.image_sign,
             per_particle_args=per_particle_args,
         )
@@ -183,6 +199,7 @@ def likelihood_gaussian_white_noise(
     image_config: cxs.BasicImageConfig,
     pose: cxs.AbstractPose,
     transfer_theory: cxs.ContrastTransferTheory,
+    integrator: cxs.GaussianMixtureProjection | cxs.AutoVolumeProjection,
     dilated_mask: DilatedMask | None = None,
     image_sign: Float[Array, ""] = jnp.array(1.0),
     per_particle_args: Float[Array, ""] = jnp.array(1.0),
@@ -214,6 +231,7 @@ def likelihood_gaussian_white_noise(
         image_config,
         pose,
         transfer_theory,
+        volume_integrator=integrator,
         normalizes_signal=True,
     )
     computed_image = image_model.simulate()
@@ -240,6 +258,7 @@ def likelihood_iso_gaussian_marg(
     image_config: cxs.BasicImageConfig,
     pose: cxs.AbstractPose,
     transfer_theory: cxs.ContrastTransferTheory,
+    integrator: cxs.GaussianMixtureProjection | cxs.AutoVolumeProjection,
     dilated_mask: DilatedMask | None = None,
     image_sign: Float[Array, ""] = jnp.array(1.0),
     per_particle_args: None = None,
@@ -258,6 +277,7 @@ def likelihood_iso_gaussian_marg(
         image_config,
         pose,
         transfer_theory,
+        volume_integrator=integrator,
         normalizes_signal=True,
     )
     computed_image = image_model.simulate()
