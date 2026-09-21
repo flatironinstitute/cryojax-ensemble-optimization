@@ -29,11 +29,6 @@ class FFOptimizationConfig(BaseModel, extra="forbid"):
         description="Step size in Angstroms for the optimization process."
     )
 
-    batch_size_for_z_planes: PositiveInt = Field(
-        default=1,
-        description="The number of z-planes to evaluate in parallel with"
-        " `jax.vmap`. By default, `1`.",
-    )
     n_batches_of_atoms: PositiveInt = Field(
         default=1,
         description="The number of iterations used to evaluate the volume, "
@@ -256,11 +251,9 @@ class FlexibleFittingConfig(BaseModel, extra="forbid"):
     @field_validator("early_stopping")
     @classmethod
     def validate_early_stopping_config(cls, values):
-        return (
-            dict(FFEarlyStoppingConfig(**values).model_dump())
-            if values is not None
-            else {}
-        )
+        if values is None:
+            return None
+        return dict(FFEarlyStoppingConfig(**values).model_dump())
 
     @field_validator("atom_selection")
     @classmethod

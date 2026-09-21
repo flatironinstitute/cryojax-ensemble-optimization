@@ -49,7 +49,7 @@ class DatasetSimulatorConfigAtomicModels(BaseModel, extra="forbid"):
 
     @field_serializer("atomic_models_probabilities")
     def serialize_atomic_model_probabilities(self, v):
-        if isinstance(v, int):
+        if isinstance(v, float):
             v = [v]
         v = jnp.array(v)
         return v / jnp.sum(v)

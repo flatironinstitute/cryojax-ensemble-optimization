@@ -1,7 +1,7 @@
 import abc
 from typing import cast
 
-import cryojax.ndimage as im
+import cryojax.ndimage as cxim
 import cryojax.simulator as cxs
 import equinox as eqx
 import jax.numpy as jnp
@@ -37,14 +37,12 @@ class ModelToVolumeCorrelationLossFn(AbstractModelToVolumeLossFn):
         volume_shape: tuple[int, int, int],
         vol_mask: Float[Array, "dim_z dim_y dim_x"] | None = None,
         *,
-        batch_size_for_z_planes: Int = 1,
         n_batches_of_atoms: Int = 1,
     ):
         assert (amplitudes > 0).all(), "Amplitudes must be positive."
         assert (variances > 0).all(), "Variances must be positive."
         assert voxel_size > 0, "Voxel size must be positive."
         assert n_batches_of_atoms > 0, "n_batches_of_atoms must be positive."
-        assert batch_size_for_z_planes > 0, "batch_size_for_z_planes must be positive."
 
         self.variances = variances
         self.amplitudes = amplitudes
@@ -89,7 +87,6 @@ class ModelToVolumeWeightedMSELossFn(AbstractModelToVolumeLossFn):
         volume_shape: tuple[int, int, int],
         vol_mask: Float[Array, "dim_z dim_y dim_x"] | None = None,
         *,
-        batch_size_for_z_planes: Int = 1,
         n_batches_of_atoms: Int = 1,
     ):
 
@@ -97,7 +94,6 @@ class ModelToVolumeWeightedMSELossFn(AbstractModelToVolumeLossFn):
         assert (variances > 0).all(), "Variances must be positive."
         assert voxel_size > 0, "Voxel size must be positive."
         assert n_batches_of_atoms > 0, "n_batches_of_atoms must be positive."
-        assert batch_size_for_z_planes > 0, "batch_size_for_z_planes must be positive."
 
         self.variances = variances
         self.amplitudes = amplitudes
@@ -107,9 +103,7 @@ class ModelToVolumeWeightedMSELossFn(AbstractModelToVolumeLossFn):
         self.render_fn = cxs.GaussianMixtureRenderFn(
             shape=volume_shape,
             voxel_size=voxel_size,
-            batch_options=dict(
-                batch_size=batch_size_for_z_planes, n_batches=n_batches_of_atoms
-            ),
+            n_batches=n_batches_of_atoms,
         )
 
         weights = weights
@@ -196,10 +190,10 @@ def _model_to_volume_weighted_mse(
     pad_size = (fourier_weights.shape[0],) * 3
     pad_size = cast(tuple[int, int, int], pad_size)
     comp_volume_fourier = (
-        im.rfftn(im.pad_to_shape(comp_volume, pad_size)) * fourier_weights
+        jnp.fft.rfftn(cxim.pad_to_shape(comp_volume, pad_size)) * fourier_weights
     )
     reference_volume_fourier = (
-        im.rfftn(im.pad_to_shape(reference_volume, pad_size)) * fourier_weights
+        jnp.fft.rfftn(cxim.pad_to_shape(reference_volume, pad_size)) * fourier_weights
     )
 
     optimal_scale = jnp.sum(comp_volume_fourier * reference_volume_fourier) / jnp.sum(

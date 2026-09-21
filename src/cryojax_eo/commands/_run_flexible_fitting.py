@@ -45,8 +45,10 @@ def warnexists(out):
 
 def _make_atom_list(atom_selection, topology) -> np.ndarray:
     suffix = Path(atom_selection).suffix
-    if suffix in [".txt", ".npy"]:
+    if suffix == ".txt":
         atom_list = np.loadtxt(atom_selection, dtype=int)
+    elif suffix == ".npy":
+        atom_list = np.load(atom_selection).astype(int)
     else:
         atom_list = topology.select(atom_selection)
     return np.array(atom_list)
@@ -66,9 +68,6 @@ def _construct_model_to_volume_loss_fn(
         voxel_size=voxel_size_ff,
         volume_shape=(box_size_ff, box_size_ff, box_size_ff),
         vol_mask=vol_mask,
-        batch_size_for_z_planes=config["walker_optimizer_params"][
-            "batch_size_for_z_planes"
-        ],
         n_batches_of_atoms=config["walker_optimizer_params"]["n_batches_of_atoms"],
     )
     if config["reference_volume_params"].get("path_to_weights") is not None:
@@ -193,15 +192,14 @@ def run_flexible_fitting(flexible_fitting_config: FlexibleFittingConfig):
         model_to_vol_loss_fn=model_to_vol_loss_fn,
     )
 
-    early_stopping = (
-        EarlyStopping(
+    if config.get("early_stopping") is not None:
+        early_stopping = EarlyStopping(
             patience=config["early_stopping"]["patience"],
             rtol=config["early_stopping"]["rtol"],
             atol=config["early_stopping"]["atol"],
         )
-        if config.get("early_stopping") is not None
-        else None
-    )
+    else:
+        early_stopping = None
 
     # Construct the ensemble optimization pipeline
     flexible_fitting_pipeline = cxeo.FlexibleFittingPipeline(

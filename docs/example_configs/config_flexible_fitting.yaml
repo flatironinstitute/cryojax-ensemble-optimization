@@ -40,7 +40,6 @@ projector_params:
 walker_optimizer_params:
   n_steps: 10           # (*) Default: 1. Number of gradient descent steps per iteration
   step_size: 2.0        # step size in Angstroms
-  batch_size_for_z_planes: 1  # (*) Default: 1. Z-planes evaluated in parallel with jax.vmap
   n_batches_of_atoms: 1       # (*) Default: 1. Increase to reduce GPU memory usage
 
 n_steps: 100  # total number of flexible fitting iterations

@@ -183,7 +183,7 @@ def compute_likelihoods_for_structural_file(
             ),
             frequency_cutoff_fraction=frequency_cutoff_fraction,
         )
-        voxel_grid = cxim.irfftn(lowpass_filter(cxim.rfftn(voxel_grid)))
+        voxel_grid = jnp.fft.irfftn(lowpass_filter(jnp.fft.rfftn(voxel_grid)))
 
     voxel_volume = cxs.FourierVoxelGridVolume.from_real_voxel_grid(voxel_grid)
 

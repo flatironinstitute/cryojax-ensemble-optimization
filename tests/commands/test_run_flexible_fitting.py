@@ -52,7 +52,6 @@ def base_config(sample_path_to_pdb1, sample_path_mrc_file, tmp_path):
             "type": "steepest_desc",
             "n_steps": 2,
             "step_size": 1.0,
-            "batch_size_for_z_planes": 1,
             "n_batches_of_atoms": 1,
         },
     }
@@ -102,7 +101,6 @@ def test_all_options(
             },
             "walker_optimizer_params": {
                 "type": "adam",
-                "batch_size_for_z_planes": 2,
                 "n_batches_of_atoms": 2,
             },
             "early_stopping": {"patience": 2, "rtol": 1e-4, "atol": 1e-4},
@@ -133,7 +131,6 @@ def test_minimal_options(base_config, tmp_path):
             },
             "walker_optimizer_params": {
                 "type": REMOVE,
-                "batch_size_for_z_planes": REMOVE,
                 "n_batches_of_atoms": REMOVE,
             },
         },

@@ -54,8 +54,10 @@ def warnexists(out):
 
 def _make_atom_list(atom_selection, topology) -> np.ndarray:
     suffix = Path(atom_selection).suffix
-    if suffix in [".txt", ".npy"]:
+    if suffix == ".txt":
         atom_list = np.loadtxt(atom_selection, dtype=int)
+    elif suffix == ".npy":
+        atom_list = np.load(atom_selection).astype(int)
     else:
         atom_list = topology.select(atom_selection)
     return np.array(atom_list)

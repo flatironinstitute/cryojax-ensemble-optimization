@@ -52,7 +52,6 @@ projector_params:
 walker_optimizer_params:
   n_steps: 10           # (*) Default: 1. Number of gradient steps per iteration
   step_size: 2.0        # step size in Angstroms
-  batch_size_for_z_planes: 1  # (*) Default: 1. Z-planes evaluated in parallel with jax.vmap
   n_batches_of_atoms: 1       # (*) Default: 1. Atom batches for memory-friendly volume evaluation
 
 n_steps: 100  # total number of flexible fitting iterations
@@ -62,7 +61,7 @@ n_steps: 100  # total number of flexible fitting iterations
 
 **Alignment.** The `path_to_prealigned_atomic_model` must be aligned to the frame of reference of the consensus map. This reference structure is used only for rigid-body re-alignment at each iteration; the structure being optimized is `path_to_atomic_model`. Providing a `path_to_reference_volume` enables this alignment and is strongly recommended. The `rigid_alignment_box_size` controls the resolution of the alignment step — a value of 32 typically adds about 1 second per iteration.
 
-**Flexible fitting box size.** The `flexible_fitting_box_size` sets the resolution at which the cross-correlation loss is computed. Larger boxes capture more detail but require more GPU memory. For memory-constrained settings, increase `n_batches_of_atoms` to spread atom contributions across sequential evaluations, and increase `batch_size_for_z_planes` to parallelize over z-planes with `jax.vmap`.
+**Flexible fitting box size.** The `flexible_fitting_box_size` sets the resolution at which the cross-correlation loss is computed. Larger boxes capture more detail but require more GPU memory. For memory-constrained settings, increase `n_batches_of_atoms` to spread atom contributions across sequential evaluations.
 
 **Volumetric mask.** The optional `path_to_volumetric_mask` accepts a `.mrc` mask file (e.g., the dilated solvent mask from a homogeneous refinement job). It is Fourier-cropped to `flexible_fitting_box_size` and applied to the cross-correlation loss, focusing the fitting on a specific region of the map and suppressing noise outside the mask. If omitted, the loss is computed over the full volume.
 
