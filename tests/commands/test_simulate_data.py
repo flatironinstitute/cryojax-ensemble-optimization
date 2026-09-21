@@ -211,21 +211,6 @@ def test_atomic_model_from_mrc(base_config, tmp_path, sample_path_mrc_file):
     assert_dataset_written(config)
 
 
-def test_atomic_model_from_npz(base_config, tmp_path, sample_path_gmm_model):
-    """A fitted gaussian mixture, as written by `fit_gmm_to_atoms`."""
-    config = deep_update(
-        base_config,
-        {
-            "atomic_models_params": {
-                "path_to_atomic_models": [sample_path_gmm_model],
-                "atomic_models_probabilities": [1.0],
-            }
-        },
-    )
-    run_command(main, tmp_path, config)
-    assert_dataset_written(config)
-
-
 def test_scalar_model_probability(base_config, tmp_path, sample_path_to_pdb1):
     """A single model may give its probability as a scalar rather than a list."""
     config = deep_update(

@@ -287,30 +287,6 @@ def mse_weights_mrc(tmp_path_factory):
 
 
 @pytest.fixture(scope="session")
-def c2_beads_pdb(tmp_path_factory):
-    """`ala_model_0.pdb` with its alpha carbons renamed to `C2`.
-
-    `GMMFitConfig.fit_selection_string` defaults to `name "C2"`, which selects
-    nothing in either of the bundled protein models, so the branch of
-    `fit_gmm_to_atoms` that runs without a config file needs its own input. The
-    other atoms are kept: the target density is built from every heavy atom
-    while only the `C2` beads are fitted, which is the coarse-graining the
-    command is for. Fitting beads against a target built from those same beads
-    makes the Gauss-Newton solve singular.
-    """
-    import mdtraj
-
-    structure = mdtraj.load(str(DATA_DIR / "ala_model_0.pdb"))
-    for atom in structure.topology.atoms:
-        if atom.name == "CA":
-            atom.name = "C2"
-
-    path = str(tmp_path_factory.mktemp("c2_beads") / "beads.pdb")
-    structure.save_pdb(path)
-    return path
-
-
-@pytest.fixture(scope="session")
 def simulated_particle_stack(tmp_path_factory):
     """A small particle stack with a realistic pixel size, simulated once.
 

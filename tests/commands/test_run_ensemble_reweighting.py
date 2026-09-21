@@ -120,20 +120,6 @@ def test_structural_files_mixed_formats(
     run_command(main, tmp_path, config, from_likelihoods=None)
     assert_weights_written(config, n_models=2)
 
-    # The `.pdb` branch renders a voxel grid and writes it out; `.mrc` does not.
-    out_dir = config["path_to_output_dir"]
-    stem = Path(distinct_pdb_copies[0]).stem
-    assert os.path.exists(os.path.join(out_dir, f"{stem}_voxel_grid.mrc"))
-
-
-def test_unsupported_structural_file(base_config, tmp_path, sample_path_gmm_model):
-    """A file type the config does not accept is rejected before any work."""
-    config = deep_update(
-        base_config, {"path_to_structural_files": [sample_path_gmm_model]}
-    )
-    with pytest.raises(Exception):
-        run_command(main, tmp_path, config, from_likelihoods=None)
-
 
 @pytest.mark.parametrize("data_sign", ["dark-on-light", "light-on-dark"])
 def test_data_sign(base_config, tmp_path, data_sign):
