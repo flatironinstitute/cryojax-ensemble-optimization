@@ -1,11 +1,11 @@
 import abc
 from typing import cast
 
-import cryojax.ndimage as im
+import cryojax.ndimage as cxim
 import cryojax.simulator as cxs
 import equinox as eqx
 import jax.numpy as jnp
-from jaxtyping import Array, Float, Int
+from jaxtyping import Array, Float
 
 
 class AbstractModelToVolumeLossFn(eqx.Module):
@@ -33,29 +33,27 @@ class ModelToVolumeCorrelationLossFn(AbstractModelToVolumeLossFn):
         self,
         amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
         variances: Float[Array, "n_atoms n_gaussians_per_atom"],
-        voxel_size: Float,
-        volume_shape: tuple[int, int, int],
+        render_fn: cxs.GaussianMixtureRenderFn,
         vol_mask: Float[Array, "dim_z dim_y dim_x"] | None = None,
-        *,
-        batch_size_for_z_planes: Int = 1,
-        n_batches_of_atoms: Int = 1,
     ):
+        """**Arguments:**
+
+        - `amplitudes`: Amplitudes of the GMM atomic volume representation.
+        - `variances`: Variances of the GMM atomic volume representation.
+        - `render_fn`: Renders a `GaussianMixtureVolume` onto a voxel grid.
+            Its `shape` must match that of the reference volume passed to
+            `__call__`.
+        - `vol_mask`: Optional mask applied to both volumes before computing
+            the cross-correlation. If `None`, no mask is applied.
+        """
         assert (amplitudes > 0).all(), "Amplitudes must be positive."
         assert (variances > 0).all(), "Variances must be positive."
-        assert voxel_size > 0, "Voxel size must be positive."
-        assert n_batches_of_atoms > 0, "n_batches_of_atoms must be positive."
-        assert batch_size_for_z_planes > 0, "batch_size_for_z_planes must be positive."
 
         self.variances = variances
         self.amplitudes = amplitudes
+        self.render_fn = render_fn
 
-        self.vol_mask = jnp.ones(volume_shape) if vol_mask is None else vol_mask
-
-        self.render_fn = cxs.GaussianMixtureRenderFn(
-            shape=volume_shape,
-            voxel_size=voxel_size,
-            n_batches=n_batches_of_atoms,
-        )
+        self.vol_mask = jnp.ones(render_fn.shape) if vol_mask is None else vol_mask
 
     def __call__(
         self,
@@ -85,34 +83,31 @@ class ModelToVolumeWeightedMSELossFn(AbstractModelToVolumeLossFn):
         amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
         variances: Float[Array, "n_atoms n_gaussians_per_atom"],
         weights: Float[Array, "dim dim dim"],
-        voxel_size: Float,
-        volume_shape: tuple[int, int, int],
+        render_fn: cxs.GaussianMixtureRenderFn,
         vol_mask: Float[Array, "dim_z dim_y dim_x"] | None = None,
-        *,
-        batch_size_for_z_planes: Int = 1,
-        n_batches_of_atoms: Int = 1,
     ):
+        """**Arguments:**
 
+        - `amplitudes`: Amplitudes of the GMM atomic volume representation.
+        - `variances`: Variances of the GMM atomic volume representation.
+        - `weights`: Fourier-space weights for the MSE, on a grid whose shape
+            is an integer multiple of `render_fn.shape`.
+        - `render_fn`: Renders a `GaussianMixtureVolume` onto a voxel grid.
+            Its `shape` must match that of the reference volume passed to
+            `__call__`.
+        - `vol_mask`: Optional mask applied to both volumes before computing
+            the MSE. If `None`, no mask is applied.
+        """
         assert (amplitudes > 0).all(), "Amplitudes must be positive."
         assert (variances > 0).all(), "Variances must be positive."
-        assert voxel_size > 0, "Voxel size must be positive."
-        assert n_batches_of_atoms > 0, "n_batches_of_atoms must be positive."
-        assert batch_size_for_z_planes > 0, "batch_size_for_z_planes must be positive."
 
         self.variances = variances
         self.amplitudes = amplitudes
+        self.render_fn = render_fn
 
+        volume_shape = render_fn.shape
         self.vol_mask = jnp.ones(volume_shape) if vol_mask is None else vol_mask
 
-        self.render_fn = cxs.GaussianMixtureRenderFn(
-            shape=volume_shape,
-            voxel_size=voxel_size,
-            batch_options=dict(
-                batch_size=batch_size_for_z_planes, n_batches=n_batches_of_atoms
-            ),
-        )
-
-        weights = weights
         upsampling_factor = weights.shape[0] / volume_shape[0]
         if not float(upsampling_factor).is_integer():
             raise ValueError(
@@ -196,10 +191,10 @@ def _model_to_volume_weighted_mse(
     pad_size = (fourier_weights.shape[0],) * 3
     pad_size = cast(tuple[int, int, int], pad_size)
     comp_volume_fourier = (
-        im.rfftn(im.pad_to_shape(comp_volume, pad_size)) * fourier_weights
+        jnp.fft.rfftn(cxim.pad_to_shape(comp_volume, pad_size)) * fourier_weights
     )
     reference_volume_fourier = (
-        im.rfftn(im.pad_to_shape(reference_volume, pad_size)) * fourier_weights
+        jnp.fft.rfftn(cxim.pad_to_shape(reference_volume, pad_size)) * fourier_weights
     )
 
     optimal_scale = jnp.sum(comp_volume_fourier * reference_volume_fourier) / jnp.sum(

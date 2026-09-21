@@ -13,6 +13,8 @@ reference_volume_params:
   flexible_fitting_box_size: 128  # (*) Default: 128. Box size (pixels) for the cross-correlation loss
   rigid_alignment_box_size: 32    # (*) Default: 32.  Box size (pixels) for rigid-body re-alignment
   reference_volume_voxel_size:    # (*) Default: null. Override the voxel size stored in the MRC header
+  path_to_volumetric_mask:        # (*) Default: null. Mask (.mrc) applied to the loss, cropped to flexible_fitting_box_size
+  path_to_weights:                # (*) Default: null. Fourier weights (.mrc) that switch the loss to weighted MSE
 
 projector_params:
   n_steps: 1000                    # number of MD integration steps per iteration
@@ -38,9 +40,19 @@ projector_params:
     timestep_ps: 0.002                # (*) Default: 0.002 ps (2 fs)
 
 walker_optimizer_params:
+  type: steepest_desc   # (*) Default: steepest_desc. Options: steepest_desc, adam
   n_steps: 10           # (*) Default: 1. Number of gradient descent steps per iteration
   step_size: 2.0        # step size in Angstroms
-  batch_size_for_z_planes: 1  # (*) Default: 1. Z-planes evaluated in parallel with jax.vmap
   n_batches_of_atoms: 1       # (*) Default: 1. Increase to reduce GPU memory usage
+  volume_render_backend:      # (*) How walkers are rendered onto the voxel grid when computing the loss and its gradient. Every field is optional
+    spread_mode: local        # (*) Default: local. 'local' spreads each gaussian onto its nearby voxels only; 'exact' evaluates dense gaussian integrals over the whole grid
+    spread_width_in_stds: 6.0 # (*) Default: 6.0. Truncation width of the spreading, in standard deviations of the gaussian. Ignored when spread_mode is 'exact'
+    enable_pallas: false      # (*) Default: false. Use the Pallas/Triton GPU kernels instead of pure JAX. Requires a CUDA GPU, and only applies when spread_mode is 'local'
+
+early_stopping:         # (*) Default: null (never stop early). Omit the whole block to disable
+  patience: 10          # required when the block is present. Iterations without improvement before stopping
+  rtol: 1.0e-4          # (*) Default: 1.0e-4. Relative tolerance on the loss
+  atol: 1.0e-4          # (*) Default: 1.0e-4. Absolute tolerance on the loss
 
 n_steps: 100  # total number of flexible fitting iterations
+rng_seed: 0   # (*) Default: 0. Seeds the OpenMM Langevin thermostat; 0 keeps OpenMM's default of a fresh seed each run

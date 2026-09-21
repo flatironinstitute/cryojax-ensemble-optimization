@@ -100,15 +100,16 @@ def _compute_likelihoods_fn(volume, relion_stack, dilated_mask, image_sign):
     )
 
 
-@eqx.filter_vmap(in_axes=(None, 0, None, eqx.if_array(0), None))
+@eqx.filter_vmap(in_axes=(None, 0, None, eqx.if_array(0), None, None))
 def _estimate_pose(
     volume: cxs.AbstractVolumeRepresentation,
     image: Float[Array, "y_dim x_dim"],
     image_config: cxs.BasicImageConfig,
     transfer_theory: cxs.ContrastTransferTheory,
     pose_search: cxeo.HierarchicalSO3GridSearch,
+    integrator: cxs.AbstractVolumeIntegrator,
 ) -> cxs.QuaternionPose:
-    return pose_search(volume, image, image_config, transfer_theory)
+    return pose_search(volume, image, image_config, transfer_theory, integrator)
 
 
 @eqx.filter_jit
@@ -118,11 +119,14 @@ def estimate_poses(
     image_config: cxs.BasicImageConfig,
     transfer_theory: cxs.ContrastTransferTheory,
     pose_search: cxeo.HierarchicalSO3GridSearch,
+    integrator: cxs.AbstractVolumeIntegrator,
     *,
     n_images_in_parallel: int,
 ) -> cxs.QuaternionPose:
     return filter_bmap(
-        lambda x: _estimate_pose(volume, x[0], image_config, x[1], pose_search),
+        lambda x: _estimate_pose(
+            volume, x[0], image_config, x[1], pose_search, integrator
+        ),
         xs=(images, transfer_theory),
         batch_size=n_images_in_parallel,
     )
@@ -179,7 +183,7 @@ def compute_likelihoods_for_structural_file(
             ),
             frequency_cutoff_fraction=frequency_cutoff_fraction,
         )
-        voxel_grid = cxim.irfftn(lowpass_filter(cxim.rfftn(voxel_grid)))
+        voxel_grid = jnp.fft.irfftn(lowpass_filter(jnp.fft.rfftn(voxel_grid)))
 
     voxel_volume = cxs.FourierVoxelGridVolume.from_real_voxel_grid(voxel_grid)
 
@@ -215,6 +219,7 @@ def compute_likelihoods_for_structural_file(
                 image_config=batch["particle_stack"]["parameters"]["image_config"],
                 transfer_theory=batch["particle_stack"]["parameters"]["transfer_theory"],
                 pose_search=pose_search,
+                integrator=cxs.AutoVolumeProjection(),
                 n_images_in_parallel=10,
             )
             batch["particle_stack"]["parameters"]["pose"] = _convert_quat_to_euler(poses)

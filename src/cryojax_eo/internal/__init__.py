@@ -3,6 +3,5 @@ from ._config_validators import (
     DatasetSimulatorConfig as DatasetSimulatorConfig,
     EnsOptMDConfig as EnsOptMDConfig,
     FlexibleFittingConfig as FlexibleFittingConfig,
-    GMMFitConfig as GMMFitConfig,
     ReweightingConfig as ReweightingConfig,
 )
