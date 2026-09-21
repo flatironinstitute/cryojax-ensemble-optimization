@@ -1,3 +1,4 @@
+import warnings
 from pathlib import Path
 from typing import Literal
 
@@ -10,8 +11,10 @@ from pydantic import (
     PositiveFloat,
     PositiveInt,
     field_validator,
+    model_validator,
 )
 
+from .ensemble_opt_config import PoseSearchConfig as PoseSearchConfig
 from .utils import _validate_file_with_type, _validate_files_with_type
 
 
@@ -114,11 +117,21 @@ class ReweightingConfig(BaseModel, extra="forbid"):
     estimates_poses: bool = Field(
         default=False,
         description="Whether to estimate the poses of the particles for each model. "
-        "If True, the estimated poses will be saved in a new starfile"
-        "in the output directory. "
+        "If True, the poses are estimated with a hierarchical SO(3) grid search "
+        "configured by `pose_search_params`, and the estimated poses will be saved "
+        "in a new starfile in the output directory. "
         "This will significantly increase the computational cost of the optimization, "
         "but it can also improve the performance of the optimization, "
-        " especially for low-resolution data.",
+        " especially for low-resolution data. "
+        "If False, the poses stored in the starfile are used as-is and "
+        "`pose_search_params` is ignored.",
+    )
+    pose_search_params: PoseSearchConfig = Field(
+        default_factory=PoseSearchConfig,
+        description="Parameters for the pose search. "
+        "Only used when `estimates_poses` is True. Any omitted field falls back "
+        "to the built-in default. "
+        "This is a dictionary formatted by the `PoseSearchConfig` class.",
     )
 
     # @model_validator(mode="after")
@@ -138,6 +151,15 @@ class ReweightingConfig(BaseModel, extra="forbid"):
     #     else:
     #         self.initial_weights = [1.0 / n_structures for _ in range(n_structures)]
     #     return self
+
+    @model_validator(mode="after")
+    def validate_pose_estimation(self):
+        if not self.estimates_poses and "pose_search_params" in self.model_fields_set:
+            warnings.warn(
+                "pose_search_params is ignored when estimates_poses is False.",
+                stacklevel=2,
+            )
+        return self
 
     @field_validator("path_to_structural_files")
     @classmethod

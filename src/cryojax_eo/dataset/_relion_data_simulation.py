@@ -1,12 +1,14 @@
 import logging
 import os
 from functools import partial
+from pathlib import Path
 from typing import Literal
 
 import cryojax.simulator as cxs
 import equinox as eqx
 import jax
 import jax.numpy as jnp
+from cryojax.io import read_array_from_mrc
 from cryojax.ndimage import CircularCosineMask
 from cryojax.rotations import SO3
 from cryospax import (
@@ -66,6 +68,23 @@ def make_relion_parameter_file(
     return parameter_file
 
 
+def _load_volume(
+    filename: str, *, include_b_factors: bool, selection_string: str
+) -> cxs.AbstractVolumeRepresentation:
+    """Load a volume from either an atomic model or a real-space voxel grid (`.mrc`)."""
+    suffix = Path(filename).suffix
+    if suffix == ".mrc":
+        voxel_grid = read_array_from_mrc(filename, loads_grid_spacing=False)
+        return cxs.FourierVoxelGridVolume.from_real_voxel_grid(voxel_grid)
+    else:
+        return cxs.load_tabulated_volume(
+            filename,
+            output_type=cxs.GaussianMixtureVolume,
+            include_b_factors=include_b_factors,
+            selection_string=selection_string,
+        )
+
+
 def simulate_relion_dataset(config: DatasetSimulatorConfig) -> RelionParticleDataset:
     os.makedirs(config.path_to_relion_project, exist_ok=True)
 
@@ -79,9 +98,8 @@ def simulate_relion_dataset(config: DatasetSimulatorConfig) -> RelionParticleDat
     config_dict = dict(config.model_dump())
     volumes = tuple(
         [
-            cxs.load_tabulated_volume(
+            _load_volume(
                 filename,
-                output_type=cxs.GaussianMixtureVolume,
                 include_b_factors=config_dict["atomic_models_params"]["loads_b_factors"],
                 selection_string=config_dict["atomic_models_params"]["atom_selection"],
             )
@@ -119,7 +137,7 @@ def _simulate_relion_dataset(
     parameter_file: RelionParticleParameterFile,
     path_to_relion_project: str,
     images_per_file: int,
-    volumes: tuple[cxs.GaussianMixtureVolume, ...],
+    volumes: tuple[cxs.AbstractVolumeRepresentation, ...],
     ensemble_probabilities: Float[Array, " n_volumes"],
     mask: CircularCosineMask,
     noise_snr_range: list[Float],

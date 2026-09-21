@@ -7,7 +7,6 @@ from ._config_validators import (
     DatasetSimulatorConfig,
     EnsOptMDConfig,
     FlexibleFittingConfig,
-    GMMFitConfig,
     ReweightingConfig,
 )
 
@@ -36,11 +35,6 @@ def load_config(
 @overload
 def load_config(
     path_to_config: str | Path,
-    config_mode: Literal["gmm fitting"],
-) -> GMMFitConfig: ...
-@overload
-def load_config(
-    path_to_config: str | Path,
     config_mode: Literal["flexible fitting"],
 ) -> FlexibleFittingConfig: ...
 
@@ -50,17 +44,10 @@ def load_config(
     config_mode: Literal[
         "data simulation",
         "ensemble optimization",
-        "gmm fitting",
         "flexible fitting",
         "reweighting",
     ],
-) -> (
-    DatasetSimulatorConfig
-    | EnsOptMDConfig
-    | GMMFitConfig
-    | FlexibleFittingConfig
-    | ReweightingConfig
-):
+) -> DatasetSimulatorConfig | EnsOptMDConfig | FlexibleFittingConfig | ReweightingConfig:
     """
     Load a configuration file and parse it into the appropriate configuration object.
 
@@ -69,7 +56,7 @@ def load_config(
         Path to the configuration file (YAML format).
     - `config_mode`
         Type of configuration to load. Must be one of "data simulation",
-        "ensemble optimization", "gmm fitting", "flexible fitting", or "reweighting".
+        "ensemble optimization", "flexible fitting", or "reweighting".
 
     **Returns:**
     - Config Object
@@ -82,8 +69,6 @@ def load_config(
         return DatasetSimulatorConfig(**config_dict)
     elif config_mode == "ensemble optimization":
         return EnsOptMDConfig(**config_dict)
-    elif config_mode == "gmm fitting":
-        return GMMFitConfig(**config_dict)
     elif config_mode == "flexible fitting":
         return FlexibleFittingConfig(**config_dict)
     elif config_mode == "reweighting":
@@ -92,5 +77,5 @@ def load_config(
         raise ValueError(
             f"Unknown config_mode: {config_mode}. Must be one of"
             + " 'data simulation', 'ensemble optimization',"
-            " 'gmm fitting', 'flexible fitting', or 'reweighting'."
+            " 'flexible fitting', or 'reweighting'."
         )

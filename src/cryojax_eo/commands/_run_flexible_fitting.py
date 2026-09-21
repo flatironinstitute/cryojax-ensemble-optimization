@@ -6,27 +6,18 @@ import os
 from pathlib import Path
 from typing import Any
 
+import cryojax.simulator as cxs
 import jax.numpy as jnp
 import mdtraj
 import numpy as np
 import optax
 import yaml
 from cryojax.io import read_array_from_mrc
+from cryojax.jax_util import FloatLike
 from cryojax.ndimage import fourier_crop_to_shape
-from jaxtyping import Array, Float, Int
+from jaxtyping import Array, Float
 
-from cryojax_eo.ensemble_optimization import (
-    SteeredMDSimulator,
-    md_params_config_to_openmm_overrides,
-)
-from cryojax_eo.flexible_fitting import (
-    AbstractModelToVolumeLossFn,
-    AdamWalkerFlexibleFitting,
-    FlexibleFittingPipeline,
-    ModelToVolumeCorrelationLossFn,
-    ModelToVolumeWeightedMSELossFn,
-    SteepestDescWalkerFlexibleFitting,
-)
+import cryojax_eo as cxeo
 from cryojax_eo.internal import FlexibleFittingConfig
 from cryojax_eo.io import read_walkers_from_pdbs
 from cryojax_eo.utils import EarlyStopping, ModelToVolumeAligner
@@ -56,42 +47,63 @@ def warnexists(out):
 
 def _make_atom_list(atom_selection, topology) -> np.ndarray:
     suffix = Path(atom_selection).suffix
-    if suffix in [".txt", ".npy"]:
+    if suffix == ".txt":
         atom_list = np.loadtxt(atom_selection, dtype=int)
+    elif suffix == ".npy":
+        atom_list = np.load(atom_selection).astype(int)
     else:
         atom_list = topology.select(atom_selection)
     return np.array(atom_list)
 
 
+def _make_render_fn(
+    gmm_volume: cxs.GaussianMixtureVolume,
+    shape: tuple[int, int, int],
+    voxel_size: FloatLike,
+    config: dict,
+) -> cxs.GaussianMixtureRenderFn:
+    render_options = config["walker_optimizer_params"]["volume_render_backend"]
+    if render_options["spread_mode"] == "local":
+        n_spread = cxs.suggest_n_spread(
+            gmm_volume,
+            pixel_size=voxel_size,
+            cutoff_sigma=render_options["spread_width_in_stds"],
+        )
+    else:
+        n_spread = None
+
+    return cxs.GaussianMixtureRenderFn(
+        shape=shape,
+        voxel_size=voxel_size,
+        n_batches=config["walker_optimizer_params"]["n_batches_of_atoms"],
+        n_spread=n_spread,
+        enable_pallas=render_options["enable_pallas"],
+    )
+
+
 def _construct_model_to_volume_loss_fn(
     amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
     variances: Float[Array, "n_atoms n_gaussians_per_atom"],
-    voxel_size_ff: Float,
-    box_size_ff: Int,
+    render_fn: cxs.GaussianMixtureRenderFn,
     vol_mask: Float[Array, "dim_z dim_y dim_x"] | None,
     config: dict,
 ):
     loss_kwargs: dict[str, Any] = dict(
         amplitudes=amplitudes,
         variances=variances,
-        voxel_size=voxel_size_ff,
-        volume_shape=(box_size_ff, box_size_ff, box_size_ff),
+        render_fn=render_fn,
         vol_mask=vol_mask,
-        batch_size_for_z_planes=config["walker_optimizer_params"][
-            "batch_size_for_z_planes"
-        ],
-        n_batches_of_atoms=config["walker_optimizer_params"]["n_batches_of_atoms"],
     )
     if config["reference_volume_params"].get("path_to_weights") is not None:
         path_to_weights = config["reference_volume_params"]["path_to_weights"]
         loss_kwargs["weights"] = jnp.asarray(read_array_from_mrc(path_to_weights))
-        return ModelToVolumeWeightedMSELossFn(**loss_kwargs)
+        return cxeo.ModelToVolumeWeightedMSELossFn(**loss_kwargs)
     else:
-        return ModelToVolumeCorrelationLossFn(**loss_kwargs)
+        return cxeo.ModelToVolumeCorrelationLossFn(**loss_kwargs)
 
 
 def _construct_walker_optimizer(
-    config: dict, model_to_vol_loss_fn: AbstractModelToVolumeLossFn
+    config: dict, model_to_vol_loss_fn: cxeo.AbstractModelToVolumeLossFn
 ):
     optimizer_kwargs = dict(
         n_steps=config["walker_optimizer_params"]["n_steps"],
@@ -99,9 +111,9 @@ def _construct_walker_optimizer(
         model_to_vol_loss_fn=model_to_vol_loss_fn,
     )
     if config["walker_optimizer_params"]["type"] == "steepest_desc":
-        return SteepestDescWalkerFlexibleFitting(**optimizer_kwargs)
+        return cxeo.SteepestDescWalkerFlexibleFitting(**optimizer_kwargs)
     elif config["walker_optimizer_params"]["type"] == "adam":
-        return AdamWalkerFlexibleFitting(**optimizer_kwargs)
+        return cxeo.AdamWalkerFlexibleFitting(**optimizer_kwargs)
     else:
         raise ValueError(
             f"Invalid walker optimizer type: {config['walker_optimizer_params']['type']}"
@@ -172,26 +184,39 @@ def run_flexible_fitting(flexible_fitting_config: FlexibleFittingConfig):
     logging.debug("Reference volume loaded.")
 
     # Construct prior projector
-    parameters_for_md = md_params_config_to_openmm_overrides(
+    parameters_for_md = cxeo.md_params_config_to_openmm_overrides(
         config["projector_params"]["md_params"]
     )
     parameters_for_md["platform"] = config["projector_params"]["platform"]
     parameters_for_md["properties"] = config["projector_params"]["platform_properties"]
 
-    prior_projector = SteeredMDSimulator(
+    prior_projector = cxeo.SteeredMDSimulator(
         path_to_initial_pdb=config["path_to_atomic_model"],
         n_steps=config["projector_params"]["n_steps"],
         restrain_atom_list=atom_list.tolist(),
         parameters_for_md=parameters_for_md,
         base_state_file_path=os.path.join(config["path_to_output"], "states_proj/state_"),
+        # A seed of 0 keeps OpenMM's default behavior of drawing a fresh seed
+        # each run (non-reproducible).
+        random_seed=config["rng_seed"] if config["rng_seed"] != 0 else None,
     )
 
     # Construct likelihood optimizer
+    render_fn = _make_render_fn(
+        cxs.GaussianMixtureVolume(
+            positions=initial_walker[atom_list],
+            amplitudes=amplitudes,
+            variances=variances,
+        ),
+        shape=(box_size_ff, box_size_ff, box_size_ff),
+        voxel_size=voxel_size_ff,
+        config=config,
+    )
+
     model_to_vol_loss_fn = _construct_model_to_volume_loss_fn(
         amplitudes,
         variances,
-        voxel_size_ff,
-        box_size_ff,
+        render_fn,
         vol_mask,
         config,
     )
@@ -201,18 +226,17 @@ def run_flexible_fitting(flexible_fitting_config: FlexibleFittingConfig):
         model_to_vol_loss_fn=model_to_vol_loss_fn,
     )
 
-    early_stopping = (
-        EarlyStopping(
+    if config.get("early_stopping") is not None:
+        early_stopping = EarlyStopping(
             patience=config["early_stopping"]["patience"],
             rtol=config["early_stopping"]["rtol"],
             atol=config["early_stopping"]["atol"],
         )
-        if config.get("early_stopping") is not None
-        else None
-    )
+    else:
+        early_stopping = None
 
     # Construct the ensemble optimization pipeline
-    flexible_fitting_pipeline = FlexibleFittingPipeline(
+    flexible_fitting_pipeline = cxeo.FlexibleFittingPipeline(
         prior_projector=prior_projector,
         walker_optimizer=walker_optimizer,
         n_steps=config["n_steps"],

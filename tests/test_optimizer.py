@@ -3,13 +3,13 @@ import jax.numpy as jnp
 import mdtraj
 from cryospax import RelionParticleDataset, RelionParticleParameterFile
 
-from cryojax_eo.dataset import create_dataloader
-from cryojax_eo.ensemble_optimization import (
+from cryojax_eo import (
     ImagesToEnsembleLikelihoodFn,
     IterativeEnsembleLikelihoodOptimizer,
     MargGaussianWhiteLogLikelihoodFn,
     MultGradWeightOptimizer,
 )
+from cryojax_eo.dataset import create_dataloader
 from cryojax_eo.io import read_walkers_from_pdbs
 
 

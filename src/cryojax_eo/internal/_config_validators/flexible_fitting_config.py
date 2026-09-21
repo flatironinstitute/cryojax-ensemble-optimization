@@ -16,6 +16,28 @@ from .ensemble_opt_config import MDParamsConfig as MDParamsConfig
 from .utils import _validate_file_with_type, _validate_files_with_type
 
 
+class FFVolumeRenderBackendConfig(BaseModel, extra="forbid"):
+    enable_pallas: bool = Field(
+        default=False,
+        description="Whether to use the Pallas/Triton GPU kernel, instead of pure "
+        + "JAX, when spread_mode='local'. Ignored when spread_mode='exact'. Most "
+        + "advantageous for the backward pass.",
+    )
+    spread_mode: Literal["exact", "local"] = Field(
+        default="local",
+        description="How each gaussian is rendered onto the voxel grid. 'exact' "
+        + "evaluates dense gaussian integrals over the whole grid. 'local' instead "
+        + "spreads each gaussian onto only its nearby voxels, with the truncation "
+        + "width set by `spread_width_in_stds`, trading accuracy for speed since "
+        + "gaussians are short-ranged relative to typical grid sizes.",
+    )
+    spread_width_in_stds: PositiveFloat = Field(
+        default=6.0,
+        description="Truncation width for 'local' spread mode, in standard "
+        + "deviations of the gaussian. Ignored when spread_mode='exact'.",
+    )
+
+
 class FFOptimizationConfig(BaseModel, extra="forbid"):
     type: Literal["steepest_desc", "adam"] = Field(
         default="steepest_desc",
@@ -29,17 +51,18 @@ class FFOptimizationConfig(BaseModel, extra="forbid"):
         description="Step size in Angstroms for the optimization process."
     )
 
-    batch_size_for_z_planes: PositiveInt = Field(
-        default=1,
-        description="The number of z-planes to evaluate in parallel with"
-        " `jax.vmap`. By default, `1`.",
-    )
     n_batches_of_atoms: PositiveInt = Field(
         default=1,
         description="The number of iterations used to evaluate the volume, "
         "where the iteration is taken over groups of atoms. "
         "This is useful if `batch_size = 1` and GPU memory is exhausted. "
         "By default, `1`.",
+    )
+
+    volume_render_backend: FFVolumeRenderBackendConfig = Field(
+        default_factory=FFVolumeRenderBackendConfig,
+        description="Backend options for the volume render function used to "
+        + "rasterize walkers onto a voxel grid during flexible fitting.",
     )
 
 
@@ -226,6 +249,12 @@ class FlexibleFittingConfig(BaseModel, extra="forbid"):
     n_steps: PositiveInt = Field(
         description="Number of steps of cryoJAX ensemble refinement to run."
     )
+    rng_seed: int = Field(
+        default=0,
+        description="Random seed. Also fixes the OpenMM Langevin thermostat's "
+        "random stream for reproducibility. A value of 0 leaves OpenMM's default "
+        "behavior of drawing a fresh seed each run.",
+    )
 
     @field_validator("path_to_atomic_model")
     @classmethod
@@ -250,11 +279,9 @@ class FlexibleFittingConfig(BaseModel, extra="forbid"):
     @field_validator("early_stopping")
     @classmethod
     def validate_early_stopping_config(cls, values):
-        return (
-            dict(FFEarlyStoppingConfig(**values).model_dump())
-            if values is not None
-            else {}
-        )
+        if values is None:
+            return None
+        return dict(FFEarlyStoppingConfig(**values).model_dump())
 
     @field_validator("atom_selection")
     @classmethod
