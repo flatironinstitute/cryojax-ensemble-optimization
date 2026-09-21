@@ -6,14 +6,16 @@ import os
 from pathlib import Path
 from typing import Any
 
+import cryojax.simulator as cxs
 import jax.numpy as jnp
 import mdtraj
 import numpy as np
 import optax
 import yaml
 from cryojax.io import read_array_from_mrc
+from cryojax.jax_util import FloatLike
 from cryojax.ndimage import fourier_crop_to_shape
-from jaxtyping import Array, Float, Int
+from jaxtyping import Array, Float
 
 import cryojax_eo as cxeo
 from cryojax_eo.internal import FlexibleFittingConfig
@@ -54,21 +56,43 @@ def _make_atom_list(atom_selection, topology) -> np.ndarray:
     return np.array(atom_list)
 
 
+def _make_render_fn(
+    gmm_volume: cxs.GaussianMixtureVolume,
+    shape: tuple[int, int, int],
+    voxel_size: FloatLike,
+    config: dict,
+) -> cxs.GaussianMixtureRenderFn:
+    render_options = config["walker_optimizer_params"]["volume_render_backend"]
+    if render_options["spread_mode"] == "local":
+        n_spread = cxs.suggest_n_spread(
+            gmm_volume,
+            pixel_size=voxel_size,
+            cutoff_sigma=render_options["spread_width_in_stds"],
+        )
+    else:
+        n_spread = None
+
+    return cxs.GaussianMixtureRenderFn(
+        shape=shape,
+        voxel_size=voxel_size,
+        n_batches=config["walker_optimizer_params"]["n_batches_of_atoms"],
+        n_spread=n_spread,
+        enable_pallas=render_options["enable_pallas"],
+    )
+
+
 def _construct_model_to_volume_loss_fn(
     amplitudes: Float[Array, "n_atoms n_gaussians_per_atom"],
     variances: Float[Array, "n_atoms n_gaussians_per_atom"],
-    voxel_size_ff: Float,
-    box_size_ff: Int,
+    render_fn: cxs.GaussianMixtureRenderFn,
     vol_mask: Float[Array, "dim_z dim_y dim_x"] | None,
     config: dict,
 ):
     loss_kwargs: dict[str, Any] = dict(
         amplitudes=amplitudes,
         variances=variances,
-        voxel_size=voxel_size_ff,
-        volume_shape=(box_size_ff, box_size_ff, box_size_ff),
+        render_fn=render_fn,
         vol_mask=vol_mask,
-        n_batches_of_atoms=config["walker_optimizer_params"]["n_batches_of_atoms"],
     )
     if config["reference_volume_params"].get("path_to_weights") is not None:
         path_to_weights = config["reference_volume_params"]["path_to_weights"]
@@ -178,11 +202,21 @@ def run_flexible_fitting(flexible_fitting_config: FlexibleFittingConfig):
     )
 
     # Construct likelihood optimizer
+    render_fn = _make_render_fn(
+        cxs.GaussianMixtureVolume(
+            positions=initial_walker[atom_list],
+            amplitudes=amplitudes,
+            variances=variances,
+        ),
+        shape=(box_size_ff, box_size_ff, box_size_ff),
+        voxel_size=voxel_size_ff,
+        config=config,
+    )
+
     model_to_vol_loss_fn = _construct_model_to_volume_loss_fn(
         amplitudes,
         variances,
-        voxel_size_ff,
-        box_size_ff,
+        render_fn,
         vol_mask,
         config,
     )

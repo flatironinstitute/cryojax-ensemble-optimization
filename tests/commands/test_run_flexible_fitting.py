@@ -139,6 +139,21 @@ def test_minimal_options(base_config, tmp_path):
     assert_walker_written(config)
 
 
+@pytest.mark.parametrize("spread_mode", ["exact", "local"])
+def test_volume_render_backend_spread_mode(base_config, tmp_path, spread_mode):
+    """Both render backends drive the fit end to end."""
+    config = deep_update(
+        base_config,
+        {
+            "walker_optimizer_params": {
+                "volume_render_backend": {"spread_mode": spread_mode}
+            }
+        },
+    )
+    run_command(main, tmp_path, config)
+    assert_walker_written(config)
+
+
 @pytest.mark.parametrize("optimizer_type", ["steepest_desc", "adam"])
 def test_optimizer_type(base_config, tmp_path, optimizer_type):
     config = deep_update(

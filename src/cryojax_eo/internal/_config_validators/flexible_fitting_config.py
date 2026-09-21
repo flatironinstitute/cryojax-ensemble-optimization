@@ -16,6 +16,28 @@ from .ensemble_opt_config import MDParamsConfig as MDParamsConfig
 from .utils import _validate_file_with_type, _validate_files_with_type
 
 
+class FFVolumeRenderBackendConfig(BaseModel, extra="forbid"):
+    enable_pallas: bool = Field(
+        default=False,
+        description="Whether to use the Pallas/Triton GPU kernel, instead of pure "
+        + "JAX, when spread_mode='local'. Ignored when spread_mode='exact'. Most "
+        + "advantageous for the backward pass.",
+    )
+    spread_mode: Literal["exact", "local"] = Field(
+        default="local",
+        description="How each gaussian is rendered onto the voxel grid. 'exact' "
+        + "evaluates dense gaussian integrals over the whole grid. 'local' instead "
+        + "spreads each gaussian onto only its nearby voxels, with the truncation "
+        + "width set by `spread_width_in_stds`, trading accuracy for speed since "
+        + "gaussians are short-ranged relative to typical grid sizes.",
+    )
+    spread_width_in_stds: PositiveFloat = Field(
+        default=6.0,
+        description="Truncation width for 'local' spread mode, in standard "
+        + "deviations of the gaussian. Ignored when spread_mode='exact'.",
+    )
+
+
 class FFOptimizationConfig(BaseModel, extra="forbid"):
     type: Literal["steepest_desc", "adam"] = Field(
         default="steepest_desc",
@@ -35,6 +57,12 @@ class FFOptimizationConfig(BaseModel, extra="forbid"):
         "where the iteration is taken over groups of atoms. "
         "This is useful if `batch_size = 1` and GPU memory is exhausted. "
         "By default, `1`.",
+    )
+
+    volume_render_backend: FFVolumeRenderBackendConfig = Field(
+        default_factory=FFVolumeRenderBackendConfig,
+        description="Backend options for the volume render function used to "
+        + "rasterize walkers onto a voxel grid during flexible fitting.",
     )
 
 
