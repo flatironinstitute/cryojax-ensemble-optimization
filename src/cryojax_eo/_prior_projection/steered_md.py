@@ -203,8 +203,10 @@ class SteeredMDSimulator(AbstractPriorProjector, strict=True):
 
         simulation = _add_restraint_force_to_simulation(
             self.simulation,
+            # Single device->host transfer; passing the JAX array directly makes
+            # numpy pull it to host row by row (one transfer per atom).
             mdtraj.Trajectory(
-                ref_walkers / 10.0, self.simulation.topology
+                np.asarray(ref_walkers) / 10.0, self.simulation.topology
             ).openmm_positions(0),
             self.restrain_atom_list,
             bias_constant,
