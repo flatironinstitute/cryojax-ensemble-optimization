@@ -5,11 +5,11 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 from cryojax.jax_util import filter_bmap
-from jax_dataloader import DataLoader
 from jaxtyping import Array, Float
 from tqdm import tqdm
 
 from ..._pose_search import HierarchicalSO3GridSearch
+from ...dataset import ParticleDataLoader
 from .._utils import estimate_poses
 from .single_likelihood import AbstractImageToWalkerLogLikelihoodFn
 
@@ -83,7 +83,7 @@ class ImagesToEnsembleLikelihoodFn(AbstractImagesToEnsembleLikelihoodFn):
     def compute_full_log_likelihood_matrix(
         self,
         walkers: Float[Array, "n_walkers n_atoms n_gaussians_per_atom"],
-        dataloader: DataLoader,
+        dataloader: ParticleDataLoader,
         *,
         pose_search: HierarchicalSO3GridSearch | None = None,
         prints_progress=False,
@@ -96,8 +96,8 @@ class ImagesToEnsembleLikelihoodFn(AbstractImagesToEnsembleLikelihoodFn):
         """
         compute_likelihood_matrix_fn = eqx.filter_jit(self.compute_log_likelihood_matrix)
 
-        shuffle = dataloader.dataloader.shuffle  # save the original shuffle state
-        dataloader.dataloader.shuffle = False
+        shuffle = dataloader.shuffle  # save the original shuffle state
+        dataloader.shuffle = False
         # Compute the likelihood matrix for each batch in the dataloader
         likelihood_matrix = []
 
@@ -138,7 +138,7 @@ class ImagesToEnsembleLikelihoodFn(AbstractImagesToEnsembleLikelihoodFn):
             likelihood_matrix.append(lklhood_matrix)
 
         # restore the original shuffle state
-        dataloader.dataloader.shuffle = shuffle
+        dataloader.shuffle = shuffle
 
         # Concatenate the likelihood matrices from all batches
         return jnp.concatenate(likelihood_matrix, axis=0)

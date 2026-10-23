@@ -1,4 +1,5 @@
 from ._datasets_and_dataloaders import (
+    ParticleDataLoader as ParticleDataLoader,
     create_dataloader as create_dataloader,
 )
 from ._relion_data_simulation import (

@@ -6,10 +6,10 @@ import logging
 
 import equinox as eqx
 import jax.numpy as jnp
-import jax_dataloader as jdl
 from jaxtyping import Array, Float, Int
 
 from .._pose_search import HierarchicalSO3GridSearch
+from ..dataset import ParticleDataLoader
 from . import ImagesToEnsembleLikelihoodFn
 from ._mult_grad_weight_opt import multiplicative_gradient
 
@@ -35,7 +35,7 @@ class MultGradWeightOptimizer(eqx.Module):
     def __call__(
         self,
         walkers: Float[Array, "n_walkers n_atoms 3"],
-        dataloader: jdl.DataLoader,
+        dataloader: ParticleDataLoader,
     ) -> Float[Array, " n_walkers"]:
         """
         Optimize the weights of the walkers using projected gradient descent

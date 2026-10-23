@@ -9,10 +9,10 @@ import cryojax.simulator as cxs
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-import jax_dataloader as jdl
 from jaxtyping import Array, Float
 
 from .._pose_search import HierarchicalSO3GridSearch
+from ..dataset import ParticleDataLoader
 from . import ImagesToEnsembleLikelihoodFn
 from ._utils import estimate_poses
 from ._weights_optimizer import MultGradWeightOptimizer
@@ -54,7 +54,7 @@ class IterativeEnsembleLikelihoodOptimizer(AbstractEnsembleParameterOptimizer):
         self,
         walkers: Float[Array, "n_walkers n_atoms 3"],
         weights: Float[Array, " n_walkers"],
-        dataloader: jdl.DataLoader,
+        dataloader: ParticleDataLoader,
     ) -> tuple[float, Float[Array, "n_walkers n_atoms 3"], Float[Array, " n_walkers"]]:
         loss = 0.0
         for _ in range(self.n_steps):
