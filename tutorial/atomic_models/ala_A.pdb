@@ -1,0 +1,58 @@
+ATOM      1  H1  ACE X   1      -3.667   5.352  -2.257  1.00  0.00      SYST H
+ATOM      2  CH3 ACE X   1      -3.268   4.481  -2.776  1.00  0.00      SYST C
+ATOM      3  H2  ACE X   1      -3.295   4.764  -3.828  1.00  0.00      SYST H
+ATOM      4  H3  ACE X   1      -3.895   3.622  -2.536  1.00  0.00      SYST H
+ATOM      5  C   ACE X   1      -1.820   4.273  -2.320  1.00  0.00      SYST C
+ATOM      6  O   ACE X   1      -0.989   5.056  -2.661  1.00  0.00      SYST O
+ATOM      7  N   ALA X   2      -1.584   3.221  -1.515  1.00  0.00      SYST N
+ATOM      8  H   ALA X   2      -2.396   2.744  -1.153  1.00  0.00      SYST H
+ATOM      9  CA  ALA X   2      -0.309   2.995  -0.866  1.00  0.00      SYST C
+ATOM     10  HA  ALA X   2       0.508   3.505  -1.377  1.00  0.00      SYST H
+ATOM     11  CB  ALA X   2      -0.367   3.557   0.538  1.00  0.00      SYST C
+ATOM     12  HB1 ALA X   2       0.623   3.651   0.985  1.00  0.00      SYST H
+ATOM     13  HB2 ALA X   2      -0.694   4.595   0.469  1.00  0.00      SYST H
+ATOM     14  HB3 ALA X   2      -1.083   3.016   1.157  1.00  0.00      SYST H
+ATOM     15  C   ALA X   2       0.098   1.510  -0.776  1.00  0.00      SYST C
+ATOM     16  O   ALA X   2      -0.697   0.618  -0.827  1.00  0.00      SYST O
+ATOM     17  N   ALA X   3       1.438   1.189  -0.726  1.00  0.00      SYST N
+ATOM     18  H   ALA X   3       2.141   1.914  -0.753  1.00  0.00      SYST H
+ATOM     19  CA  ALA X   3       2.103  -0.189  -0.737  1.00  0.00      SYST C
+ATOM     20  HA  ALA X   3       1.463  -0.756  -1.413  1.00  0.00      SYST H
+ATOM     21  CB  ALA X   3       3.538  -0.142  -1.164  1.00  0.00      SYST C
+ATOM     22  HB1 ALA X   3       4.127   0.377  -0.408  1.00  0.00      SYST H
+ATOM     23  HB2 ALA X   3       3.993  -1.114  -1.354  1.00  0.00      SYST H
+ATOM     24  HB3 ALA X   3       3.597   0.348  -2.136  1.00  0.00      SYST H
+ATOM     25  C   ALA X   3       1.911  -0.977   0.617  1.00  0.00      SYST C
+ATOM     26  O   ALA X   3       2.931  -1.321   1.242  1.00  0.00      SYST O
+ATOM     27  N   ALA X   4       0.679  -1.288   0.905  1.00  0.00      SYST N
+ATOM     28  H   ALA X   4      -0.109  -0.779   0.529  1.00  0.00      SYST H
+ATOM     29  CA  ALA X   4       0.355  -2.265   1.980  1.00  0.00      SYST C
+ATOM     30  HA  ALA X   4       1.233  -2.404   2.611  1.00  0.00      SYST H
+ATOM     31  CB  ALA X   4      -0.699  -1.644   2.824  1.00  0.00      SYST C
+ATOM     32  HB1 ALA X   4      -0.931  -2.279   3.679  1.00  0.00      SYST H
+ATOM     33  HB2 ALA X   4      -0.260  -0.741   3.248  1.00  0.00      SYST H
+ATOM     34  HB3 ALA X   4      -1.542  -1.403   2.175  1.00  0.00      SYST H
+ATOM     35  C   ALA X   4      -0.011  -3.727   1.516  1.00  0.00      SYST C
+ATOM     36  O   ALA X   4      -0.181  -4.709   2.209  1.00  0.00      SYST O
+ATOM     37  N   NME X   5      -0.217  -3.873   0.193  1.00  0.00      SYST N
+ATOM     38  H   NME X   5      -0.029  -3.037  -0.342  1.00  0.00      SYST H
+ATOM     39  C   NME X   5      -0.952  -5.007  -0.409  1.00  0.00      SYST C
+ATOM     40  H1  NME X   5      -0.462  -5.965  -0.234  1.00  0.00      SYST H
+ATOM     41  H2  NME X   5      -2.021  -4.966  -0.200  1.00  0.00      SYST H
+ATOM     42  H3  NME X   5      -0.841  -4.927  -1.490  1.00  0.00      SYST H
+TER      43      NME X   5
+CONECT    1    2
+CONECT    2    5    1    3    4
+CONECT    3    2
+CONECT    4    2
+CONECT    5    2    6    7
+CONECT    6    5
+CONECT    7    5
+CONECT   35   37
+CONECT   37   35   39   38
+CONECT   38   37
+CONECT   39   40   41   42   37
+CONECT   40   39
+CONECT   41   39
+CONECT   42   39
+END
