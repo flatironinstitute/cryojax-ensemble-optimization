@@ -5,10 +5,10 @@ Base optimizer object for ensemble refinement.
 from abc import abstractmethod
 
 from equinox import AbstractVar, Module
-from jax_dataloader import DataLoader
 from jaxtyping import Array, Float
 
 from .._pose_search import HierarchicalSO3GridSearch
+from ..dataset import ParticleDataLoader
 from ._loss_functions import AbstractImagesToEnsembleLikelihoodFn
 
 
@@ -26,6 +26,6 @@ class AbstractEnsembleParameterOptimizer(Module):
         self,
         walkers: Float[Array, "n_walkers n_atoms 3"],
         weights: Float[Array, " n_walkers"],
-        dataloader: DataLoader,
+        dataloader: ParticleDataLoader,
     ) -> Float:
         raise NotImplementedError

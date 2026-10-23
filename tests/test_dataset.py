@@ -4,10 +4,12 @@ import shutil
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 from cryospax import RelionParticleDataset, RelionParticleParameterFile
 
 from cryojax_eo.dataset import (
+    ParticleDataLoader,
     create_dataloader,
     make_relion_parameter_file,
     simulate_relion_dataset,
@@ -131,3 +133,58 @@ def test_create_dataloader(
         "Batch size of per_particle_args is incorrect"
     )
     return
+
+
+class _ArrayDataset:
+    def __init__(self, n):
+        self.data = np.arange(n)
+
+    def __getitem__(self, index):
+        return self.data[index]
+
+    def __len__(self):
+        return len(self.data)
+
+
+@pytest.mark.parametrize("drop_last", [True, False])
+def test_particle_dataloader_batching(drop_last):
+    dataloader = ParticleDataLoader(_ArrayDataset(10), batch_size=3, drop_last=drop_last)
+    batches = list(dataloader)
+
+    assert len(dataloader) == len(batches) == (3 if drop_last else 4)
+    expected = np.arange(9) if drop_last else np.arange(10)
+    np.testing.assert_array_equal(np.concatenate(batches), expected)
+
+
+def test_particle_dataloader_shuffle():
+    def make_dataloader():
+        return ParticleDataLoader(
+            _ArrayDataset(10), batch_size=3, shuffle=True, jax_prng_key=jax.random.key(0)
+        )
+
+    dataloader = make_dataloader()
+    epoch_1 = np.concatenate(list(dataloader))
+    epoch_2 = np.concatenate(list(dataloader))
+
+    np.testing.assert_array_equal(np.sort(epoch_1), np.arange(10))
+    assert not np.array_equal(epoch_1, epoch_2), "Shuffle should change between epochs"
+    np.testing.assert_array_equal(epoch_1, np.concatenate(list(make_dataloader())))
+
+    with pytest.raises(ValueError):
+        ParticleDataLoader(_ArrayDataset(10), batch_size=3, shuffle=True)
+
+
+@pytest.mark.parametrize("shuffle", [True, False])
+def test_particle_dataloader_prefetch(shuffle):
+    def epoch(prefetch):
+        dataloader = ParticleDataLoader(
+            _ArrayDataset(10),
+            batch_size=3,
+            shuffle=shuffle,
+            jax_prng_key=jax.random.key(0),
+            prefetch=prefetch,
+        )
+        return list(dataloader)
+
+    for batch, batch_prefetch in zip(epoch(0), epoch(2), strict=True):
+        np.testing.assert_array_equal(batch, batch_prefetch)

@@ -11,11 +11,11 @@ import mdtraj
 import numpy as np
 import optax
 from cryojax.jax_util import NDArrayLike
-from jax_dataloader import DataLoader
 from jaxtyping import Array, Float, Int, PRNGKeyArray
 from mdtraj.formats import XTCTrajectoryFile
 from tqdm import tqdm
 
+from cryojax_eo.dataset import ParticleDataLoader
 from cryojax_eo.utils import ModelToVolumeAligner, rigid_align_positions
 
 from .._image_to_ensemble_utils import (
@@ -66,7 +66,7 @@ class EnsembleOptimizationPipeline(eqx.Module):
         key: PRNGKeyArray,
         initial_walkers: Float[Array, "n_walkers n_atoms 3"],
         initial_weights: Float[Array, " n_walkers"],
-        dataloader: DataLoader,
+        dataloader: ParticleDataLoader,
         bias_constant_scheduler: optax.Schedule,
         *,
         output_directory: str | pathlib.Path,
@@ -228,7 +228,7 @@ class EnsembleOptimizationPipeline(eqx.Module):
         self,
         walkers: Float[Array, "n_walkers n_atoms 3"],
         weights: Float[Array, " n_walkers"],
-        dataloader: DataLoader,
+        dataloader: ParticleDataLoader,
         weight_optimizer: MultGradWeightOptimizer,
     ):
         """

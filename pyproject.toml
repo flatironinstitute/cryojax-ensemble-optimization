@@ -30,7 +30,6 @@ dependencies = [
     "jaxlib",
     "jaxtyping",
     "jaxopt",
-    "jax_dataloader",
     "equinox",
     "natsort",
     "pydantic",
