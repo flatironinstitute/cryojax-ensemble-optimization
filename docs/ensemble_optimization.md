@@ -64,6 +64,9 @@ likelihood_optimizer_params:
     n_candidates: 40 # (*) Number of orientations kept at the end of each round
     n_angles_in_parallel: 10 # (*) Orientations evaluated in parallel (vmapped)
     shift_search_range_in_angstroms: 20.0 # (*) Half-width of the searched shift range. Omit to search all shifts
+    uses_mask: true # (*) Default: false. Compare images only inside a projected 3D mask when scoring orientations
+    path_to_mask: /path/to/pose_search_mask.mrc # (*) Default: data_params.path_to_volumetric_mask
+    path_to_aligned_model: /path/to/model_aligned_to_mask.pdb # Required when uses_mask is true. A model aligned to the mask
   volume_integrator_backend: # (*) How walker volumes are projected into images. Every field is optional
     spread_mode: local # (*) Default: local. Options: local, exact
     spread_width_in_stds: 6.0 # (*) Default: 6.0. Ignored when spread_mode is 'exact'
@@ -92,6 +95,11 @@ The `path_to_initial_states` argument is useful for restarting simulations or wa
 The optional `md_params` block inside `projector_params` lets you override any of the underlying OpenMM simulation parameters without modifying the code. All fields are optional and fall back to built-in defaults when omitted. The `nonbonded_method` field accepts string aliases: `CutoffNonPeriodic` (default, for implicit/vacuum simulations), `PME` or `Ewald` (for explicit solvent with a periodic box), `CutoffPeriodic` (periodic box with a simple cutoff), `LJPME` (PME for both electrostatics and Lennard-Jones), and `NoCutoff` (no cutoff; very small systems only). Note that periodic methods require a simulation box defined in the PDB. The `constraints` field accepts `HBonds` (default, constrains bonds to hydrogen — compatible with a 2 fs timestep), `AllBonds`, `HAngles` (allows ~4 fs timesteps), or `null` to disable constraints entirely. Numeric fields use explicit unit suffixes: `_nm` for nanometers, `_K` for Kelvin, `_per_ps` for ps⁻¹, and `_ps` for picoseconds. The `platform` and `platform_properties` fields are set separately at the top level of `projector_params`.
 
 Setting `estimates_poses: true` inside `likelihood_optimizer_params` turns on pose estimation during the optimization. When it is `false` (the default), the poses stored in the starfile are used as they are. When it is `true`, the pose of each particle is re-estimated for every walker at each step with a hierarchical SO(3) grid search, which is considerably more expensive. The search itself is configured by the optional `pose_search_params` block, whose fields all have defaults: the cost grows with `n_rounds` and `n_candidates`, while `n_angles_in_parallel` trades memory for speed. Restricting the translational search with `shift_search_range_in_angstroms` is recommended when the particles are already roughly centered. This feature is still experimental.
+
+The pose search can also be restricted to a region of the particle with `uses_mask: true`. Each candidate orientation is then scored only inside the 3D mask projected at that orientation, the same way the masked likelihood compares images. The mask is read from `path_to_mask`, or from `data_params.path_to_volumetric_mask` when `path_to_mask` is omitted; it must have the same box size as the particle images. Because the walkers move during the optimization, `path_to_aligned_model` must point to an atomic model that is aligned to the mask and has the same atoms as the walkers. Before each pose search, every walker is rigidly aligned to that model, the search runs in the mask's frame, and the alignment is composed back into the estimated poses, so they apply to the walkers as they are.
+
+!!! warning
+    Only use solvent or detergent masks for the pose search, i.e. masks that enclose the whole particle and exclude the solvent or the micelle. Do not use focus masks that cover only part of the particle: scoring orientations on a subregion introduces non-trivial degeneracies in the loss landscape, and the search can settle on wrong poses.
 
 ### Volume integrator backend
 

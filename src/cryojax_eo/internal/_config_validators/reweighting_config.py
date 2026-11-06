@@ -14,7 +14,10 @@ from pydantic import (
     model_validator,
 )
 
-from .ensemble_opt_config import PoseSearchConfig as PoseSearchConfig
+from .ensemble_opt_config import (
+    PoseSearchConfig as PoseSearchConfig,
+    resolve_pose_search_mask_path,
+)
 from .utils import _validate_file_with_type, _validate_files_with_type
 
 
@@ -157,6 +160,25 @@ class ReweightingConfig(BaseModel, extra="forbid"):
         if not self.estimates_poses and "pose_search_params" in self.model_fields_set:
             warnings.warn(
                 "pose_search_params is ignored when estimates_poses is False.",
+                stacklevel=2,
+            )
+
+        pose_search_params = self.pose_search_params
+        if self.estimates_poses and pose_search_params.uses_mask:
+            pose_search_params.path_to_mask = resolve_pose_search_mask_path(
+                pose_search_params.path_to_mask,
+                self.data_params["path_to_volumetric_mask"],
+            )
+            if pose_search_params.path_to_aligned_model is not None:
+                warnings.warn(
+                    "pose_search_params.path_to_aligned_model is ignored by ensemble "
+                    "reweighting: the structural files are not aligned to the mask.",
+                    stacklevel=2,
+                )
+            warnings.warn(
+                "The pose search uses a mask. The structural files are assumed to be "
+                "aligned to the mask; check the plots in the diagnostics/ folder of "
+                "the output directory.",
                 stacklevel=2,
             )
         return self

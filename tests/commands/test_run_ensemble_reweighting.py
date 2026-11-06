@@ -187,6 +187,47 @@ def test_estimates_poses(
     assert os.path.exists(starfile), f"{starfile} was not written"
 
 
+def test_estimates_poses_with_mask(
+    base_config, tmp_path, distinct_pdb_copies, sample_path_mrc_file
+):
+    """The masked pose search falls back to the data mask, warns that the
+    structures are assumed aligned to it, and writes the overlap plots."""
+    config = deep_update(
+        base_config,
+        {
+            "path_to_structural_files": distinct_pdb_copies[:1],
+            "data_params": {"path_to_volumetric_mask": sample_path_mrc_file},
+            "estimates_poses": True,
+            "pose_search_params": {
+                "n_rounds": 0,
+                "initial_resolution": 1,
+                "n_candidates": 2,
+                "n_angles_in_parallel": 2,
+                "shift_search_range_in_angstroms": 2.0,
+                "uses_mask": True,
+            },
+        },
+    )
+    with pytest.warns(UserWarning, match="assumed to be aligned to the mask"):
+        run_command(main, tmp_path, config, from_likelihoods=None)
+    assert_weights_written(config, n_models=1)
+
+    stem = Path(distinct_pdb_copies[0]).stem
+    plot = os.path.join(
+        config["path_to_output_dir"], "diagnostics", f"{stem}_mask_overlap.png"
+    )
+    assert os.path.exists(plot), f"{plot} was not written"
+
+
+def test_estimates_poses_with_mask_requires_a_mask(base_config, tmp_path):
+    config = deep_update(
+        base_config,
+        {"estimates_poses": True, "pose_search_params": {"uses_mask": True}},
+    )
+    with pytest.raises(ValueError, match="no mask was given"):
+        run_command(main, tmp_path, config, from_likelihoods=None)
+
+
 @pytest.mark.parametrize("explicit_path", [False, True])
 def test_from_likelihoods(base_config, tmp_path, explicit_path):
     """`--from-likelihoods` re-optimizes without recomputing the likelihoods."""
