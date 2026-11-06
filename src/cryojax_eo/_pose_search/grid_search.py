@@ -8,6 +8,7 @@ import jax.numpy as jnp
 from cryojax.jax_util import filter_bmap
 from jaxtyping import Array, Float
 
+from ..simulator._dilated_mask import DilatedMask
 from .geometry import (
     getbestneighbors_base_SO3,
     getbestneighbors_next_SO3,
@@ -16,7 +17,7 @@ from .geometry import (
 from .pose_offset import compute_correlation_at_optimal_offset
 
 
-@eqx.filter_vmap(in_axes=(0, None, None, None, None, None, None))
+@eqx.filter_vmap(in_axes=(0, None, None, None, None, None, None, None))
 def _loss_for_grid_search(
     quat: Float[Array, "4"],
     volume: cxs.AbstractVolumeRepresentation,
@@ -25,10 +26,14 @@ def _loss_for_grid_search(
     transfer_theory: cxs.ContrastTransferTheory,
     integrator: cxs.AbstractVolumeIntegrator,
     shift_search_area: Float[Array, "H W"] | None,
+    dilated_mask: DilatedMask | None,
 ) -> tuple[Float[Array, ""], Float[Array, " 2"]]:
     """
     Computes the correlation at the optimal shift using Plancherel's theorem and
     Fourier's convolution theorem for a given quaternion.
+
+    If `dilated_mask` is given, it is projected at the same (unshifted) pose
+    and the images are compared inside it, as in the masked likelihood.
 
     The function outputs the negative correlation as this is a loss function.
     """
@@ -47,12 +52,15 @@ def _loss_for_grid_search(
         # normalizes_signal=True,
     ).simulate(outputs_real_space=True)
 
+    mask2d = None if dilated_mask is None else dilated_mask.project(pose, image_config)
+
     # get the optimal shift, restricted to `shift_search_area`
     correlation, optimal_offset = compute_correlation_at_optimal_offset(
         target_image,
         computed_image_no_shif,
         image_config.get_coordinate_grid(physical=True),
         shift_search_area,
+        mask2d,
     )
     return -correlation, optimal_offset
 
@@ -65,6 +73,7 @@ def _batched_loss_for_grid_search(
     transfer_theory: cxs.ContrastTransferTheory,
     integrator: cxs.AbstractVolumeIntegrator,
     shift_search_area: Float[Array, "H W"] | None,
+    dilated_mask: DilatedMask | None,
     n_angles_in_parallel: int,
 ) -> tuple[Float[Array, " N"], Float[Array, "N 2"]]:
     """
@@ -80,6 +89,7 @@ def _batched_loss_for_grid_search(
             transfer_theory,
             integrator,
             shift_search_area,
+            dilated_mask,
         ),
         xs=quats,
         batch_size=n_angles_in_parallel,
@@ -115,6 +125,14 @@ class HierarchicalSO3GridSearch(eqx.Module):
     - `shift_search_range_in_angstroms`:
         Half-width of the square region of shifts that is searched, in
         angstroms. If `None`, all shifts are searched.
+    - `dilated_mask`:
+        Optional 3D mask. If given, each candidate orientation is scored by
+        comparing the images inside the projected mask.
+    - `mask_frame_positions`:
+        Optional atomic positions of a model aligned to `dilated_mask`. Not used
+        by `__call__` itself: walker-level pose estimation (`estimate_poses`)
+        aligns each walker to these positions before the search, and composes
+        that alignment into the returned poses.
     """
 
     base_quats: Float[Array, "N 4"]
@@ -123,6 +141,8 @@ class HierarchicalSO3GridSearch(eqx.Module):
     base_grid_res: int
     n_angles_in_parallel: int
     shift_search_range_in_angstroms: Float[Array, ""] | None
+    dilated_mask: DilatedMask | None
+    mask_frame_positions: Float[Array, "n_atoms 3"] | None
 
     def __init__(
         self,
@@ -131,6 +151,8 @@ class HierarchicalSO3GridSearch(eqx.Module):
         n_candidates: int,
         n_angles_in_parallel: int = 10,
         shift_search_range_in_angstroms: Float[Array, ""] | None = None,
+        dilated_mask: DilatedMask | None = None,
+        mask_frame_positions: Float[Array, "n_atoms 3"] | None = None,
     ):
         """
         Initialize the HierarchicalSO3GridSearch.
@@ -151,6 +173,13 @@ class HierarchicalSO3GridSearch(eqx.Module):
             angstroms. Only shifts with `|x| <= shift_search_range_in_angstroms`
             and `|y| <= shift_search_range_in_angstroms` are considered. If
             `None`, all shifts are searched.
+        - `dilated_mask`:
+            Optional 3D mask. If given, each candidate orientation is scored by
+            comparing the images inside the mask projected at that orientation.
+        - `mask_frame_positions`:
+            Optional atomic positions (in angstroms) of a model aligned to
+            `dilated_mask`. Used by `estimate_poses` to align walkers to the
+            mask before the search.
         """
         assert base_grid_res >= 1, "Base grid must be at least 1."
         assert n_rounds >= 0, "Number of rounds must be non-negative."
@@ -172,6 +201,10 @@ class HierarchicalSO3GridSearch(eqx.Module):
             None
             if shift_search_range_in_angstroms is None
             else jnp.asarray(shift_search_range_in_angstroms)
+        )
+        self.dilated_mask = dilated_mask
+        self.mask_frame_positions = (
+            None if mask_frame_positions is None else jnp.asarray(mask_frame_positions)
         )
 
     def __call__(
@@ -211,6 +244,7 @@ class HierarchicalSO3GridSearch(eqx.Module):
             transfer_theory,
             integrator,
             shift_search_area,
+            self.dilated_mask,
             self.n_angles_in_parallel,
         )
         # jax.debug.print("Iter: 1. Best loss: {loss}", loss=losses.min())
@@ -239,6 +273,7 @@ class HierarchicalSO3GridSearch(eqx.Module):
                 transfer_theory,
                 integrator,
                 shift_search_area,
+                self.dilated_mask,
                 self.n_angles_in_parallel,
             )
             carry = _HierSO3GriSearchCarry(
@@ -261,6 +296,7 @@ class HierarchicalSO3GridSearch(eqx.Module):
                     transfer_theory,
                     integrator,
                     shift_search_area,
+                    self.dilated_mask,
                     self.n_angles_in_parallel,
                 ),
                 init_val=carry,
@@ -284,6 +320,7 @@ def _run_global_SO3_step(
     transfer_theory: cxs.ContrastTransferTheory,
     integrator: cxs.AbstractVolumeIntegrator,
     shift_search_area: Float[Array, "H W"] | None,
+    dilated_mask: DilatedMask | None,
     n_angles_in_parallel: int,
 ):
     quats, grid_indices = getbestneighbors_next_SO3(
@@ -301,6 +338,7 @@ def _run_global_SO3_step(
         transfer_theory,
         integrator,
         shift_search_area,
+        dilated_mask,
         n_angles_in_parallel,
     )
     # jax.debug.print(

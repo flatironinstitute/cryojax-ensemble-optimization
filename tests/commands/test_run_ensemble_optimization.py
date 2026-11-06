@@ -223,6 +223,50 @@ def test_estimates_poses(base_config, tmp_path):
     assert_ensemble_written(config, n_models=2)
 
 
+def test_estimates_poses_with_mask(
+    base_config, tmp_path, sample_path_mrc_file, map_frame_pdb
+):
+    config = deep_update(
+        base_config,
+        {
+            "likelihood_optimizer_params": {
+                "estimates_poses": True,
+                "pose_search_params": {
+                    "n_rounds": 0,
+                    "initial_resolution": 1,
+                    "n_candidates": 2,
+                    "n_angles_in_parallel": 2,
+                    "shift_search_range_in_angstroms": 2.0,
+                    "uses_mask": True,
+                    "path_to_mask": sample_path_mrc_file,
+                    "path_to_aligned_model": map_frame_pdb,
+                },
+            }
+        },
+    )
+    run_command(main, tmp_path, config)
+    assert_ensemble_written(config, n_models=2)
+
+
+def test_estimates_poses_with_mask_requires_aligned_model(
+    base_config, tmp_path, sample_path_mrc_file
+):
+    config = deep_update(
+        base_config,
+        {
+            "likelihood_optimizer_params": {
+                "estimates_poses": True,
+                "pose_search_params": {
+                    "uses_mask": True,
+                    "path_to_mask": sample_path_mrc_file,
+                },
+            }
+        },
+    )
+    with pytest.raises(ValueError, match="path_to_aligned_model must be set"):
+        run_command(main, tmp_path, config)
+
+
 @pytest.mark.parametrize("suffix", ["txt", "npy"])
 def test_atom_selection_from_file(
     base_config, tmp_path, suffix, atom_indices_txt, atom_indices_npy
