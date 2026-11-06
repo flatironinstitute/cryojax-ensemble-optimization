@@ -27,7 +27,7 @@ from cryojax_eo.io import read_walkers_from_pdbs
 from cryojax_eo.simulator import DilatedMask
 from cryojax_eo.utils import ModelToVolumeAligner
 
-from ._utils import make_pose_search
+from ._utils import make_pose_search, read_pose_search_mask
 
 
 def add_args(parser):
@@ -229,9 +229,35 @@ def run_ensemble_optimization_with_md(ensemble_opt_config: EnsOptMDConfig):
     ensemble_likelihood_fn = cxeo.ImagesToEnsembleLikelihoodFn(
         img_to_walker_log_likelihood_fn, n_walkers_in_parallel=1, n_images_in_parallel=50
     )
+    pose_search_params = likelihood_optimizer_params["pose_search_params"]
+    if likelihood_optimizer_params["estimates_poses"] and pose_search_params["uses_mask"]:
+        logging.debug("Loading mask and aligned model for the pose search...")
+        pose_search_mask = DilatedMask(
+            read_pose_search_mask(pose_search_params["path_to_mask"], tmp_image_config)
+        )
+        # Same frame as the prealigned reference, to which the walkers are aligned
+        mask_frame_model = mdtraj.load(
+            str(pose_search_params["path_to_aligned_model"])
+        ).center_coordinates(mass_weighted=True)
+        if mask_frame_model.n_atoms != ref_structure.n_atoms:
+            raise ValueError(
+                f"The model aligned to the pose search mask has "
+                f"{mask_frame_model.n_atoms} atoms, but the prealigned model has "
+                f"{ref_structure.n_atoms}. They must have the same atoms."
+            )
+        mask_frame_positions = (
+            jnp.asarray(mask_frame_model.xyz[0][atom_list]) * 10.0
+        )  # Convert from nm to Angstroms
+        logging.debug("Pose search mask and aligned model loaded.")
+    else:
+        pose_search_mask = None
+        mask_frame_positions = None
+
     pose_search = make_pose_search(
         likelihood_optimizer_params["estimates_poses"],
-        likelihood_optimizer_params["pose_search_params"],
+        pose_search_params,
+        dilated_mask=pose_search_mask,
+        mask_frame_positions=mask_frame_positions,
     )
 
     likelihood_optimizer = cxeo.IterativeEnsembleLikelihoodOptimizer(

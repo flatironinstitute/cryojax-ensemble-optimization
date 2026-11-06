@@ -20,13 +20,14 @@ from cryospax import (
     RelionParticleParameterFile,
 )
 from jaxtyping import Array, Float
+from matplotlib.figure import Figure
 from tqdm import tqdm
 
 import cryojax_eo as cxeo
 from cryojax_eo.internal import ReweightingConfig
 from cryojax_eo.simulator import DilatedMask
 
-from ._utils import make_pose_search
+from ._utils import make_pose_search, read_pose_search_mask
 
 
 RELION_DATASET_IN_AXES = dict(
@@ -132,6 +133,38 @@ def estimate_poses(
     )
 
 
+def _plot_structure_mask_overlap(
+    voxel_grid: Float[Array, "z y x"],
+    mask: Float[Array, "z y x"],
+    path_to_figure: str | Path,
+    title: str,
+) -> None:
+    """Save sum-projections of a structure along x, y and z, with the outline
+    of the mask's projection drawn on top.
+    """
+    voxel_grid = np.asarray(voxel_grid)
+    mask = np.asarray(mask)
+
+    fig = Figure(figsize=(12, 4.5), layout="constrained")
+    axes = fig.subplots(1, 3)
+    # Voxel grids are indexed as (z, y, x)
+    for ax, axis, label in zip(axes, (2, 1, 0), ("x", "y", "z")):
+        mask_projection = mask.sum(axis=axis)
+        ax.imshow(voxel_grid.sum(axis=axis), cmap="gray", origin="lower")
+        ax.contour(
+            mask_projection,
+            levels=[1e-2 * mask_projection.max()],
+            colors="tab:orange",
+            linewidths=1.5,
+        )
+        ax.set_title(f"Projection along {label}")
+        ax.set_xticks([])
+        ax.set_yticks([])
+    fig.suptitle(f"{title} (orange: pose search mask)")
+    fig.savefig(path_to_figure, dpi=150)
+    return
+
+
 @eqx.filter_vmap
 def _convert_quat_to_euler(quat_pose: cxs.QuaternionPose) -> cxs.EulerAnglePose:
     return cxs.EulerAnglePose.from_rotation_and_translation(
@@ -139,19 +172,13 @@ def _convert_quat_to_euler(quat_pose: cxs.QuaternionPose) -> cxs.EulerAnglePose:
     )
 
 
-def compute_likelihoods_for_structural_file(
+def _load_voxel_grid(
     path_to_structure: str | Path,
-    relion_dataset: RelionParticleDataset,
+    image_config: cxs.BasicImageConfig,
     selection_string: str,
-    dilated_mask: DilatedMask | None,
-    data_sign: Literal["dark-on-light", "light-on-dark"],
-    n_images_in_parallel: int,
     max_volume_repr_resolution: float | None,
-    pose_search: cxeo.HierarchicalSO3GridSearch | None,
-    path_to_outputdir: str,
-) -> Float[Array, " n_images"]:
-    image_sign = -1.0 if data_sign == "dark-on-light" else 1.0
-    image_config = relion_dataset.parameter_file[0]["image_config"]
+) -> Float[Array, "z y x"]:
+    """Load a structural file as a voxel grid, low-pass filtered if requested."""
     if Path(path_to_structure).suffix in [".pdb", ".cif"]:
         gmm_volume = cxs.load_tabulated_volume(
             path_to_structure,
@@ -185,6 +212,60 @@ def compute_likelihoods_for_structural_file(
         )
         voxel_grid = jnp.fft.irfftn(lowpass_filter(jnp.fft.rfftn(voxel_grid)))
 
+    return voxel_grid
+
+
+def write_mask_diagnostics(
+    paths_to_structures: list[str | Path],
+    image_config: cxs.BasicImageConfig,
+    selection_string: str,
+    max_volume_repr_resolution: float | None,
+    pose_search_mask: Float[Array, "z y x"],
+    path_to_outputdir: str,
+) -> None:
+    """Write the mask overlap plot of every structural file to `diagnostics/`,
+    so they can be checked before the (long) likelihood computation starts.
+    """
+    path_to_diagnostics = os.path.join(path_to_outputdir, "diagnostics")
+    os.makedirs(path_to_diagnostics, exist_ok=True)
+    for path_to_structure in tqdm(paths_to_structures, desc="Mask diagnostics"):
+        voxel_grid = _load_voxel_grid(
+            path_to_structure, image_config, selection_string, max_volume_repr_resolution
+        )
+        if voxel_grid.shape != pose_search_mask.shape:
+            logging.warning(
+                f"Skipping the mask overlap plot for {path_to_structure}: its shape "
+                f"{voxel_grid.shape} differs from the mask's {pose_search_mask.shape}."
+            )
+            continue
+        _plot_structure_mask_overlap(
+            voxel_grid,
+            pose_search_mask,
+            os.path.join(
+                path_to_diagnostics, Path(path_to_structure).stem + "_mask_overlap.png"
+            ),
+            title=Path(path_to_structure).name,
+        )
+    logging.info(f"Mask diagnostics written to {path_to_diagnostics}")
+    return
+
+
+def compute_likelihoods_for_structural_file(
+    path_to_structure: str | Path,
+    relion_dataset: RelionParticleDataset,
+    selection_string: str,
+    dilated_mask: DilatedMask | None,
+    data_sign: Literal["dark-on-light", "light-on-dark"],
+    n_images_in_parallel: int,
+    max_volume_repr_resolution: float | None,
+    pose_search: cxeo.HierarchicalSO3GridSearch | None,
+    path_to_outputdir: str,
+) -> Float[Array, " n_images"]:
+    image_sign = -1.0 if data_sign == "dark-on-light" else 1.0
+    image_config = relion_dataset.parameter_file[0]["image_config"]
+    voxel_grid = _load_voxel_grid(
+        path_to_structure, image_config, selection_string, max_volume_repr_resolution
+    )
     voxel_volume = cxs.FourierVoxelGridVolume.from_real_voxel_grid(voxel_grid)
 
     likelihoods = []
@@ -283,8 +364,36 @@ def run_ensemble_reweighting_from_scratch(
     else:
         dilated_mask = None
 
+    pose_search_params = config["pose_search_params"]
+    if config["estimates_poses"] and pose_search_params["uses_mask"]:
+        logging.debug("Loading pose search mask...")
+        pose_search_mask = read_pose_search_mask(
+            pose_search_params["path_to_mask"], image_config
+        )
+        logging.debug("Pose search mask loaded.")
+        logging.warning(
+            "The pose search uses a mask. The structural files are assumed to be "
+            "aligned to the mask; check the plots in the diagnostics/ folder of the "
+            "output directory."
+        )
+        # Before the likelihoods, so a misaligned mask can be caught right away
+        write_mask_diagnostics(
+            config["path_to_structural_files"],
+            image_config,
+            config["atom_selection"],
+            config["max_volume_repr_resolution"],
+            pose_search_mask,
+            config["path_to_output_dir"],
+        )
+    else:
+        pose_search_mask = None
+
     pose_search = make_pose_search(
-        config["estimates_poses"], config["pose_search_params"]
+        config["estimates_poses"],
+        pose_search_params,
+        dilated_mask=(
+            None if pose_search_mask is None else DilatedMask(pose_search_mask)
+        ),
     )
 
     # Running the optimization

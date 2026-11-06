@@ -7,6 +7,7 @@ def compute_correlation_at_optimal_offset(
     image_ref: Float[Array, "H W"],
     coordinate_grid_in_angstroms: Float[Array, "H W 2"],
     shift_search_area: Float[Array, "H W"] | None = None,
+    mask_ref: Float[Array, "H W"] | None = None,
 ) -> tuple[Float[Array, ""], Float[Array, "2"]]:
     """
     Estimates the correlation between two images at the optimal shift
@@ -24,6 +25,12 @@ def compute_correlation_at_optimal_offset(
         restricting the region of shifts that is searched. Shifts where the
         mask is (numerically) zero are excluded. If `None`, all shifts are
         searched.
+    - `mask_ref`:
+        Optional 2D mask, centered like `image_ref`, that moves together with
+        it. Both images are multiplied by the shifted mask before they are
+        compared, as in the masked likelihood, and the correlation is
+        normalized by the energy of `image_shifted` inside the shifted mask.
+        If `None`, the images are compared unmasked.
     **Returns:**
     - `loss`:
         Negative correlation at the optimal shift.
@@ -31,12 +38,26 @@ def compute_correlation_at_optimal_offset(
         Shift that best aligns ``image_shifted`` to
         ``image_ref`` in the phase-correlation sense.
     """
-    abs_cross_corr = jnp.abs(
-        _compute_cross_correlation_image(
-            image_shifted / jnp.linalg.norm(image_shifted),
-            image_ref / jnp.linalg.norm(image_ref),
+    if mask_ref is None:
+        abs_cross_corr = jnp.abs(
+            _compute_cross_correlation_image(
+                image_shifted / jnp.linalg.norm(image_shifted),
+                image_ref / jnp.linalg.norm(image_ref),
+            )
         )
-    )
+    else:
+        # sum_x (ref * mask)(x - s) * (shifted * mask(x - s))
+        #   = sum_x (ref * mask^2)(x - s) * shifted(x)
+        masked_ref = image_ref * mask_ref
+        cross_corr = _compute_cross_correlation_image(
+            image_shifted, masked_ref * mask_ref
+        )
+        # Energy of `image_shifted` inside the mask, for every shift
+        energy_in_mask = _compute_cross_correlation_image(image_shifted**2, mask_ref**2)
+        abs_cross_corr = jnp.abs(cross_corr) / (
+            jnp.linalg.norm(masked_ref)
+            * jnp.sqrt(jnp.clip(energy_in_mask, min=0.0) + 1e-12)
+        )
     # The zero-lag component comes out of the FFT in the corner, so center it
     # to match the (fftshifted) coordinate grid and the shift search area
     abs_cross_corr = jnp.fft.fftshift(abs_cross_corr)

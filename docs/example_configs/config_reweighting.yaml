@@ -31,6 +31,8 @@ pose_search_params:
   n_candidates: 40 # (*) Number of orientations kept at the end of each round
   n_angles_in_parallel: 10 # (*) Orientations evaluated in parallel (vmapped). Larger is faster but uses more memory
   shift_search_range_in_angstroms: 40.0 # (*) Half-width of the searched shift range, in angstroms. Omit to search all shifts
+  uses_mask: true # (*) Default: false. Score each orientation only inside the 3D mask projected at that orientation. The structural files are assumed to be aligned to the mask; check the plots written to diagnostics/ in the output directory
+  path_to_mask: /path/to/pose_search_mask.mrc # (*) Default: data_params.path_to_volumetric_mask. Must have the same box size as the particle images
 
 # A collection of structural files
 # can be any combination of pdb, cif, mrc files

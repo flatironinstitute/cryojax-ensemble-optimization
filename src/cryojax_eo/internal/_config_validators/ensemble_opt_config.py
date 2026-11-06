@@ -86,6 +86,55 @@ class PoseSearchConfig(BaseModel, extra="forbid"):
         + "in angstroms. Only shifts with |x| and |y| below this value are "
         + "considered. If None, all shifts are searched.",
     )
+    uses_mask: bool = Field(
+        default=False,
+        description="Whether to compare images only inside a projected 3D mask "
+        + "when scoring each candidate orientation, as done in the masked "
+        + "likelihood. The mask is given by `path_to_mask`.",
+    )
+    path_to_mask: FilePath | None = Field(
+        default=None,
+        description="Path to the 3D mask (.mrc) used for the pose search. "
+        + "Only used when `uses_mask` is True. If None, "
+        + "`data_params.path_to_volumetric_mask` is used.",
+    )
+    path_to_aligned_model: FilePath | None = Field(
+        default=None,
+        description="Path to an atomic model (.pdb or .cif) aligned to the pose "
+        + "search mask. Before each pose search, the walkers are rigidly aligned "
+        + "to this model, and the alignment is composed into the estimated poses. "
+        + "Required when `uses_mask` is True in ensemble optimization. Ignored by "
+        + "ensemble reweighting, which assumes its structures are already aligned "
+        + "to the mask.",
+    )
+
+    @field_validator("path_to_mask")
+    @classmethod
+    def validate_path_to_mask(cls, v):
+        if v is not None:
+            return _validate_file_with_type(v, file_type=".mrc")
+
+    @field_validator("path_to_aligned_model")
+    @classmethod
+    def validate_path_to_aligned_model(cls, v):
+        if v is not None:
+            return _validate_files_with_type([v], file_types=[".pdb", ".cif"])[0]
+
+
+def resolve_pose_search_mask_path(
+    path_to_mask: Path | None, path_to_volumetric_mask: Path | None
+) -> Path:
+    """Return the pose search mask, falling back to the data mask, and raise if
+    neither is given. Only called when the pose search uses a mask.
+    """
+    if path_to_mask is None:
+        path_to_mask = path_to_volumetric_mask
+    if path_to_mask is None:
+        raise ValueError(
+            "pose_search_params.uses_mask is True, but no mask was given: set "
+            "pose_search_params.path_to_mask or data_params.path_to_volumetric_mask."
+        )
+    return path_to_mask
 
 
 class EnsOptMDConfigOptimizationConfig(BaseModel, extra="forbid"):
@@ -428,6 +477,22 @@ class EnsOptMDConfig(BaseModel, extra="forbid"):
             initial_weights = [1.0 / n_atomic_models] * n_atomic_models
 
         self.likelihood_optimizer_params["initial_weights"] = initial_weights
+
+        pose_search_params = self.likelihood_optimizer_params["pose_search_params"]
+        if (
+            self.likelihood_optimizer_params["estimates_poses"]
+            and pose_search_params["uses_mask"]
+        ):
+            pose_search_params["path_to_mask"] = resolve_pose_search_mask_path(
+                pose_search_params["path_to_mask"],
+                self.data_params["path_to_volumetric_mask"],
+            )
+            if pose_search_params["path_to_aligned_model"] is None:
+                raise ValueError(
+                    "pose_search_params.uses_mask is True, so "
+                    "pose_search_params.path_to_aligned_model must be set to a model "
+                    "aligned to the pose search mask."
+                )
         return self
 
     @field_validator("path_to_atomic_models", mode="before")
